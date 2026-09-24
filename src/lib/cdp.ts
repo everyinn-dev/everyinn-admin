@@ -1,10 +1,18 @@
-import { LoyaltyTier, Member, BookingType, RoomClass } from "@/types";
+import { LoyaltyTier, Member, BookingType, RoomClass, CdpTiersConfig } from "@/types";
 import { logEvent } from "./audit";
+import { DEFAULT_CDP_TIERS, getCachedCdpTiers } from "./masterData";
 
-export function calculateLoyaltyTier(totalSpent: number, totalBookings: number): LoyaltyTier {
-  if (totalBookings >= 10 || totalSpent >= 8000000) return 'gold';
-  if (totalBookings >= 5 || totalSpent >= 3000000) return 'silver';
-  if (totalBookings >= 1 || totalSpent >= 500000) return 'bronze';
+/**
+ * Calculate loyalty tier based on spend & bookings using dynamic D1 master data tiers
+ */
+export function calculateLoyaltyTier(
+  totalSpent: number,
+  totalBookings: number,
+  tiers: CdpTiersConfig = DEFAULT_CDP_TIERS
+): LoyaltyTier {
+  if (totalBookings >= tiers.gold.min_bookings || totalSpent >= tiers.gold.min_spent) return 'gold';
+  if (totalBookings >= tiers.silver.min_bookings || totalSpent >= tiers.silver.min_spent) return 'silver';
+  if (totalBookings >= tiers.bronze.min_bookings || totalSpent >= tiers.bronze.min_spent) return 'bronze';
   return 'new';
 }
 
@@ -29,6 +37,7 @@ export async function upsertMemberOnBooking(
     bookingType: BookingType;
     roomClass: RoomClass;
     staffId?: number;
+    cdpTiers?: CdpTiersConfig;
   }
 ): Promise<{
   member: Member;
@@ -36,6 +45,7 @@ export async function upsertMemberOnBooking(
   tierChanged: boolean;
   oldTier?: LoyaltyTier;
 }> {
+  const tiers = data.cdpTiers || (await getCachedCdpTiers(db));
   const cleanPhone = data.phone.trim();
   const existing = await lookupMember(db, cleanPhone);
   const now = new Date().toISOString();
@@ -44,7 +54,7 @@ export async function upsertMemberOnBooking(
   const nightsToAdd = isNightStay ? 1 : 0;
 
   if (!existing) {
-    const newTier = calculateLoyaltyTier(data.totalPrice, 1);
+    const newTier = calculateLoyaltyTier(data.totalPrice, 1, tiers);
     await db
       .prepare(
         `INSERT INTO members (
@@ -94,7 +104,7 @@ export async function upsertMemberOnBooking(
     const updatedSpent = existing.total_spent + data.totalPrice;
     const updatedBookings = existing.total_bookings + 1;
     const updatedNights = existing.total_nights + nightsToAdd;
-    const newTier = calculateLoyaltyTier(updatedSpent, updatedBookings);
+    const newTier = calculateLoyaltyTier(updatedSpent, updatedBookings, tiers);
     const tierChanged = newTier !== existing.loyalty_tier;
 
     await db

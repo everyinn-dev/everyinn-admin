@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { PricingRule } from "@/types";
+import { getCachedPricingRules } from "@/lib/masterData";
 
 export async function GET() {
   try {
     const db = await getDb();
-    const { results } = await db
-      .prepare(
-        `SELECT id, property_id, room_class, booking_type, base_price, extra_hour_fee, is_active
-         FROM pricing_rules
-         WHERE is_active = 1`
-      )
-      .all<PricingRule>();
+    const pricingRules = await getCachedPricingRules(db);
 
-    return NextResponse.json({ pricingRules: results });
+    return NextResponse.json({ pricingRules });
   } catch (error) {
     console.error("Get pricing rules error:", error);
     return NextResponse.json({ error: "Failed to load pricing rules" }, { status: 500 });

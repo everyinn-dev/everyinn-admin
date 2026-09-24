@@ -14,23 +14,6 @@ export interface PricingBreakdown {
   totalPrice: number;
 }
 
-export const EXTRA_HOUR_FEE = 60000;
-
-export const DEFAULT_PRICING: Record<RoomClass, Record<'combo3h' | 'combo6h' | 'overnight' | 'dayroom', number>> = {
-  haven: {
-    combo3h: 320000,
-    combo6h: 600000,
-    overnight: 490000,
-    dayroom: 590000,
-  },
-  signature: {
-    combo3h: 360000,
-    combo6h: 640000,
-    overnight: 620000,
-    dayroom: 750000,
-  },
-};
-
 export function resolveHourlyCombo(hours: number): {
   comboKey: 'combo3h' | 'combo6h';
   comboLabel: string;
@@ -60,7 +43,8 @@ export function calculatePrice(params: {
   checkinAt: Date;
   checkoutAt: Date;
   lateCheckoutHours?: number;
-  pricingRules?: PricingRule[];
+  pricingRules: PricingRule[];
+  extraHourFee?: number;
   discountAmount?: number;
 }): PricingBreakdown {
   const {
@@ -70,26 +54,31 @@ export function calculatePrice(params: {
     checkoutAt,
     lateCheckoutHours = 0,
     pricingRules,
+    extraHourFee,
     discountAmount = 0,
   } = params;
 
-  // Helper to get rule price or fallback
+  // Retrieve base price strictly from master pricing_rules
   const getBase = (typeKey: 'combo3h' | 'combo6h' | 'overnight' | 'dayroom'): number => {
-    if (pricingRules && pricingRules.length > 0) {
-      const match = pricingRules.find(
-        (r) => r.room_class === roomClass && r.booking_type === typeKey && r.is_active === 1
-      );
-      if (match) return match.base_price;
+    if (!pricingRules || pricingRules.length === 0) {
+      return 0;
     }
-    return DEFAULT_PRICING[roomClass][typeKey];
+    const match = pricingRules.find(
+      (r) => r.room_class === roomClass && r.booking_type === typeKey && r.is_active === 1
+    );
+    if (!match) {
+      throw new Error(`Không tìm thấy biểu phí cho hạng phòng '${roomClass}' và hình thức '${typeKey}'.`);
+    }
+    return match.base_price;
   };
 
   const getExtraHourFee = (): number => {
+    if (extraHourFee !== undefined) return extraHourFee;
     if (pricingRules && pricingRules.length > 0) {
       const match = pricingRules.find((r) => r.room_class === roomClass && r.is_active === 1);
-      if (match) return match.extra_hour_fee;
+      if (match?.extra_hour_fee !== undefined) return match.extra_hour_fee;
     }
-    return EXTRA_HOUR_FEE;
+    return 60000;
   };
 
   const extraUnitFee = getExtraHourFee();

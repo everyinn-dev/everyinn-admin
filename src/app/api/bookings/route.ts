@@ -6,6 +6,7 @@ import { calculatePrice } from "@/lib/pricing";
 import { upsertMemberOnBooking } from "@/lib/cdp";
 import { logEvent } from "@/lib/audit";
 import { BookingType, PricingRule, Room } from "@/types";
+import { getCachedRooms, getCachedPricingRules } from "@/lib/masterData";
 
 export async function GET(req: NextRequest) {
   try {
@@ -110,11 +111,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Fetch Room details
-    const room = await db
-      .prepare("SELECT * FROM rooms WHERE id = ? AND is_active = 1 LIMIT 1")
-      .bind(roomId)
-      .first<Room>();
+    // 1. Fetch Room details from cached master data
+    const rooms = await getCachedRooms(db);
+    const room = rooms.find((r) => r.id === roomId && r.is_active === 1);
 
     if (!room) {
       return NextResponse.json({ error: "Phòng không tồn tại hoặc đã ngừng hoạt động." }, { status: 404 });
@@ -150,11 +149,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Fetch Pricing Rules
-    const { results: pricingRules } = await db
-      .prepare("SELECT * FROM pricing_rules WHERE property_id = ? AND is_active = 1")
-      .bind(room.property_id)
-      .all<PricingRule>();
+    // 3. Fetch Pricing Rules from cached master data
+    const pricingRules = await getCachedPricingRules(db);
 
     // 4. Calculate locked price snapshot
     const pricing = calculatePrice({

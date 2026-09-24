@@ -33,16 +33,26 @@ It is designed exclusively for hotel **receptionists and managers** to:
 
 ## 🗄️ 3. Database Schema Overview (D1 SQLite)
 Migrations are located in `db/migrations/`:
-- `001_tables.sql`:
-  - `properties`: Property profile, banking info, checkin instructions, wifi.
-  - `rooms`: 6 rooms total (`sort_order`, `room_class`: `'haven'` [101, 201, 301] | `'signature'` [102, 202, 302]).
-  - `pricing_rules`: Pricing table by room class & booking type.
-  - `configs`: JSON key-value store for business rules & CDP tier thresholds.
-  - `staff` & `staff_sessions`: Receptionist & Manager credentials.
-  - `members`: Mini CDP profile (`phone`, `full_name`, `total_bookings`, `total_spent`, `loyalty_tier`: `'new' | 'bronze' | 'silver' | 'gold'`).
-  - `bookings`: Snapshot of prices, checkin/checkout ISO strings, status (`'confirmed'`, `'cancelled'`, etc.).
-  - `room_blocks`: Room maintenance / administrative blocks.
-  - `event_logs`: Immutable audit log for all system events.
+- `001_tables.sql`: Core schema (properties, rooms, pricing_rules, configs, staff, members, bookings, room_blocks, event_logs).
+- `002_seed.sql`: Seed data for property, default rooms, pricing rules, configs, and default staff.
+- `003_refactor_rooms_pricing.sql`: 6 rooms total (3 Haven: 101, 201, 301 | 3 Signature: 102, 202, 302) and standard pricing.
+- `004_add_config_hourly_slots.sql`: Adds `hourly_checkin_slots` config (`[21, 22, 23, 24]`) to `configs` table.
+
+---
+
+## ⚡ 3.1. Master Data In-Process Caching (`src/lib/cache.ts` & `src/lib/masterData.ts`)
+To optimize Cloudflare D1 query quota and accelerate latency:
+- Master data is cached in-memory at module scope (`Map` with TTL = 60 minutes):
+  - `master:rooms`: Active rooms list (`getCachedRooms`)
+  - `master:pricing_rules`: Active pricing table (`getCachedPricingRules`)
+  - `master:booking_rules`: Check-in hours, late checkout limits, extra fees (`getCachedBookingRules`)
+  - `master:cdp_tiers`: Spend & booking thresholds for Bronze/Silver/Gold (`getCachedCdpTiers`)
+  - `master:hourly_slots`: Allowed overnight check-in hours (`getCachedHourlySlots`)
+- **Cache Invalidation**:
+  - Automatically resets whenever a new Worker instance spins up or code deploys via GitHub.
+  - Automatically expires after 60-minute TTL.
+  - Manual invalidation via `POST /api/admin/cache/clear` (Manager role only).
+- **Transactional Data**: `bookings`, `members`, `room_blocks`, and `staff_sessions` are ALWAYS read fresh from D1.
 
 ---
 

@@ -4,6 +4,33 @@ export type BookingStatus = 'confirmed' | 'pending' | 'holding' | 'cancelled';
 export type LoyaltyTier = 'new' | 'bronze' | 'silver' | 'gold';
 export type StaffRole = 'receptionist' | 'manager';
 
+export interface BookingRulesConfig {
+  min_hourly: number;
+  max_hourly_checkin: string;
+  overnight_start: string;
+  overnight_max_checkout: string;
+  day_checkin: string;
+  day_checkout: string;
+  max_late_checkout_hours: number;
+  extra_hour_fee: number;
+}
+
+export interface TierThreshold {
+  min_spent: number;
+  min_bookings: number;
+}
+
+export interface CdpTiersConfig {
+  bronze: TierThreshold;
+  silver: TierThreshold;
+  gold: TierThreshold;
+}
+
+export interface HourlySlotsConfig {
+  slots: number[];
+}
+
+
 export interface Property {
   id: string;
   name: string;

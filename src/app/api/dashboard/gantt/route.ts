@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
+import { getCachedRooms } from "@/lib/masterData";
 import { GanttDataResponse, Room, Booking, RoomBlock } from "@/types";
 
 export async function GET(req: NextRequest) {
@@ -20,15 +21,8 @@ export async function GET(req: NextRequest) {
     const startOfDay = `${targetDate}T00:00:00`;
     const endOfDay = `${targetDate}T23:59:59`;
 
-    // 1. Fetch all active rooms sorted by sort_order
-    const { results: rooms } = await db
-      .prepare(
-        `SELECT id, property_id, room_number, name, room_class, floor, max_guests, sort_order, is_active
-         FROM rooms
-         WHERE is_active = 1
-         ORDER BY sort_order ASC, room_number ASC`
-      )
-      .all<Room>();
+    // 1. Fetch all active rooms from cached master data
+    const rooms = await getCachedRooms(db);
 
     // 2. Fetch all bookings that overlap with this target date
     const { results: bookings } = await db

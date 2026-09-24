@@ -6,6 +6,9 @@ interface OvernightFieldsProps {
   checkinDate: string; // YYYY-MM-DD
   startHour: number; // 21, 22, 23, 24
   lateCheckoutHours: number; // 0 to 6
+  hourlySlots?: number[];
+  extraHourFee?: number;
+  maxLateCheckoutHours?: number;
   onChangeDate: (date: string) => void;
   onChangeStartHour: (hour: number) => void;
   onChangeLateCheckout: (lateHours: number) => void;
@@ -15,20 +18,34 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
   checkinDate,
   startHour,
   lateCheckoutHours,
+  hourlySlots,
+  extraHourFee = 60000,
+  maxLateCheckoutHours = 2,
   onChangeDate,
   onChangeStartHour,
   onChangeLateCheckout,
 }) => {
-  // Allowed overnight checkin options: 21h, 22h, 23h, 24h (0h)
-  const startHourOptions = [
-    { value: 21, label: "21:00 tối (Trả 09:00 hôm sau)" },
-    { value: 22, label: "22:00 tối (Trả 10:00 hôm sau)" },
-    { value: 23, label: "23:00 tối (Trả 11:00 hôm sau)" },
-    { value: 24, label: "24:00 / 00:00 (Trả 12:00 hôm sau)" },
-  ];
+  const slots = hourlySlots && hourlySlots.length > 0 ? hourlySlots : [21, 22, 23, 24];
+  const unitFee = extraHourFee;
+  const maxLate = maxLateCheckoutHours;
 
-  // Late checkout options (0h to 2h, each +60k - max 2h per policy)
-  const lateCheckoutOptions = [0, 1, 2];
+  // Allowed overnight checkin options generated dynamically from master data
+  const startHourOptions = useMemo(() => {
+    return slots.map((hour) => {
+      const checkoutHour = (hour + 12) % 24;
+      const checkoutStr = checkoutHour < 10 ? `0${checkoutHour}:00` : `${checkoutHour}:00`;
+      const hourStr = hour === 24 ? "24:00 / 00:00" : `${hour}:00 tối`;
+      return {
+        value: hour,
+        label: `${hourStr} (Trả ${checkoutStr} hôm sau)`,
+      };
+    });
+  }, [slots]);
+
+  // Late checkout options dynamically generated based on maxLateCheckoutHours
+  const lateCheckoutOptions = useMemo(() => {
+    return Array.from({ length: maxLate + 1 }, (_, i) => i);
+  }, [maxLate]);
 
   // Calculated checkout date & time
   const calculatedCheckout = useMemo(() => {
@@ -43,13 +60,18 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
     });
   }, [checkinDate, startHour, lateCheckoutHours]);
 
+  const minSlot = Math.min(...slots);
+  const maxSlot = Math.max(...slots);
+
   return (
     <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
         <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
           <span>🌙</span> Quy tắc đặt qua đêm (12 tiếng trọn đêm)
         </span>
-        <span className="text-[11px] text-slate-400">Khung giờ nhận: 21:00 - 24:00</span>
+        <span className="text-[11px] text-slate-400">
+          Khung giờ nhận: {minSlot}:00 - {maxSlot}:00
+        </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -96,7 +118,7 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
           >
             {lateCheckoutOptions.map((h) => (
               <option key={h} value={h}>
-                {h === 0 ? "Đúng giờ (0h)" : `+${h} giờ trễ (+${(h * 60000).toLocaleString("vi-VN")}đ)`}
+                {h === 0 ? "Đúng giờ (0h)" : `+${h} giờ trễ (+${(h * unitFee).toLocaleString("vi-VN")}đ)`}
               </option>
             ))}
           </select>
@@ -112,7 +134,7 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
             <span className="text-amber-300 font-medium">
               {" "}
               + {lateCheckoutHours} giờ trễ (+
-              {Number(lateCheckoutHours * 60000).toLocaleString("vi-VN")}đ)
+              {Number(lateCheckoutHours * unitFee).toLocaleString("vi-VN")}đ)
             </span>
           )}
         </div>

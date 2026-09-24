@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookingType, Member, PricingRule, Room } from "@/types";
+import { BookingRulesConfig, BookingType, Member, PricingRule, Room } from "@/types";
 import { calculatePrice } from "@/lib/pricing";
 import { PhoneLookupField } from "./PhoneLookupField";
 import { BookingTypeTabs } from "./BookingTypeTabs";
@@ -16,11 +16,15 @@ import { Button } from "../ui/Button";
 interface BookingFormProps {
   initialRooms: Room[];
   initialPricingRules: PricingRule[];
+  bookingRules?: BookingRulesConfig;
+  hourlySlots?: number[];
 }
 
 export const BookingForm: React.FC<BookingFormProps> = ({
   initialRooms,
   initialPricingRules,
+  bookingRules,
+  hourlySlots,
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -118,8 +122,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       checkoutAt,
       lateCheckoutHours: lateHours,
       pricingRules: initialPricingRules,
+      extraHourFee: bookingRules?.extra_hour_fee,
     });
-  }, [bookingType, selectedRoom, checkinAt, checkoutAt, lateHours, initialPricingRules]);
+  }, [bookingType, selectedRoom, checkinAt, checkoutAt, lateHours, initialPricingRules, bookingRules]);
 
   // CDP Auto-fill callback
   const handleMemberFound = (member: Member) => {
@@ -273,7 +278,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               onChange={(e) => setRoomId(e.target.value)}
               className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 font-semibold"
             >
-              <optgroup label="Haven (10 Phòng - 22m²)">
+              <optgroup label={`Haven (${initialRooms.filter((r) => r.room_class === "haven").length} Phòng - 22m²)`}>
                 {initialRooms
                   .filter((r) => r.room_class === "haven")
                   .map((r) => (
@@ -282,7 +287,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                     </option>
                   ))}
               </optgroup>
-              <optgroup label="Signature (5 Phòng - 28m²)">
+              <optgroup label={`Signature (${initialRooms.filter((r) => r.room_class === "signature").length} Phòng - 28m²)`}>
                 {initialRooms
                   .filter((r) => r.room_class === "signature")
                   .map((r) => (
@@ -320,6 +325,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             checkinDate={overnightDate}
             startHour={overnightStartHour}
             lateCheckoutHours={overnightLateHours}
+            hourlySlots={hourlySlots}
+            extraHourFee={bookingRules?.extra_hour_fee}
+            maxLateCheckoutHours={bookingRules?.max_late_checkout_hours}
             onChangeDate={setOvernightDate}
             onChangeStartHour={setOvernightStartHour}
             onChangeLateCheckout={setOvernightLateHours}
