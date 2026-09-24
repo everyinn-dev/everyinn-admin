@@ -15,7 +15,7 @@
 		{
 			"binding": "DB",
 			"database_name": "everyinn-admin",
-			"database_id": "REPLACE_WITH_D1_DATABASE_ID"
+			"database_id": "2518bd3e-5479-4b03-afb1-3ab28d7e3e7e"
 		}
 	],
 	"observability": {
