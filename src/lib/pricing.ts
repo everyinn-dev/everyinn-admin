@@ -19,14 +19,14 @@ export const EXTRA_HOUR_FEE = 60000;
 export const DEFAULT_PRICING: Record<RoomClass, Record<'combo3h' | 'combo6h' | 'overnight' | 'dayroom', number>> = {
   haven: {
     combo3h: 320000,
-    combo6h: 450000,
-    overnight: 500000,
-    dayroom: 650000,
+    combo6h: 600000,
+    overnight: 490000,
+    dayroom: 590000,
   },
   signature: {
-    combo3h: 370000,
-    combo6h: 520000,
-    overnight: 580000,
+    combo3h: 360000,
+    combo6h: 640000,
+    overnight: 620000,
     dayroom: 750000,
   },
 };

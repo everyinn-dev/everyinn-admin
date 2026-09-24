@@ -27,8 +27,8 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
     { value: 24, label: "24:00 / 00:00 (Trả 12:00 hôm sau)" },
   ];
 
-  // Late checkout options (0h to 6h, each +60k)
-  const lateCheckoutOptions = [0, 1, 2, 3, 4, 5, 6];
+  // Late checkout options (0h to 2h, each +60k - max 2h per policy)
+  const lateCheckoutOptions = [0, 1, 2];
 
   // Calculated checkout date & time
   const calculatedCheckout = useMemo(() => {

@@ -13,43 +13,32 @@ INSERT OR IGNORE INTO properties (
   'everyinn2024'
 );
 
--- ── ROOMS SEED ─────────────────────────────────
+-- ── ROOMS SEED (3 Haven: 101, 201, 301 | 3 Signature: 102, 202, 302) ────────
 INSERT OR IGNORE INTO rooms (id, property_id, room_number, name, room_class, floor, area_sqm, max_guests, sort_order) VALUES
   ('haven-101', 'prop-01', '101', 'Haven 101', 'haven', 1, 22, 2, 1),
-  ('haven-102', 'prop-01', '102', 'Haven 102', 'haven', 1, 22, 2, 2),
-  ('sig-103',   'prop-01', '103', 'Signature 103', 'signature', 1, 28, 2, 3),
+  ('sig-102',   'prop-01', '102', 'Signature 102', 'signature', 1, 28, 2, 2),
 
-  ('haven-201', 'prop-01', '201', 'Haven 201', 'haven', 2, 22, 2, 4),
-  ('haven-202', 'prop-01', '202', 'Haven 202', 'haven', 2, 22, 2, 5),
-  ('sig-203',   'prop-01', '203', 'Signature 203', 'signature', 2, 28, 2, 6),
+  ('haven-201', 'prop-01', '201', 'Haven 201', 'haven', 2, 22, 2, 3),
+  ('sig-202',   'prop-01', '202', 'Signature 202', 'signature', 2, 28, 2, 4),
 
-  ('haven-301', 'prop-01', '301', 'Haven 301', 'haven', 3, 22, 2, 7),
-  ('haven-302', 'prop-01', '302', 'Haven 302', 'haven', 3, 22, 2, 8),
-  ('sig-303',   'prop-01', '303', 'Signature 303', 'signature', 3, 28, 2, 9),
-
-  ('haven-401', 'prop-01', '401', 'Haven 401', 'haven', 4, 22, 2, 10),
-  ('haven-402', 'prop-01', '402', 'Haven 402', 'haven', 4, 22, 2, 11),
-  ('sig-403',   'prop-01', '403', 'Signature 403', 'signature', 4, 28, 2, 12),
-
-  ('haven-501', 'prop-01', '501', 'Haven 501', 'haven', 5, 22, 2, 13),
-  ('haven-502', 'prop-01', '502', 'Haven 502', 'haven', 5, 22, 2, 14),
-  ('sig-503',   'prop-01', '503', 'Signature 503', 'signature', 5, 28, 2, 15);
+  ('haven-301', 'prop-01', '301', 'Haven 301', 'haven', 3, 22, 2, 5),
+  ('sig-302',   'prop-01', '302', 'Signature 302', 'signature', 3, 28, 2, 6);
 
 -- ── PRICING RULES ──────────────────────────────
 INSERT OR IGNORE INTO pricing_rules (property_id, room_class, booking_type, base_price, extra_hour_fee) VALUES
   ('prop-01', 'haven', 'combo3h',   320000, 60000),
-  ('prop-01', 'haven', 'combo6h',   450000, 60000),
-  ('prop-01', 'haven', 'overnight', 500000, 60000),
-  ('prop-01', 'haven', 'dayroom',   650000, 60000),
+  ('prop-01', 'haven', 'combo6h',   600000, 60000),
+  ('prop-01', 'haven', 'overnight', 490000, 60000),
+  ('prop-01', 'haven', 'dayroom',   590000, 60000),
 
-  ('prop-01', 'signature', 'combo3h',   370000, 60000),
-  ('prop-01', 'signature', 'combo6h',   520000, 60000),
-  ('prop-01', 'signature', 'overnight', 580000, 60000),
+  ('prop-01', 'signature', 'combo3h',   360000, 60000),
+  ('prop-01', 'signature', 'combo6h',   640000, 60000),
+  ('prop-01', 'signature', 'overnight', 620000, 60000),
   ('prop-01', 'signature', 'dayroom',   750000, 60000);
 
 -- ── SYSTEM CONFIGS ─────────────────────────────
 INSERT OR IGNORE INTO configs (key, value, description) VALUES
-  ('booking_rules', '{"min_hourly":3,"max_hourly_checkin":"21:00","overnight_start":"21:00","overnight_max_checkout":"12:00","day_checkin":"15:00","day_checkout":"12:00","max_late_checkout_hours":6,"extra_hour_fee":60000}', 'Quy tắc giờ đặt phòng và phụ phí'),
+  ('booking_rules', '{"min_hourly":3,"max_hourly_checkin":"21:00","overnight_start":"21:00","overnight_max_checkout":"09:00","day_checkin":"15:00","day_checkout":"12:00","max_late_checkout_hours":2,"extra_hour_fee":60000}', 'Quy tắc giờ đặt phòng và phụ phí'),
   ('cdp_tiers', '{"bronze":{"min_spent":500000,"min_bookings":1},"silver":{"min_spent":3000000,"min_bookings":5},"gold":{"min_spent":8000000,"min_bookings":10}}', 'Quy tắc thăng hạng thành viên');
 
 -- ── INITIAL STAFF (Password: everyinn2024) ────

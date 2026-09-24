@@ -35,7 +35,7 @@ It is designed exclusively for hotel **receptionists and managers** to:
 Migrations are located in `db/migrations/`:
 - `001_tables.sql`:
   - `properties`: Property profile, banking info, checkin instructions, wifi.
-  - `rooms`: 15 rooms total (`sort_order`, `room_class`: `'haven'` | `'signature'`).
+  - `rooms`: 6 rooms total (`sort_order`, `room_class`: `'haven'` [101, 201, 301] | `'signature'` [102, 202, 302]).
   - `pricing_rules`: Pricing table by room class & booking type.
   - `configs`: JSON key-value store for business rules & CDP tier thresholds.
   - `staff` & `staff_sessions`: Receptionist & Manager credentials.
@@ -47,25 +47,21 @@ Migrations are located in `db/migrations/`:
 ---
 
 ## 📐 4. Business & Pricing Formulas (`src/lib/pricing.ts`)
-- **Phụ phí giờ thêm**: 60.000đ / giờ.
+- **Phụ phí giờ thêm**: 60.000đ / giờ (thêm tối đa 2 giờ).
 - **1. Theo Giờ (Hourly)**:
   - Khung giờ nhận: **09:00 đến 21:00** (sau 21:00 tính là Qua Đêm).
-  - Khối đặt tối thiểu: **Combo 3 Giờ** (Haven: 320k, Signature: 370k).
-  - Khối 6 Giờ: **Combo 6 Giờ** (Haven: 450k, Signature: 520k).
-  - Phụ trội:
-    - 4h = Combo 3h + 1h (60k)
-    - 5h = Combo 3h + 2h (120k)
-    - 6h = Combo 6h
-    - 7h = Combo 6h + 1h (60k) ...
+  - Khối đặt tối thiểu: **Combo 3 Giờ** (Haven: 320k, Signature: 360k).
+  - Khối 6 Giờ: **Combo 6 Giờ** (Haven: 600k, Signature: 640k).
+  - Phụ trội: 60k / giờ (thêm tối đa 2 giờ).
 - **2. Qua Đêm (Overnight)**:
   - Khung giờ nhận: **21:00 đến 24:00 (00:00)**.
-  - Tiêu chuẩn: **12 tiếng trọn đêm** (trả phòng từ 09:00 đến 12:00 hôm sau).
-  - Giá gốc: Haven 500k, Signature 580k.
-  - Trả phòng trễ (Late checkout): Tối đa 6 tiếng (+60k/h).
+  - Tiêu chuẩn: **21:00 - 09:00 hôm sau** (12 tiếng).
+  - Giá gốc: Haven 490k, Signature 620k.
+  - Trả phòng trễ (Late checkout): Tối đa 2 tiếng (+60k/h).
 - **3. Theo Ngày (Day Use)**:
   - Nhận phòng tiêu chuẩn: **15:00** — Trả phòng: **12:00** hôm sau.
-  - Giá gốc: Haven 650k/đêm, Signature 750k/đêm.
-  - Trả phòng trễ: Tối đa 6 tiếng (+60k/h).
+  - Giá gốc: Haven 590k/đêm, Signature 750k/đêm.
+  - Trả phòng trễ: Tối đa 2 tiếng (+60k/h).
 
 ---
 
