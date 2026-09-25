@@ -9,6 +9,7 @@ import { BookingTypeTabs } from "./BookingTypeTabs";
 import { HourlyFields } from "./HourlyFields";
 import { OvernightFields } from "./OvernightFields";
 import { DayUseFields } from "./DayUseFields";
+import { CustomFields } from "./CustomFields";
 import { PriceSummaryCard } from "./PriceSummaryCard";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -32,37 +33,65 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   // Query param prefill (if receptionist clicked "+ Đặt phòng này" from dashboard)
   const queryRoomId = searchParams.get("roomId");
   const queryDate = searchParams.get("date");
+  const queryHour = searchParams.get("hour");
 
   // Today in Vietnam (UTC+7)
   const defaultDate =
     queryDate || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
-  // Form states
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [facebook, setFacebook] = useState("");
   const [numGuests, setNumGuests] = useState(2);
+  const [foundMember, setFoundMember] = useState<Member | null>(null);
+  const [updatingSocial, setUpdatingSocial] = useState(false);
+  const [socialUpdateFeedback, setSocialUpdateFeedback] = useState<string | null>(null);
+
+  // Room selection
   const [roomId, setRoomId] = useState<string>(
     queryRoomId && initialRooms.some((r) => r.id === queryRoomId)
       ? queryRoomId
       : initialRooms[0]?.id || ""
   );
+
+  // Booking Type & Notes
   const [bookingType, setBookingType] = useState<BookingType>("hourly");
+  const [closingNote, setClosingNote] = useState("");
   const [note, setNote] = useState("");
 
   // Hourly specific
   const [hourlyDate, setHourlyDate] = useState(defaultDate);
-  const [hourlyCheckinHour, setHourlyCheckinHour] = useState(14); // 14:00 default
+  const [hourlyCheckinHour, setHourlyCheckinHour] = useState(
+    queryHour ? parseInt(queryHour, 10) : 14
+  );
   const [hourlyDuration, setHourlyDuration] = useState(3); // 3h combo default
 
   // Overnight specific
   const [overnightDate, setOvernightDate] = useState(defaultDate);
-  const [overnightStartHour, setOvernightStartHour] = useState(22); // 22:00 default
+  const [overnightStartHour, setOvernightStartHour] = useState(
+    queryHour && [21, 22, 23, 24].includes(parseInt(queryHour, 10))
+      ? parseInt(queryHour, 10)
+      : 22
+  );
   const [overnightLateHours, setOvernightLateHours] = useState(0);
 
   // Day use specific
   const [dayuseDate, setDayuseDate] = useState(defaultDate);
   const [dayuseNights, setDayuseNights] = useState(1);
   const [dayuseLateHours, setDayuseLateHours] = useState(0);
+
+  // Custom specific
+  const [customCheckinDate, setCustomCheckinDate] = useState(defaultDate);
+  const [customCheckinTime, setCustomCheckinTime] = useState("14:00");
+  const nextDayStr = useMemo(() => {
+    const d = new Date(`${defaultDate}T00:00:00`);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }, [defaultDate]);
+  const [customCheckoutDate, setCustomCheckoutDate] = useState(nextDayStr);
+  const [customCheckoutTime, setCustomCheckoutTime] = useState("12:00");
+  const [customPrice, setCustomPrice] = useState<number>(0);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -89,17 +118,22 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       inDate.setHours(overnightStartHour, 0, 0, 0);
 
       const outDate = new Date(`${overnightDate}T00:00:00`);
-      // 12 hours basic stay + late checkout hours
       outDate.setHours(overnightStartHour + 12 + overnightLateHours, 0, 0, 0);
       return { checkinAt: inDate, checkoutAt: outDate, lateHours: overnightLateHours };
     }
 
-    // Day use
-    const inDate = new Date(`${dayuseDate}T15:00:00`);
-    const outDate = new Date(`${dayuseDate}T00:00:00`);
-    outDate.setDate(outDate.getDate() + dayuseNights);
-    outDate.setHours(12 + dayuseLateHours, 0, 0, 0);
-    return { checkinAt: inDate, checkoutAt: outDate, lateHours: dayuseLateHours };
+    if (bookingType === "dayuse") {
+      const inDate = new Date(`${dayuseDate}T15:00:00`);
+      const outDate = new Date(`${dayuseDate}T00:00:00`);
+      outDate.setDate(outDate.getDate() + dayuseNights);
+      outDate.setHours(12 + dayuseLateHours, 0, 0, 0);
+      return { checkinAt: inDate, checkoutAt: outDate, lateHours: dayuseLateHours };
+    }
+
+    // Custom
+    const inDate = new Date(`${customCheckinDate}T${customCheckinTime}:00`);
+    const outDate = new Date(`${customCheckoutDate}T${customCheckoutTime}:00`);
+    return { checkinAt: inDate, checkoutAt: outDate, lateHours: 0 };
   }, [
     bookingType,
     hourlyDate,
@@ -111,6 +145,10 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     dayuseDate,
     dayuseNights,
     dayuseLateHours,
+    customCheckinDate,
+    customCheckinTime,
+    customCheckoutDate,
+    customCheckoutTime,
   ]);
 
   // Live pricing
@@ -123,19 +161,82 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       lateCheckoutHours: lateHours,
       pricingRules: initialPricingRules,
       extraHourFee: bookingRules?.extra_hour_fee,
+      customPrice: bookingType === "custom" ? customPrice : 0,
     });
-  }, [bookingType, selectedRoom, checkinAt, checkoutAt, lateHours, initialPricingRules, bookingRules]);
+  }, [
+    bookingType,
+    selectedRoom,
+    checkinAt,
+    checkoutAt,
+    lateHours,
+    initialPricingRules,
+    bookingRules,
+    customPrice,
+  ]);
 
-  // CDP Auto-fill callback
+  // CDP Auto-fill callback (Phone lookup found returning member)
   const handleMemberFound = (member: Member) => {
+    setFoundMember(member);
     const memberName = member.full_name || member.fullName;
-    if (memberName && !name) {
+    if (memberName) {
       setName(memberName);
     }
+    setInstagram(member.instagram || "");
+    setFacebook(member.facebook || "");
   };
 
   const handleMemberNotFound = () => {
-    // Keep typed name if any
+    setFoundMember(null);
+  };
+
+  // Direct social update for returning guests by phone key
+  const handleDirectUpdateSocial = async () => {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
+      setErrorMsg("Vui lòng nhập số điện thoại khách hàng.");
+      return;
+    }
+    const cleanIg = instagram.trim();
+    const cleanFb = facebook.trim();
+    if (!cleanIg && !cleanFb) {
+      setErrorMsg("Vui lòng nhập tài khoản Instagram hoặc Facebook (bắt buộc có ít nhất 1 trong 2).");
+      return;
+    }
+
+    setUpdatingSocial(true);
+    setSocialUpdateFeedback(null);
+    setErrorMsg("");
+    try {
+      const res = await fetch(`/api/members/${cleanPhone}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instagram: cleanIg,
+          facebook: cleanFb,
+          fullName: name.trim() || undefined,
+        }),
+      });
+      const data = (await res.json()) as any;
+      if (!res.ok) {
+        throw new Error(data.error || "Không thể cập nhật hồ sơ khách hàng.");
+      }
+      setFoundMember((prev) =>
+        prev
+          ? {
+              ...prev,
+              instagram: cleanIg,
+              facebook: cleanFb,
+              full_name: name.trim() || prev.full_name,
+            }
+          : null
+      );
+      setSocialUpdateFeedback("Đã lưu cập nhật Insta/FB vào hồ sơ khách theo SĐT!");
+      setTimeout(() => setSocialUpdateFeedback(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Lỗi khi cập nhật hồ sơ.");
+    } finally {
+      setUpdatingSocial(false);
+    }
   };
 
   // Form submit
@@ -152,9 +253,29 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       setErrorMsg("Vui lòng nhập họ và tên khách hàng.");
       return;
     }
-    if (!roomId) {
-      setErrorMsg("Vui lòng chọn phòng.");
+
+    // Mandatory: At least 1 of Instagram or Facebook
+    const cleanIg = instagram.trim();
+    const cleanFb = facebook.trim();
+    if (!cleanIg && !cleanFb) {
+      setErrorMsg("Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2).");
       return;
+    }
+
+    if (!roomId) {
+      setErrorMsg("Vui lòng chọn phòng trống.");
+      return;
+    }
+
+    if (bookingType === "custom") {
+      if (customPrice <= 0) {
+        setErrorMsg("Vui lòng nhập số tiền thanh toán cho đơn đặt phòng tuỳ chỉnh.");
+        return;
+      }
+      if (checkoutAt <= checkinAt) {
+        setErrorMsg("Thời gian trả phòng phải sau thời gian nhận phòng.");
+        return;
+      }
     }
 
     try {
@@ -163,11 +284,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         roomId,
         phone: phone.trim(),
         name: name.trim(),
+        instagram: cleanIg,
+        facebook: cleanFb,
         numGuests,
         bookingType,
         checkinAt: checkinAt.toISOString(),
         checkoutAt: checkoutAt.toISOString(),
         lateCheckoutHours: lateHours,
+        customPrice: bookingType === "custom" ? customPrice : undefined,
+        closingNote: closingNote.trim(),
         note: note.trim(),
         status: "confirmed",
       };
@@ -214,18 +339,28 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         </div>
       )}
 
-      {/* Customer Information Card */}
+      {/* 1. Customer Information Card */}
       <div className="rounded-2xl bg-[#0d131f] border border-slate-800 p-5 space-y-4 shadow-lg">
-        <div className="border-b border-slate-800/80 pb-2">
+        <div className="border-b border-slate-800/80 pb-2.5 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
             <span>👤</span> Thông tin khách hàng (Tích hợp Mini CDP)
           </h2>
+          <span className="text-[11px] text-slate-400 font-medium">
+            Tự động nhớ hồ sơ khách quen
+          </span>
         </div>
 
+        {/* Row 1: Phone + Name */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <PhoneLookupField
             phone={phone}
-            onChangePhone={setPhone}
+            onChangePhone={(p) => {
+              setPhone(p);
+              if (foundMember && p.trim() !== foundMember.phone) {
+                setFoundMember(null);
+                setSocialUpdateFeedback(null);
+              }
+            }}
             onMemberFound={handleMemberFound}
             onMemberNotFound={handleMemberNotFound}
           />
@@ -239,69 +374,117 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1.5">
-              Số lượng khách
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setNumGuests(Math.max(1, numGuests - 1))}
-                className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base flex items-center justify-center border border-slate-700 transition-colors"
-              >
-                −
-              </button>
-              <span className="font-mono font-bold text-base text-white px-2">
-                {numGuests} người
+        {/* Row 2: Instagram + Facebook (Mandatory 1 in 2) */}
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-bold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
+              <span>📱</span> Tài khoản Mạng Xã Hội
+              <span className="text-rose-400 font-bold text-sm">*</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                Bắt buộc có ít nhất 1 trong 2
               </span>
-              <button
-                type="button"
-                onClick={() => setNumGuests(Math.min(4, numGuests + 1))}
-                className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base flex items-center justify-center border border-slate-700 transition-colors"
-              >
-                +
-              </button>
-              <span className="text-xs text-slate-400 pl-2">
-                (Tiêu chuẩn 2 người / phòng)
-              </span>
+              {foundMember && (
+                <button
+                  type="button"
+                  onClick={handleDirectUpdateSocial}
+                  disabled={updatingSocial || (!instagram.trim() && !facebook.trim())}
+                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-lg border border-emerald-500/30 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-40"
+                  title="Lưu cập nhật Insta/FB vào hồ sơ khách quen theo SĐT ngay lập tức"
+                >
+                  {updatingSocial ? "⏳ Đang lưu..." : "💾 Cập nhật hồ sơ khách"}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Room selection */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1.5">
-              Chọn phòng trống <span className="text-rose-400">*</span>
-            </label>
-            <select
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 font-semibold"
+          {socialUpdateFeedback && (
+            <div className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-300 flex items-center gap-1.5 animate-in fade-in duration-200">
+              <span>✅</span>
+              <span>{socialUpdateFeedback}</span>
+            </div>
+          )}
+
+          {foundMember && (
+            <div className="text-[11px] text-slate-400 flex items-center gap-1.5 bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">
+              <span>ℹ️</span>
+              <span>
+                Khách quen: Bạn có thể thay đổi Insta/FB bên dưới. Hệ thống sẽ cập nhật theo SĐT khi tạo đơn hoặc bấm &quot;Cập nhật hồ sơ khách&quot;.
+              </span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Tài khoản Instagram
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-mono">
+                  @
+                </span>
+                <input
+                  type="text"
+                  placeholder="everyinn.hotel"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value.replace(/^@/, ""))}
+                  className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 pl-7 pr-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Tài khoản Facebook
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs text-blue-400">
+                  f
+                </span>
+                <input
+                  type="text"
+                  placeholder="Tên Facebook hoặc link"
+                  value={facebook}
+                  onChange={(e) => setFacebook(e.target.value)}
+                  className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 pl-7 pr-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Number of Guests */}
+        <div className="pt-1">
+          <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1.5">
+            Số lượng khách
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setNumGuests(Math.max(1, numGuests - 1))}
+              className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base flex items-center justify-center border border-slate-700 transition-colors cursor-pointer"
             >
-              <optgroup label={`Haven (${initialRooms.filter((r) => r.room_class === "haven").length} Phòng - 22m²)`}>
-                {initialRooms
-                  .filter((r) => r.room_class === "haven")
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>
-                      Phòng {r.room_number} ({r.name} - Tầng {r.floor})
-                    </option>
-                  ))}
-              </optgroup>
-              <optgroup label={`Signature (${initialRooms.filter((r) => r.room_class === "signature").length} Phòng - 28m²)`}>
-                {initialRooms
-                  .filter((r) => r.room_class === "signature")
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>
-                      Phòng {r.room_number} ({r.name} - Tầng {r.floor})
-                    </option>
-                  ))}
-              </optgroup>
-            </select>
+              −
+            </button>
+            <span className="font-mono font-bold text-base text-white px-2">
+              {numGuests} người
+            </span>
+            <button
+              type="button"
+              onClick={() => setNumGuests(Math.min(4, numGuests + 1))}
+              className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base flex items-center justify-center border border-slate-700 transition-colors cursor-pointer"
+            >
+              +
+            </button>
+            <span className="text-xs text-slate-400 pl-2">
+              (Tiêu chuẩn 2 người / phòng)
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Booking Type & Time Specs */}
+      {/* 2. Booking Type & Time Specs (With Room Selection At Bottom) */}
       <div className="rounded-2xl bg-[#0d131f] border border-slate-800 p-5 space-y-5 shadow-lg">
         <BookingTypeTabs
           selectedType={bookingType}
@@ -345,6 +528,68 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           />
         )}
 
+        {bookingType === "custom" && (
+          <CustomFields
+            checkinDate={customCheckinDate}
+            checkinTime={customCheckinTime}
+            checkoutDate={customCheckoutDate}
+            checkoutTime={customCheckoutTime}
+            customPrice={customPrice}
+            onChangeCheckinDate={setCustomCheckinDate}
+            onChangeCheckinTime={setCustomCheckinTime}
+            onChangeCheckoutDate={setCustomCheckoutDate}
+            onChangeCheckoutTime={setCustomCheckoutTime}
+            onChangeCustomPrice={setCustomPrice}
+          />
+        )}
+
+        {/* Relocated: Room Selection At Bottom of Booking Type Card */}
+        <div className="pt-3 border-t border-slate-800">
+          <label className="block text-xs font-bold text-slate-200 tracking-wide uppercase mb-1.5 flex items-center gap-1.5">
+            <span>🚪</span>
+            <span>Chọn phòng trống</span>
+            <span className="text-rose-400">*</span>
+          </label>
+          <select
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
+            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer shadow-inner"
+          >
+            <optgroup label={`Haven (${initialRooms.filter((r) => r.room_class === "haven").length} Phòng - 22m²)`}>
+              {initialRooms
+                .filter((r) => r.room_class === "haven")
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    Phòng {r.room_number} ({r.name} - Tầng {r.floor})
+                  </option>
+                ))}
+            </optgroup>
+            <optgroup label={`Signature (${initialRooms.filter((r) => r.room_class === "signature").length} Phòng - 28m²)`}>
+              {initialRooms
+                .filter((r) => r.room_class === "signature")
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    Phòng {r.room_number} ({r.name} - Tầng {r.floor})
+                  </option>
+                ))}
+            </optgroup>
+          </select>
+        </div>
+
+        {/* Closing / Confirmation Note with Guest */}
+        <div className="pt-2">
+          <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1">
+            Câu chốt với khách (Thoả thuận đặt phòng)
+          </label>
+          <textarea
+            rows={2}
+            value={closingNote}
+            onChange={(e) => setClosingNote(e.target.value)}
+            placeholder="VD: Dạ vậy bên Home xin chốt là bên mình book 201 in 21H 23/9 out 9H 24/9 tổng là 392K ạ..."
+            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none font-sans"
+          />
+        </div>
+
         {/* Internal Receptionist Note */}
         <div>
           <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1">
@@ -360,10 +605,10 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         </div>
       </div>
 
-      {/* Price Summary Card */}
+      {/* 3. Price Summary Card */}
       <PriceSummaryCard pricing={pricing} selectedRoom={selectedRoom} />
 
-      {/* Action Buttons */}
+      {/* 4. Action Buttons */}
       <div className="flex items-center justify-end gap-3 pt-2">
         <Button
           type="button"

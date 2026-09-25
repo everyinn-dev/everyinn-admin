@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { logEvent } from "@/lib/audit";
+import { invalidatePrefix } from "@/lib/cache";
 import { Booking } from "@/types";
 
 export async function GET(
@@ -86,6 +87,8 @@ export async function PATCH(
         { cancelReason, cancelledByStaffId: staff.id },
         staff.id
       );
+
+      invalidatePrefix("dashboard:gantt:");
 
       return NextResponse.json({ success: true, message: "Đã hủy đặt phòng thành công." });
     }
