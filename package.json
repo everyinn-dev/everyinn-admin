@@ -14,10 +14,12 @@
     "db:seed:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/002_seed.sql",
     "db:migrate:003:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/003_refactor_rooms_pricing.sql",
     "db:migrate:004:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/004_add_config_hourly_slots.sql",
+    "db:migrate:005:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/005_import_sheet_bookings.sql",
     "db:migrate:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/001_tables.sql",
     "db:seed:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/002_seed.sql",
     "db:migrate:003:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/003_refactor_rooms_pricing.sql",
-    "db:migrate:004:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/004_add_config_hourly_slots.sql"
+    "db:migrate:004:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/004_add_config_hourly_slots.sql",
+    "db:migrate:005:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/005_import_sheet_bookings.sql"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.14.0",
