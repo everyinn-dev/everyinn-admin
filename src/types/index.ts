@@ -1,5 +1,5 @@
 export type RoomClass = 'haven' | 'signature';
-export type BookingType = 'hourly' | 'overnight' | 'dayuse';
+export type BookingType = 'hourly' | 'overnight' | 'dayuse' | 'custom';
 export type BookingStatus = 'confirmed' | 'pending' | 'holding' | 'cancelled';
 export type LoyaltyTier = 'new' | 'bronze' | 'silver' | 'gold';
 export type StaffRole = 'receptionist' | 'manager';
@@ -101,6 +101,8 @@ export interface Member {
   last_booked_at?: string;
   loyalty_tier: LoyaltyTier;
   preferred_room_class?: string;
+  instagram?: string;
+  facebook?: string;
   internal_notes?: string;
   is_blocked: number;
   portal_opt_in: number;
@@ -121,6 +123,9 @@ export interface Booking {
   checkin_at: string; // ISO string
   checkout_at: string; // ISO string
   late_checkout_hours: number;
+  instagram?: string;
+  facebook?: string;
+  closing_note?: string;
   note?: string;
   created_by_staff_id?: number;
   created_by_staff_name?: string;
@@ -176,6 +181,9 @@ export interface GanttBookingItem {
   checkoutAt: string;
   totalPrice: number;
   status: BookingStatus;
+  instagram?: string;
+  facebook?: string;
+  closingNote?: string;
   note?: string;
 }
 
@@ -198,6 +206,9 @@ export interface GanttRoomData {
 }
 
 export interface GanttDataResponse {
-  date: string; // YYYY-MM-DD
+  date?: string; // YYYY-MM-DD (when query is for a single day)
+  month?: string; // YYYY-MM (when query is for a full month)
+  daysInMonth?: number;
   rooms: GanttRoomData[];
 }
+

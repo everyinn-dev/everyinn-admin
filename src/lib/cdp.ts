@@ -36,6 +36,8 @@ export async function upsertMemberOnBooking(
     totalPrice: number;
     bookingType: BookingType;
     roomClass: RoomClass;
+    instagram?: string;
+    facebook?: string;
     staffId?: number;
     cdpTiers?: CdpTiersConfig;
   }
@@ -47,6 +49,8 @@ export async function upsertMemberOnBooking(
 }> {
   const tiers = data.cdpTiers || (await getCachedCdpTiers(db));
   const cleanPhone = data.phone.trim();
+  const cleanInstagram = (data.instagram || "").trim();
+  const cleanFacebook = (data.facebook || "").trim();
   const existing = await lookupMember(db, cleanPhone);
   const now = new Date().toISOString();
 
@@ -58,13 +62,15 @@ export async function upsertMemberOnBooking(
     await db
       .prepare(
         `INSERT INTO members (
-          phone, full_name, total_bookings, total_spent, total_nights,
+          phone, full_name, instagram, facebook, total_bookings, total_spent, total_nights,
           first_booked_at, last_booked_at, loyalty_tier, preferred_room_class
-        ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         cleanPhone,
         data.name,
+        cleanInstagram || null,
+        cleanFacebook || null,
         data.totalPrice,
         nightsToAdd,
         now,
@@ -79,13 +85,15 @@ export async function upsertMemberOnBooking(
       'MEMBER_CREATED',
       'member',
       cleanPhone,
-      { phone: cleanPhone, name: data.name, tier: newTier },
+      { phone: cleanPhone, name: data.name, instagram: cleanInstagram, facebook: cleanFacebook, tier: newTier },
       data.staffId
     );
 
     const createdMember: Member = {
       phone: cleanPhone,
       full_name: data.name,
+      instagram: cleanInstagram || undefined,
+      facebook: cleanFacebook || undefined,
       total_bookings: 1,
       total_spent: data.totalPrice,
       total_nights: nightsToAdd,
@@ -107,10 +115,21 @@ export async function upsertMemberOnBooking(
     const newTier = calculateLoyaltyTier(updatedSpent, updatedBookings, tiers);
     const tierChanged = newTier !== existing.loyalty_tier;
 
+    const finalInstagram =
+      data.instagram !== undefined
+        ? (cleanInstagram || null)
+        : (existing.instagram || null);
+    const finalFacebook =
+      data.facebook !== undefined
+        ? (cleanFacebook || null)
+        : (existing.facebook || null);
+
     await db
       .prepare(
         `UPDATE members SET
           full_name = COALESCE(?, full_name),
+          instagram = ?,
+          facebook = ?,
           total_bookings = ?,
           total_spent = ?,
           total_nights = ?,
@@ -122,6 +141,8 @@ export async function upsertMemberOnBooking(
       )
       .bind(
         data.name || existing.full_name,
+        finalInstagram,
+        finalFacebook,
         updatedBookings,
         updatedSpent,
         updatedNights,
@@ -153,6 +174,8 @@ export async function upsertMemberOnBooking(
     const updatedMember: Member = {
       ...existing,
       full_name: data.name || existing.full_name,
+      instagram: finalInstagram || undefined,
+      facebook: finalFacebook || undefined,
       total_bookings: updatedBookings,
       total_spent: updatedSpent,
       total_nights: updatedNights,
@@ -169,4 +192,77 @@ export async function upsertMemberOnBooking(
       oldTier: existing.loyalty_tier,
     };
   }
+}
+
+/**
+ * Direct update of a member's social accounts and name by phone number key
+ */
+export async function updateMemberSocial(
+  db: D1Database,
+  data: {
+    phone: string;
+    instagram?: string;
+    facebook?: string;
+    fullName?: string;
+    staffId?: number;
+  }
+): Promise<{ success: boolean; member?: Member; error?: string }> {
+  const cleanPhone = data.phone.trim();
+  const existing = await lookupMember(db, cleanPhone);
+  if (!existing) {
+    return { success: false, error: "Không tìm thấy hồ sơ khách hàng với số điện thoại này." };
+  }
+
+  const cleanInstagram = typeof data.instagram === "string" ? data.instagram.trim() : undefined;
+  const cleanFacebook = typeof data.facebook === "string" ? data.facebook.trim() : undefined;
+
+  const finalInstagram =
+    cleanInstagram !== undefined
+      ? (cleanInstagram || null)
+      : (existing.instagram || null);
+  const finalFacebook =
+    cleanFacebook !== undefined
+      ? (cleanFacebook || null)
+      : (existing.facebook || null);
+
+  if (!finalInstagram && !finalFacebook) {
+    return {
+      success: false,
+      error: "Tài khoản mạng xã hội không được bỏ trống (bắt buộc có ít nhất 1 trong 2: Instagram hoặc Facebook).",
+    };
+  }
+
+  const now = new Date().toISOString();
+  const finalName = data.fullName?.trim() || existing.full_name;
+
+  await db
+    .prepare(
+      `UPDATE members SET
+        full_name = ?,
+        instagram = ?,
+        facebook = ?,
+        updated_at = ?
+       WHERE phone = ?`
+    )
+    .bind(finalName, finalInstagram, finalFacebook, now, cleanPhone)
+    .run();
+
+  await logEvent(
+    db,
+    "MEMBER_UPDATED",
+    "member",
+    cleanPhone,
+    {
+      phone: cleanPhone,
+      oldInstagram: existing.instagram,
+      newInstagram: finalInstagram,
+      oldFacebook: existing.facebook,
+      newFacebook: finalFacebook,
+      name: finalName,
+    },
+    data.staffId
+  );
+
+  const updated = await lookupMember(db, cleanPhone);
+  return { success: true, member: updated || undefined };
 }

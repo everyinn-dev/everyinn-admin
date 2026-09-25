@@ -3,7 +3,7 @@ import { BookingType, PricingRule, RoomClass } from "@/types";
 export interface PricingBreakdown {
   bookingType: BookingType;
   roomClass: RoomClass;
-  comboKey: 'combo3h' | 'combo6h' | 'overnight' | 'dayroom';
+  comboKey: 'combo3h' | 'combo6h' | 'overnight' | 'dayroom' | 'custom';
   comboLabel: string;
   basePrice: number;
   durationLabel: string;
@@ -46,6 +46,7 @@ export function calculatePrice(params: {
   pricingRules: PricingRule[];
   extraHourFee?: number;
   discountAmount?: number;
+  customPrice?: number;
 }): PricingBreakdown {
   const {
     bookingType,
@@ -56,6 +57,7 @@ export function calculatePrice(params: {
     pricingRules,
     extraHourFee,
     discountAmount = 0,
+    customPrice = 0,
   } = params;
 
   // Retrieve base price strictly from master pricing_rules
@@ -82,6 +84,31 @@ export function calculatePrice(params: {
   };
 
   const extraUnitFee = getExtraHourFee();
+
+  if (bookingType === 'custom') {
+    const validPrice = Math.max(0, Math.round(customPrice));
+    const diffMs = Math.max(0, checkoutAt.getTime() - checkinAt.getTime());
+    const totalHours = Math.round(diffMs / (3600 * 1000));
+    const totalDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    const durationText = totalDays > 0
+      ? `${totalDays} ngày${remainingHours > 0 ? ` ${remainingHours}h` : ''}`
+      : `${totalHours} giờ`;
+
+    return {
+      bookingType,
+      roomClass,
+      comboKey: 'custom',
+      comboLabel: 'Đơn Đặt Tuỳ Chỉnh',
+      basePrice: validPrice,
+      durationLabel: `Tuỳ chỉnh (${durationText})`,
+      extraHours: 0,
+      extraHourFee: 0,
+      totalExtraFee: 0,
+      discountAmount,
+      totalPrice: Math.max(0, validPrice - discountAmount),
+    };
+  }
 
   if (bookingType === 'hourly') {
     const diffMs = checkoutAt.getTime() - checkinAt.getTime();

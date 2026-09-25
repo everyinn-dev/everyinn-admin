@@ -7,6 +7,7 @@ import { upsertMemberOnBooking } from "@/lib/cdp";
 import { logEvent } from "@/lib/audit";
 import { BookingType, PricingRule, Room } from "@/types";
 import { getCachedRooms, getCachedPricingRules } from "@/lib/masterData";
+import { invalidatePrefix } from "@/lib/cache";
 
 export async function GET(req: NextRequest) {
   try {
@@ -75,11 +76,16 @@ export async function POST(req: NextRequest) {
       roomId,
       phone,
       name,
+      instagram = "",
+      facebook = "",
+      closingNote = "",
+      closing_note = "",
       numGuests = 2,
       bookingType,
       checkinAt,
       checkoutAt,
       lateCheckoutHours = 0,
+      customPrice = 0,
       note = "",
       status = "confirmed",
     } = body;
@@ -94,6 +100,29 @@ export async function POST(req: NextRequest) {
 
     const cleanPhone = phone.trim();
     const cleanName = name.trim();
+    const cleanInstagram = (instagram || "").trim();
+    const cleanFacebook = (facebook || "").trim();
+    const cleanClosingNote = (closingNote || closing_note || "").trim();
+
+    // Mandatory: At least 1 of Instagram or Facebook
+    if (!cleanInstagram && !cleanFacebook) {
+      return NextResponse.json(
+        { error: "Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2)." },
+        { status: 400 }
+      );
+    }
+
+    // Custom booking type price validation
+    if (bookingType === "custom") {
+      const priceNum = Number(customPrice);
+      if (isNaN(priceNum) || priceNum < 0) {
+        return NextResponse.json(
+          { error: "Vui lòng nhập số tiền hợp lệ cho đơn đặt phòng tuỳ chỉnh." },
+          { status: 400 }
+        );
+      }
+    }
+
     const checkinDate = new Date(checkinAt);
     const checkoutDate = new Date(checkoutAt);
 
@@ -160,6 +189,7 @@ export async function POST(req: NextRequest) {
       checkoutAt: checkoutDate,
       lateCheckoutHours: Number(lateCheckoutHours) || 0,
       pricingRules,
+      customPrice: Number(customPrice) || 0,
     });
 
     const bookingId = generateBookingId();
@@ -169,13 +199,13 @@ export async function POST(req: NextRequest) {
     await db
       .prepare(
         `INSERT INTO bookings (
-          id, property_id, room_id, member_phone, member_name, num_guests,
-          booking_type, checkin_at, checkout_at, late_checkout_hours, note,
+          id, property_id, room_id, member_phone, member_name, instagram, facebook, num_guests,
+          booking_type, checkin_at, checkout_at, late_checkout_hours, closing_note, note,
           created_by_staff_id, status, base_price, extra_fee, discount_amount, total_price,
           created_at, updated_at
         ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?
         )`
@@ -186,11 +216,14 @@ export async function POST(req: NextRequest) {
         room.id,
         cleanPhone,
         cleanName,
+        cleanInstagram || null,
+        cleanFacebook || null,
         Number(numGuests) || 2,
         bookingType,
         checkinIso,
         checkoutIso,
         Number(lateCheckoutHours) || 0,
+        cleanClosingNote || null,
         note,
         staff.id,
         status,
@@ -203,10 +236,12 @@ export async function POST(req: NextRequest) {
       )
       .run();
 
-    // 6. CDP: Upsert member and recalculate loyalty tier
+    // 6. CDP: Upsert member and recalculate loyalty tier (updates instagram/facebook by phone)
     const cdpResult = await upsertMemberOnBooking(db, {
       phone: cleanPhone,
       name: cleanName,
+      instagram: cleanInstagram,
+      facebook: cleanFacebook,
       totalPrice: pricing.totalPrice,
       bookingType: bookingType as BookingType,
       roomClass: room.room_class,
@@ -225,11 +260,16 @@ export async function POST(req: NextRequest) {
         roomName: room.name,
         phone: cleanPhone,
         name: cleanName,
+        instagram: cleanInstagram,
+        facebook: cleanFacebook,
         totalPrice: pricing.totalPrice,
         bookingType,
       },
       staff.id
     );
+
+    // Invalidate dashboard gantt cache
+    invalidatePrefix("dashboard:gantt:");
 
     return NextResponse.json({
       success: true,
@@ -240,6 +280,9 @@ export async function POST(req: NextRequest) {
         roomClass: room.room_class,
         phone: cleanPhone,
         name: cleanName,
+        instagram: cleanInstagram,
+        facebook: cleanFacebook,
+        closingNote: cleanClosingNote,
         bookingType,
         checkinAt: checkinIso,
         checkoutAt: checkoutIso,

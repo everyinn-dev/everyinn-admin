@@ -37,6 +37,8 @@ Migrations are located in `db/migrations/`:
 - `002_seed.sql`: Seed data for property, default rooms, pricing rules, configs, and default staff.
 - `003_refactor_rooms_pricing.sql`: 6 rooms total (3 Haven: 101, 201, 301 | 3 Signature: 102, 202, 302) and standard pricing.
 - `004_add_config_hourly_slots.sql`: Adds `hourly_checkin_slots` config (`[21, 22, 23, 24]`) to `configs` table.
+- `005_import_sheet_bookings.sql`: Historical bookings imported from operational Google Sheet.
+- `006_add_social_and_closing_note.sql`: Adds `instagram`, `facebook` to `members` & `bookings`, and `closing_note` to `bookings`.
 
 ---
 
@@ -72,6 +74,10 @@ To optimize Cloudflare D1 query quota and accelerate latency:
   - Nhận phòng tiêu chuẩn: **15:00** — Trả phòng: **12:00** hôm sau.
   - Giá gốc: Haven 590k/đêm, Signature 750k/đêm.
   - Trả phòng trễ: Tối đa 2 tiếng (+60k/h).
+- **4. Tuỳ Chỉnh (Custom)**:
+  - Dành cho đơn thỏa thuận đặc biệt (chụp ảnh, quay phim, thuê dài ngày, đơn đối tác).
+  - Tự chọn ngày giờ check-in & check-out bất kỳ.
+  - Tự nhập số tiền thanh toán (customPrice).
 
 ---
 
@@ -102,3 +108,41 @@ To optimize Cloudflare D1 query quota and accelerate latency:
   - QR Code payment generation & manual confirmation toggle
   - Telegram bot notifications (TG-01 through TG-05)
   - 6-digit door code generation
+
+---
+
+## 🛡️ 8. Cloudflare Free Tier Infrastructure Constraints & Algorithmic Guardrails
+> **Target Platform**: Cloudflare Workers + Cloudflare D1 (SQLite at the Edge)  
+> **Source Reference**: [Cloudflare Developer Documentation](https://developers.cloudflare.com/) (Workers Limits, D1 Platform Limits)  
+> **Detailed Rule File**: See [`.agents/rules/cloudflare-free-tier.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/rules/cloudflare-free-tier.md)
+
+Khi viết code và thiết kế thuật toán cho hệ thống, TẤT CẢ các agent và lập trình viên **BẮT BUỘC** phải tuân thủ các quy tắc sau nhằm đảm bảo hệ thống chạy mượt mà trên giới hạn gói Free:
+
+### 1. Giới hạn Cơ sở dữ liệu D1 (D1 Quota Protection)
+- **5.000.000 Rows Read / ngày**:
+  - D1 tính quota theo **số dòng bị quét (Rows Read)**, KHÔNG phải số câu lệnh.
+  - **Zero-Unindexed Scans**: CẤM quét toàn bảng (`table scan`). Mọi câu lệnh SQL có `WHERE`, `ORDER BY`, `JOIN` trên bảng `bookings`, `members`, `room_blocks`, `staff_sessions` BẮT BUỘC phải dùng `INDEX`.
+  - **Selective Projection**: CẤM dùng `SELECT *` trong các API thông thường; chỉ `SELECT` các cột cần thiết để giảm tải I/O và bộ nhớ.
+  - **Phân trang bắt buộc**: Mọi API danh sách phải có `LIMIT` (mặc định $\le 50$) và phân trang, tránh kéo hàng ngàn bản ghi một lúc.
+- **100.000 Rows Written / ngày**:
+  - Tránh `UPDATE` thừa thãi khi dữ liệu không thay đổi.
+  - **Gom thao tác qua `db.batch()`**: Khi 1 nghiệp vụ cần ghi nhiều bảng (Tạo booking + Cập nhật tổng chi tiêu/hạng thẻ Member + Ghi Event Log), BẮT BUỘC dùng `await db.batch([stmt1, stmt2, stmt3])` để gói gọn trong 1 transaction và 1 round-trip duy nhất.
+
+### 2. Giới hạn Cloudflare Workers (Worker CPU & Memory Guard)
+- **10 ms CPU Time / request**:
+  - 10ms là thời gian tính toán thực tế của CPU, không tính thời gian chờ mạng.
+  - **Cảnh báo Bcrypt**: Thư viện `bcryptjs` ngốn rất nhiều CPU. Salt rounds $\ge 12$ sẽ làm sập Worker ngay lập tức (`Error 1101: CPU limit exceeded`). CHỈ dùng tối đa `bcrypt.genSalt(10)` hoặc Web Crypto API (`crypto.subtle`).
+  - **Giải thuật Tuyến Tính**: Mọi hàm biến đổi dữ liệu trên Worker phải là $O(N)$ hoặc $O(N \log N)$. CẤM vòng lặp lồng $O(N^2)$ hoặc $O(N^3)$.
+- **128 MB Memory / Isolate**:
+  - Không đọc toàn bộ dataset lớn vào bộ nhớ. Tránh rò rỉ bộ nhớ trong các biến toàn cục module.
+- **Worker Phi Trạng Thái (Stateless & Ephemeral)**:
+  - Isolate có thể bị hủy và tái tạo bất kỳ lúc nào trên 300+ data centers.
+  - `src/lib/cache.ts` CHỈ dùng để cache Master Data (Rooms, Pricing Rules, CDP Tiers) để giảm D1 rows read.
+  - CẤM dùng biến trong bộ nhớ module để làm "Khóa giữ phòng" (Hold Lock) hoặc biến đồng bộ trạng thái giao dịch. Trạng thái giữ phòng phải lưu vào cột `hold_expires_at` của bảng `bookings` trong D1.
+  - CẤM dùng `setTimeout` chạy ngầm sau khi trả Response (Worker sẽ bị đóng băng ngay lập tức).
+- **100.000 Requests / ngày**:
+  - Frontend polling / refresh phải có khoảng nghỉ tối thiểu $\ge 30$ giây. Không polling 1s - 5s.
+  - Tìm kiếm SĐT phải có Debounce (300ms - 500ms) trên client.
+- **50 Subrequests / request**:
+  - Giới hạn số lần gọi API ngoài (Telegram, VietQR, Zalo) tối đa 1-3 lần/request, có try/catch và timeout $\le 5000$ms.
+

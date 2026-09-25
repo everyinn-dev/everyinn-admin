@@ -54,6 +54,15 @@ export const Badge: React.FC<BadgeProps> = ({
             {children || "Theo Ngày"}
           </span>
         );
+      case "custom":
+        return (
+          <span
+            className={`inline-flex items-center gap-1 font-medium rounded-md bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30 ${sizeClass} ${className}`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span>
+            {children || "Tuỳ Chỉnh"}
+          </span>
+        );
     }
   }
 

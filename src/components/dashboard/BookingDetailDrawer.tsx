@@ -108,6 +108,24 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                 <span>Gọi</span>
               </a>
             </div>
+
+            {/* Social handles */}
+            {(booking.instagram || booking.facebook) && (
+              <div className="pt-2 border-t border-slate-800/80 flex flex-wrap gap-2 text-xs">
+                {booking.instagram && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-500/10 border border-pink-500/20 text-pink-300 font-medium">
+                    <span className="text-xs">📸</span>
+                    <span>@{booking.instagram}</span>
+                  </div>
+                )}
+                {booking.facebook && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium">
+                    <span className="text-xs font-bold text-blue-400">f</span>
+                    <span>{booking.facebook}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Booking Details */}
@@ -151,6 +169,19 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               {Number(booking.totalPrice).toLocaleString("vi-VN")} đ
             </div>
           </div>
+
+          {/* Closing Note / Agreement with Guest */}
+          {booking.closingNote && (
+            <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs space-y-1.5">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold uppercase tracking-wider text-[10px]">
+                <span>💬</span>
+                <span>Câu chốt với khách</span>
+              </div>
+              <p className="text-amber-100/90 italic leading-relaxed bg-slate-900/60 p-2.5 rounded-lg border border-amber-500/20">
+                &ldquo;{booking.closingNote}&rdquo;
+              </p>
+            </div>
+          )}
 
           {/* Note if any */}
           {booking.note && (
