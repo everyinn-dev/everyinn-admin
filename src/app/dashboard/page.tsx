@@ -294,6 +294,9 @@ function DashboardContent() {
             onBookingCancelled={() => {
               fetchData();
             }}
+            onBookingUpdated={() => {
+              fetchData();
+            }}
           />
         )}
       </div>

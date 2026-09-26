@@ -13,6 +13,7 @@ import { CustomFields } from "./CustomFields";
 import { PriceSummaryCard } from "./PriceSummaryCard";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
+import { useToast } from "../ui/Toast";
 
 interface BookingFormProps {
   initialRooms: Room[];
@@ -28,6 +29,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   hourlySlots,
 }) => {
   const router = useRouter();
+  const toast = useToast();
   const searchParams = useSearchParams();
 
   // Query param prefill (if receptionist clicked "+ Đặt phòng này" from dashboard)
@@ -218,7 +220,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       });
       const data = (await res.json()) as any;
       if (!res.ok) {
-        throw new Error(data.error || "Không thể cập nhật hồ sơ khách hàng.");
+        const errorText = data.error || "Không thể cập nhật hồ sơ khách hàng.";
+        toast.error(errorText, "Lỗi cập nhật mạng xã hội");
+        throw new Error(errorText);
       }
       setFoundMember((prev) =>
         prev
@@ -230,7 +234,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             }
           : null
       );
-      setSocialUpdateFeedback("Đã lưu cập nhật Insta/FB vào hồ sơ khách theo SĐT!");
+      const msg = "Đã lưu cập nhật Insta/FB vào hồ sơ khách theo SĐT!";
+      setSocialUpdateFeedback(msg);
+      toast.success(msg, "Cập nhật CDP");
       setTimeout(() => setSocialUpdateFeedback(null), 4000);
     } catch (err: any) {
       setErrorMsg(err.message || "Lỗi khi cập nhật hồ sơ.");
@@ -246,11 +252,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     setSuccessMsg("");
 
     if (!phone.trim()) {
-      setErrorMsg("Vui lòng nhập số điện thoại khách hàng.");
+      const err = "Vui lòng nhập số điện thoại khách hàng.";
+      setErrorMsg(err);
+      toast.warning(err, "Thiếu thông tin");
       return;
     }
     if (!name.trim()) {
-      setErrorMsg("Vui lòng nhập họ và tên khách hàng.");
+      const err = "Vui lòng nhập họ và tên khách hàng.";
+      setErrorMsg(err);
+      toast.warning(err, "Thiếu thông tin");
       return;
     }
 
@@ -258,22 +268,30 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     const cleanIg = instagram.trim();
     const cleanFb = facebook.trim();
     if (!cleanIg && !cleanFb) {
-      setErrorMsg("Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2).");
+      const err = "Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2).";
+      setErrorMsg(err);
+      toast.warning(err, "Thiếu tài khoản MXH");
       return;
     }
 
     if (!roomId) {
-      setErrorMsg("Vui lòng chọn phòng trống.");
+      const err = "Vui lòng chọn phòng trống.";
+      setErrorMsg(err);
+      toast.warning(err, "Chưa chọn phòng");
       return;
     }
 
     if (bookingType === "custom") {
       if (customPrice <= 0) {
-        setErrorMsg("Vui lòng nhập số tiền thanh toán cho đơn đặt phòng tuỳ chỉnh.");
+        const err = "Vui lòng nhập số tiền thanh toán cho đơn đặt phòng tuỳ chỉnh.";
+        setErrorMsg(err);
+        toast.warning(err, "Chưa nhập giá");
         return;
       }
       if (checkoutAt <= checkinAt) {
-        setErrorMsg("Thời gian trả phòng phải sau thời gian nhận phòng.");
+        const err = "Thời gian trả phòng phải sau thời gian nhận phòng.";
+        setErrorMsg(err);
+        toast.warning(err, "Lỗi thời gian");
         return;
       }
     }
@@ -305,12 +323,18 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
       const data = (await res.json()) as any;
       if (!res.ok) {
-        throw new Error(data.error || "Không thể tạo đặt phòng.");
+        const errorText = data.error || "Không thể tạo đặt phòng.";
+        if (res.status === 409) {
+          toast.warning(errorText, "Xung đột lịch & Giờ dọn phòng");
+        } else {
+          toast.error(errorText, "Lỗi tạo đặt phòng");
+        }
+        throw new Error(errorText);
       }
 
-      setSuccessMsg(
-        `✅ Đã tạo thành công mã đặt phòng #${data.booking.id} cho ${name}! Đang chuyển hướng...`
-      );
+      const successNotice = `Đã tạo thành công mã đặt phòng #${data.booking.id} cho ${name}!`;
+      setSuccessMsg(`✅ ${successNotice} Đang chuyển hướng...`);
+      toast.success(successNotice, "Tạo đơn thành công");
 
       setTimeout(() => {
         router.push(`/dashboard?date=${checkinAt.toISOString().slice(0, 10)}`);
