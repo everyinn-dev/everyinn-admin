@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Booking, BookingType, PricingRule, Room } from "@/types";
 import { calculatePrice } from "@/lib/pricing";
+import { roundToNearest30Min } from "@/lib/timelineUtils";
 import { BookingTypeTabs } from "../bookings/BookingTypeTabs";
 import { HourlyFields } from "../bookings/HourlyFields";
 import { OvernightFields } from "../bookings/OvernightFields";
@@ -98,9 +99,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         const inDateStr = b.checkin_at.slice(0, 10);
         const outDateStr = b.checkout_at.slice(0, 10);
 
-        const pad = (n: number) => String(n).padStart(2, "0");
-        const inTimeStr = `${pad(inDate.getHours())}:${pad(inDate.getMinutes())}`;
-        const outTimeStr = `${pad(outDate.getHours())}:${pad(outDate.getMinutes())}`;
+        const inTimeStr = roundToNearest30Min(inDate);
+        const outTimeStr = roundToNearest30Min(outDate);
 
         // Initialize Hourly
         setHourlyDate(inDateStr);
@@ -119,7 +119,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         setDayuseNights(nights);
         setDayuseLateHours(b.late_checkout_hours || 0);
 
-        // Initialize Custom
+        // Initialize Custom (snapped to 30-minute steps)
         setCustomCheckinDate(inDateStr);
         setCustomCheckinTime(inTimeStr);
         setCustomCheckoutDate(outDateStr);

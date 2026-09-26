@@ -156,6 +156,7 @@ export interface RoomBlock {
   blocked_from: string;
   blocked_to: string;
   reason?: string;
+  note?: string;
   created_by?: number;
   created_at: string;
 }
@@ -193,6 +194,9 @@ export interface GanttBlockItem {
   blockedFrom: string;
   blockedTo: string;
   reason?: string;
+  note?: string;
+  createdByStaffId?: number;
+  createdAt?: string;
 }
 
 export interface GanttRoomData {

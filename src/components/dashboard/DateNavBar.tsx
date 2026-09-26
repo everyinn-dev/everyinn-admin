@@ -16,6 +16,7 @@ interface DateNavBarProps {
   onFilterChange: (filter: "all" | "haven" | "signature") => void;
   onRefresh: () => void;
   isLoading?: boolean;
+  onOpenRoomLockModal?: () => void;
   roomCounts?: {
     all: number;
     haven: number;
@@ -35,6 +36,7 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
   onFilterChange,
   onRefresh,
   isLoading = false,
+  onOpenRoomLockModal,
   roomCounts,
 }) => {
   const vnToday = getVnToday();
@@ -248,6 +250,18 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
               Signature {roomCounts ? `(${roomCounts.signature})` : ""}
             </button>
           </div>
+
+          {/* Room Lock Button */}
+          {onOpenRoomLockModal && (
+            <button
+              onClick={onOpenRoomLockModal}
+              title="Khóa phòng tạm thời / Bảo trì"
+              className="px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 hover:border-amber-500/50 text-amber-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+            >
+              <span>🔒</span>
+              <span className="hidden sm:inline">Khóa phòng</span>
+            </button>
+          )}
 
           {/* Refresh button */}
           <button

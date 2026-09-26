@@ -5,6 +5,8 @@ import { getCachedRooms } from "@/lib/masterData";
 import { getOrSet } from "@/lib/cache";
 import { GanttDataResponse, Booking, RoomBlock } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const db = await getDb();
@@ -32,30 +34,32 @@ export async function GET(req: NextRequest) {
 
       const cacheKey = `dashboard:gantt:month:${monthParam}`;
 
-      // In-memory cache for 30 minutes (invalidated when bookings change)
+      // In-memory cache for 30 minutes (invalidated when bookings or room blocks change)
       const data = await getOrSet(cacheKey, 1800, async () => {
-        // Query all non-cancelled bookings overlapping with this month
-        const { results: bookings } = await db
-          .prepare(
-            `SELECT id, room_id, member_phone, member_name, instagram, facebook, closing_note, booking_type, checkin_at, checkout_at, total_price, status, note
-             FROM bookings
-             WHERE status != 'cancelled'
-               AND checkin_at <= ?
-               AND checkout_at >= ?
-             ORDER BY checkin_at ASC`
-          )
-          .bind(endOfMonth, startOfMonth)
-          .all<Booking>();
+        // High-performance single round-trip batch query on Cloudflare D1
+        const [bookingsBatch, blocksBatch] = await db.batch([
+          db
+            .prepare(
+              `SELECT id, room_id, member_phone, member_name, instagram, facebook, closing_note, booking_type, checkin_at, checkout_at, total_price, status, note
+               FROM bookings
+               WHERE status != 'cancelled'
+                 AND checkin_at <= ?
+                 AND checkout_at >= ?
+               ORDER BY checkin_at ASC`
+            )
+            .bind(endOfMonth, startOfMonth),
+          db
+            .prepare(
+              `SELECT id, room_id, blocked_from, blocked_to, reason, note, created_by, created_at
+               FROM room_blocks
+               WHERE blocked_from <= ? AND blocked_to >= ?
+               ORDER BY blocked_from ASC`
+            )
+            .bind(endOfMonth, startOfMonth),
+        ]);
 
-        // Query all active room blocks overlapping with this month
-        const { results: blocks } = await db
-          .prepare(
-            `SELECT id, room_id, blocked_from, blocked_to, reason
-             FROM room_blocks
-             WHERE blocked_from <= ? AND blocked_to >= ?`
-          )
-          .bind(endOfMonth, startOfMonth)
-          .all<RoomBlock>();
+        const bookings = (bookingsBatch?.results || []) as Booking[];
+        const blocks = (blocksBatch?.results || []) as RoomBlock[];
 
         const ganttRooms = (rooms || []).map((room) => {
           const roomBookings = (bookings || [])
@@ -84,6 +88,9 @@ export async function GET(req: NextRequest) {
               blockedFrom: blk.blocked_from,
               blockedTo: blk.blocked_to,
               reason: blk.reason,
+              note: blk.note,
+              createdByStaffId: blk.created_by,
+              createdAt: blk.created_at,
             }));
 
           return {
@@ -112,26 +119,30 @@ export async function GET(req: NextRequest) {
     const startOfDay = `${targetDate}T00:00:00`;
     const endOfDay = `${targetDate}T23:59:59`;
 
-    const { results: bookings } = await db
-      .prepare(
-        `SELECT id, room_id, member_phone, member_name, instagram, facebook, closing_note, booking_type, checkin_at, checkout_at, total_price, status, note
-         FROM bookings
-         WHERE status != 'cancelled'
-           AND checkin_at <= ?
-           AND checkout_at >= ?
-         ORDER BY checkin_at ASC`
-      )
-      .bind(endOfDay, startOfDay)
-      .all<Booking>();
+    // High-performance single round-trip batch query on Cloudflare D1
+    const [bookingsBatch, blocksBatch] = await db.batch([
+      db
+        .prepare(
+          `SELECT id, room_id, member_phone, member_name, instagram, facebook, closing_note, booking_type, checkin_at, checkout_at, total_price, status, note
+           FROM bookings
+           WHERE status != 'cancelled'
+             AND checkin_at <= ?
+             AND checkout_at >= ?
+           ORDER BY checkin_at ASC`
+        )
+        .bind(endOfDay, startOfDay),
+      db
+        .prepare(
+          `SELECT id, room_id, blocked_from, blocked_to, reason, note, created_by, created_at
+           FROM room_blocks
+           WHERE blocked_from <= ? AND blocked_to >= ?
+           ORDER BY blocked_from ASC`
+        )
+        .bind(endOfDay, startOfDay),
+    ]);
 
-    const { results: blocks } = await db
-      .prepare(
-        `SELECT id, room_id, blocked_from, blocked_to, reason
-         FROM room_blocks
-         WHERE blocked_from <= ? AND blocked_to >= ?`
-      )
-      .bind(endOfDay, startOfDay)
-      .all<RoomBlock>();
+    const bookings = (bookingsBatch?.results || []) as Booking[];
+    const blocks = (blocksBatch?.results || []) as RoomBlock[];
 
     const ganttRooms = (rooms || []).map((room) => {
       const roomBookings = (bookings || [])
@@ -160,6 +171,9 @@ export async function GET(req: NextRequest) {
           blockedFrom: blk.blocked_from,
           blockedTo: blk.blocked_to,
           reason: blk.reason,
+          note: blk.note,
+          createdByStaffId: blk.created_by,
+          createdAt: blk.created_at,
         }));
 
       return {

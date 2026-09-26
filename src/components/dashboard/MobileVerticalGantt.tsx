@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
-import { GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { Badge } from "../ui/Badge";
 import {
   TIMELINE_SLOTS,
@@ -22,6 +22,7 @@ interface MobileVerticalGanttProps {
   currentDate: string; // YYYY-MM-DD
   rooms: GanttRoomData[];
   onBookingClick: (booking: GanttBookingItem) => void;
+  onBlockClick?: (block: GanttBlockItem, room: GanttRoomData) => void;
   scrollTrigger?: number;
 }
 
@@ -35,6 +36,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
   currentDate,
   rooms,
   onBookingClick,
+  onBlockClick,
   scrollTrigger = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -418,33 +420,50 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     </div>
                   ))}
 
-                  {/* Room Blocks (Bảo trì / Giữ phòng) */}
+                  {/* Room Blocks (Bảo trì / Khóa phòng - Kéo dài nổi bật theo giờ khóa) */}
                   {room.blocks.map((block) => {
                     const blockStart = new Date(block.blockedFrom).getTime();
                     const blockEnd = new Date(block.blockedTo).getTime();
                     if (blockEnd < timelineStartMs || blockStart > timelineEndMs) return null;
 
+                    const startsBefore = blockStart < timelineStartMs;
+                    const endsAfter = blockEnd > timelineEndMs;
+
                     const top = timeToTimelineY(blockStart);
                     const bottom = timeToTimelineY(blockEnd);
-                    const durationPx = Math.max(26, bottom - top);
+                    const durationPx = Math.max(32, bottom - top);
 
                     return (
                       <div
                         key={block.id}
-                        className="absolute left-1 right-1 rounded-lg bg-amber-950/90 border border-amber-500/50 text-[10px] text-amber-200 font-medium p-1 flex flex-col justify-center overflow-hidden z-10 shadow-sm"
+                        onClick={() => onBlockClick?.(block, room)}
+                        className="absolute left-1 right-1 rounded-xl bg-[repeating-linear-gradient(45deg,rgba(180,83,9,0.4),rgba(180,83,9,0.4)_8px,rgba(245,158,11,0.22)_8px,rgba(245,158,11,0.22)_16px)] bg-amber-950/95 border-2 border-amber-400 text-amber-100 font-bold p-1.5 flex flex-col justify-between overflow-hidden z-15 shadow-lg shadow-amber-950/60 cursor-pointer active:scale-95 transition-all hover:brightness-110"
                         style={{
                           top: `${top}px`,
                           height: `${durationPx}px`,
                         }}
-                        title={`Khóa phòng: ${block.reason || "Bảo trì"}`}
+                        title={`🔒 Khóa phòng: ${block.reason || "Bảo trì"}\nThời gian: ${formatDateTimeShort(block.blockedFrom)} → ${formatDateTimeShort(block.blockedTo)}${block.note ? `\nGhi chú: ${block.note}` : ""}\n(Chạm để xem chi tiết / mở khóa)`}
                       >
-                        <div className="flex items-center gap-1 font-bold text-amber-300 truncate">
-                          <span>🔒</span>
-                          <span className="truncate">{block.reason || "Bảo trì"}</span>
+                        {startsBefore && (
+                          <div className="text-[9px] text-amber-300 font-bold flex items-center gap-1 animate-pulse pb-0.5">
+                            <span>▲</span> <span>Tiếp từ hôm trước</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 font-bold text-amber-200 truncate">
+                          <span className="text-xs">🔒</span>
+                          <span className="truncate text-[11px]">{block.reason || "Bảo trì phòng"}</span>
                         </div>
-                        <span className="text-[9px] opacity-80 font-mono">
+
+                        <span className="text-[10px] text-amber-300 font-mono font-medium truncate">
                           {formatTimeShort(block.blockedFrom)} - {formatTimeShort(block.blockedTo)}
                         </span>
+
+                        {endsAfter && (
+                          <div className="text-[9px] text-amber-300 font-bold flex items-center gap-1 animate-pulse pt-0.5">
+                            <span>▼</span> <span>Kéo dài sang hôm sau</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -456,9 +475,30 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     const cleanUntilMs = checkoutMs + 60 * 60 * 1000;
                     if (cleanUntilMs < timelineStartMs || checkoutMs > timelineEndMs) return null;
 
+                    // Check if a Room Lock starts right at checkout or within the 1h buffer
+                    const overlappingBlock = room.blocks.find((block) => {
+                      const blockStartMs = new Date(block.blockedFrom).getTime();
+                      const blockEndMs = new Date(block.blockedTo).getTime();
+                      return (
+                        (blockStartMs <= checkoutMs + 5 * 60 * 1000 && blockEndMs > checkoutMs) ||
+                        (blockStartMs >= checkoutMs && blockStartMs < cleanUntilMs)
+                      );
+                    });
+
+                    let effectiveCleanUntilMs = cleanUntilMs;
+                    if (overlappingBlock) {
+                      const blockStartMs = new Date(overlappingBlock.blockedFrom).getTime();
+                      if (blockStartMs <= checkoutMs + 5 * 60 * 1000) {
+                        // Block immediately follows or covers checkout: suppress 1h cleaning buffer
+                        return null;
+                      }
+                      effectiveCleanUntilMs = Math.min(cleanUntilMs, blockStartMs);
+                    }
+
                     const top = timeToTimelineY(checkoutMs);
-                    const bottom = timeToTimelineY(Math.min(cleanUntilMs, timelineEndMs));
+                    const bottom = timeToTimelineY(Math.min(effectiveCleanUntilMs, timelineEndMs));
                     const durationPx = Math.max(14, bottom - top);
+                    if (durationPx <= 0) return null;
 
                     return (
                       <div
@@ -468,7 +508,13 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                           top: `${top}px`,
                           height: `${durationPx}px`,
                         }}
-                        title={`Dọn phòng: 1h sau trả phòng (#${booking.id})`}
+                        title={`Dọn phòng: ${new Date(checkoutMs).toLocaleTimeString("vi-VN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })} - ${new Date(effectiveCleanUntilMs).toLocaleTimeString("vi-VN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`}
                       >
                         <span className="flex items-center gap-1 font-bold text-amber-200">
                           🧹 {durationPx >= 28 ? "Dọn phòng" : "Dọn"}
@@ -618,6 +664,12 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
             <div className="flex items-center gap-1 text-[11px]">
               <span className="w-2.5 h-2.5 rounded border border-dashed border-amber-500/80 bg-amber-500/20" />
               <span>🧹 Dọn (1h)</span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px]">
+              <span className="w-3 h-2.5 rounded border border-amber-400 bg-amber-500/30 flex items-center justify-center text-[8px]">
+                🔒
+              </span>
+              <span className="text-amber-300 font-semibold">Khóa phòng</span>
             </div>
             <div className="flex items-center gap-1 text-[11px]">
               <span className="text-[10px] text-indigo-300 font-bold font-mono">🌙 01h-07h</span>

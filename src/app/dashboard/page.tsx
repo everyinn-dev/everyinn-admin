@@ -8,8 +8,10 @@ import { GanttChart } from "@/components/dashboard/GanttChart";
 import { MobileRoomCard } from "@/components/dashboard/MobileRoomCard";
 import { MobileVerticalGantt } from "@/components/dashboard/MobileVerticalGantt";
 import { BookingDetailDrawer } from "@/components/dashboard/BookingDetailDrawer";
+import { RoomLockModal } from "@/components/dashboard/RoomLockModal";
+import { RoomLockDetailDrawer } from "@/components/dashboard/RoomLockDetailDrawer";
 import { Spinner } from "@/components/ui/Spinner";
-import { GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
 
 
@@ -37,6 +39,11 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<GanttBookingItem | null>(null);
   const [mobileView, setMobileView] = useState<"gantt" | "cards">("gantt");
+  const [isLockModalOpen, setIsLockModalOpen] = useState(false);
+  const [selectedBlockData, setSelectedBlockData] = useState<{
+    block: GanttBlockItem;
+    room: GanttRoomData;
+  } | null>(null);
 
   // Fetch Gantt data according to viewMode
   const fetchData = async () => {
@@ -199,6 +206,7 @@ function DashboardContent() {
           onRefresh={fetchData}
           isLoading={loading}
           roomCounts={roomCounts}
+          onOpenRoomLockModal={() => setIsLockModalOpen(true)}
         />
 
         {/* Content Display */}
@@ -218,6 +226,7 @@ function DashboardContent() {
                 rooms={filteredRooms}
                 scrollTrigger={scrollTrigger}
                 onBookingClick={(booking) => setSelectedBooking(booking)}
+                onBlockClick={(block, room) => setSelectedBlockData({ block, room })}
               />
             </div>
 
@@ -269,6 +278,7 @@ function DashboardContent() {
                   rooms={filteredRooms}
                   scrollTrigger={scrollTrigger}
                   onBookingClick={(booking) => setSelectedBooking(booking)}
+                  onBlockClick={(block, room) => setSelectedBlockData({ block, room })}
                 />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -297,6 +307,24 @@ function DashboardContent() {
             onBookingUpdated={() => {
               fetchData();
             }}
+          />
+        )}
+
+        {/* Room Lock Creation Modal */}
+        <RoomLockModal
+          isOpen={isLockModalOpen}
+          onClose={() => setIsLockModalOpen(false)}
+          onSuccess={() => fetchData()}
+          rooms={roomsData}
+        />
+
+        {/* Room Lock Detail Drawer */}
+        {selectedBlockData && (
+          <RoomLockDetailDrawer
+            block={selectedBlockData.block}
+            room={selectedBlockData.room}
+            onClose={() => setSelectedBlockData(null)}
+            onBlockDeleted={() => fetchData()}
           />
         )}
       </div>

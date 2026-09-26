@@ -39,6 +39,7 @@ Migrations are located in `db/migrations/`:
 - `004_add_config_hourly_slots.sql`: Adds `hourly_checkin_slots` config (`[21, 22, 23, 24]`) to `configs` table.
 - `005_import_sheet_bookings.sql`: Historical bookings imported from operational Google Sheet.
 - `006_add_social_and_closing_note.sql`: Adds `instagram`, `facebook` to `members` & `bookings`, and `closing_note` to `bookings`.
+- `007_room_blocks_indexes_and_note.sql`: Adds `note` column to `room_blocks` and date range indexes (`idx_room_blocks_room_date`, `idx_room_blocks_date`, `idx_bookings_date`).
 
 ---
 
@@ -149,4 +150,31 @@ Khi viết code và thiết kế thuật toán cho hệ thống, TẤT CẢ các
   - Tìm kiếm SĐT phải có Debounce (300ms - 500ms) trên client.
 - **50 Subrequests / request**:
   - Giới hạn số lần gọi API ngoài (Telegram, VietQR, Zalo) tối đa 1-3 lần/request, có try/catch và timeout $\le 5000$ms.
+
+---
+
+## ⏱️ 9. Quy Chuẩn Thiết Kế Thời Gian & Khóa Phòng (30-Minute Time Step Standard & Room Lock Design)
+> **Quy định bất biến toàn dự án** cho mọi tác vụ liên quan đến nhập liệu thời gian, tạo/sửa booking, khóa phòng tạm thời và hiển thị biểu đồ Gantt:
+
+### 1. Chuẩn hóa Bước Thời Gian 30 Phút (30-Minute Time Step)
+- **Zero Odd Minutes**: Tuyệt đối **KHÔNG** sử dụng từng phút lẻ (`14:15`, `14:27`, v.v.) hoặc cho phép nhập tự do qua `<input type="time">` hay `<input type="datetime-local">`.
+- **48 Slot Tiêu Chuẩn**: Mọi input/chọn thời gian trong hệ thống bắt buộc sử dụng bước thời gian là giờ tròn (`:00`) hoặc nửa giờ (`:30`), được định nghĩa trong danh sách `TIME_SLOTS_30MIN` (`src/lib/timelineUtils.ts`):
+  `["00:00", "00:30", "01:00", "01:30", ..., "23:00", "23:30"]`.
+- **Làm Tròn Thông Minh**: Khi nạp dữ liệu cũ hoặc thời điểm hiện tại, bắt buộc sử dụng helper `roundToNearest30Min()` hoặc `roundUpToNext30Min()` để đưa về mốc 30 phút gần nhất tiếp theo.
+
+### 2. Nghiệp Vụ Khóa Phòng (Room Lock / Maintenance Modal)
+- **Tách Biệt Ngày & Giờ**: Luôn cho phép người dùng chọn riêng Ngày (`<input type="date">`), sau đó mới chọn Giờ qua dropdown `<select>` 48 slot 30 phút.
+- **Vô Hiệu Hóa Quá Khứ (Past Time Disabling)**:
+  - Ngày trước ngày hôm nay: Không thể chọn (`min={todayStr}`).
+  - Trong ngày hôm nay: Tất cả các slot thời gian đã qua trong quá khứ so với giờ hiện tại (UTC+7) BẮT BUỘC phải bị `disabled` và có style mờ/gạch ngang (`text-slate-600 bg-slate-950`).
+  - Khi khóa và mở trong cùng một ngày: Giờ mở phòng bắt buộc phải sau giờ bắt đầu khóa (`toTime > fromTime`); các slot trước hoặc bằng giờ khóa phải bị `disabled`.
+
+### 3. Hiển Thị Thanh Khóa Phòng Trên Biểu Đồ Gantt (Desktop & Mobile)
+- **Họa Tiết Cảnh Báo Nổi Bật (Hazard Stripes)**: Khác với thanh đặt phòng thông thường (màu trơn gradient) và thanh dọn phòng (màu cam nhạt viền đứt), thanh Khóa Phòng sử dụng họa tiết sọc chéo hổ phách/vàng bảo trì:
+  `bg-[repeating-linear-gradient(45deg,rgba(180,83,9,0.4),rgba(180,83,9,0.4)_10px,rgba(245,158,11,0.22)_10px,rgba(245,158,11,0.22)_20px)] bg-amber-950/90 border-2 border-amber-400`.
+- **Kéo Dài Chính Xác & Thông Tin Rõ Ràng**:
+  - Thanh phải kéo dài chính xác theo thời lượng khóa phòng trên trục tọa độ Gantt.
+  - Hiển thị biểu tượng `🔒`, lý do khóa phòng (`block.reason`), và khung giờ `(HH:mm - HH:mm)`.
+  - Có chỉ báo mũi tên liên ngày nếu khóa phòng vắt qua đêm hoặc nhiều ngày (`◀ Tiếp từ hôm trước` hoặc `▶ Kéo dài sang hôm sau`).
+- **Ghi Đè Giờ Dọn Phòng**: Nếu một khối Khóa Phòng bắt đầu ngay sau giờ checkout hoặc nằm trong khung 1 giờ dọn phòng, hệ thống tự động ẩn (suppress) khối đệm dọn phòng để tránh chồng chéo gây nhầm lẫn.
 

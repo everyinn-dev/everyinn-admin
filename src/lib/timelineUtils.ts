@@ -122,3 +122,93 @@ export function formatDayHeaderShort(dateStr: string): { weekday: string; dateFo
     return { weekday: "", dateFormatted: dateStr };
   }
 }
+
+// -------------------------------------------------------------
+// 30-MINUTE TIME STEP STANDARDIZATION
+// Used across all booking creation, editing, room locks, and turnover
+// -------------------------------------------------------------
+
+/**
+ * 48 time slots spaced by 30 minutes from 00:00 to 23:30
+ */
+export const TIME_SLOTS_30MIN: string[] = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${String(h).padStart(2, "0")}:${m}`;
+});
+
+/**
+ * Convert HH:mm to minutes from start of day (e.g. "14:30" -> 870)
+ */
+export function timeStrToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Round any time string (HH:mm) or Date to the nearest 30-minute slot ("00" or "30")
+ */
+export function roundToNearest30Min(timeInput?: string | Date): string {
+  let h = 0;
+  let m = 0;
+
+  if (timeInput instanceof Date) {
+    h = timeInput.getHours();
+    m = timeInput.getMinutes();
+  } else if (typeof timeInput === "string" && timeInput.includes(":")) {
+    const parts = timeInput.split(":");
+    h = parseInt(parts[0], 10) || 0;
+    m = parseInt(parts[1], 10) || 0;
+  } else {
+    const now = new Date();
+    h = now.getHours();
+    m = now.getMinutes();
+  }
+
+  // Snap to 00 or 30
+  if (m < 15) {
+    m = 0;
+  } else if (m < 45) {
+    m = 30;
+  } else {
+    m = 0;
+    h = (h + 1) % 24;
+  }
+
+  return `${String(h).padStart(2, "0")}:${m === 0 ? "00" : "30"}`;
+}
+
+/**
+ * Round current time UP to the next 30-minute slot so default is always valid in the future
+ */
+export function roundUpToNext30Min(date: Date = new Date()): string {
+  const h = date.getHours();
+  const m = date.getMinutes();
+
+  if (m === 0) {
+    return `${String(h).padStart(2, "0")}:00`;
+  }
+  if (m <= 30) {
+    return `${String(h).padStart(2, "0")}:30`;
+  }
+  const nextH = (h + 1) % 24;
+  return `${String(nextH).padStart(2, "0")}:00`;
+}
+
+/**
+ * Check if a time slot on a given date has already passed in Vietnam local time (UTC+7)
+ */
+export function isPastTimeSlot(dateStr: string, timeStr: string): boolean {
+  if (!dateStr || !timeStr) return false;
+  const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
+  const todayStr = vnNow.toISOString().slice(0, 10);
+
+  if (dateStr < todayStr) return true;
+  if (dateStr > todayStr) return false;
+
+  // Same day: compare current hour and minute in VN time
+  const currentMinutes = vnNow.getUTCHours() * 60 + vnNow.getUTCMinutes();
+  const slotMinutes = timeStrToMinutes(timeStr);
+  return slotMinutes < currentMinutes;
+}

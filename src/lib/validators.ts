@@ -221,3 +221,101 @@ export async function checkBookingOverlap(
 
   return { hasOverlap: false };
 }
+
+export interface RoomBlockSlot {
+  roomId: string;
+  blockedFrom: string; // ISO string
+  blockedTo: string;   // ISO string
+  excludeBlockId?: number;
+}
+
+export interface RoomBlockCheckResult {
+  hasOverlap: boolean;
+  conflictBooking?: {
+    id: string;
+    checkin_at: string;
+    checkout_at: string;
+    member_name?: string;
+  };
+  conflictBlock?: {
+    id: number;
+    blocked_from: string;
+    blocked_to: string;
+    reason?: string;
+  };
+  errorMessage?: string;
+}
+
+/**
+ * Validate that a new or edited room block does NOT overlap with active bookings or other room blocks.
+ * Note: A room block CAN touch a booking checkout boundary (e.g. checkout at 23:00, block starts at 23:00),
+ * effectively overriding the 1h turnover buffer as desired for night closures or maintenance.
+ */
+export async function checkRoomBlockOverlap(
+  db: D1Database,
+  slot: RoomBlockSlot,
+  roomName?: string
+): Promise<RoomBlockCheckResult> {
+  const { roomId, blockedFrom, blockedTo, excludeBlockId } = slot;
+  const roomNameDisplay = roomName ? `${roomName}` : `${roomId}`;
+
+  const fromDate = new Date(blockedFrom);
+  const toDate = new Date(blockedTo);
+  const fromMs = fromDate.getTime();
+  const toMs = toDate.getTime();
+
+  if (isNaN(fromMs) || isNaN(toMs) || toMs <= fromMs) {
+    return {
+      hasOverlap: true,
+      errorMessage: "Thời gian bắt đầu và kết thúc khóa phòng không hợp lệ.",
+    };
+  }
+
+  // 1. Check collision with existing active bookings:
+  // A booking collides with the block iff: booking.checkin_at < blockedTo AND booking.checkout_at > blockedFrom
+  const bookingConflict = await db
+    .prepare(
+      `SELECT id, checkin_at, checkout_at, member_name
+       FROM bookings
+       WHERE room_id = ?
+         AND status != 'cancelled'
+         AND checkin_at < ?
+         AND checkout_at > ?
+       ORDER BY checkin_at ASC
+       LIMIT 1`
+    )
+    .bind(roomId, blockedTo, blockedFrom)
+    .first<{ id: string; checkin_at: string; checkout_at: string; member_name?: string }>();
+
+  if (bookingConflict) {
+    return {
+      hasOverlap: true,
+      conflictBooking: bookingConflict,
+      errorMessage: `Không thể khóa phòng ${roomNameDisplay} vì đang có khách đặt phòng (${bookingConflict.id}) từ ${formatDateTimeVi(bookingConflict.checkin_at)} đến ${formatDateTimeVi(bookingConflict.checkout_at)}.`,
+    };
+  }
+
+  // 2. Check collision with existing room blocks
+  const blockConflict = await db
+    .prepare(
+      `SELECT id, blocked_from, blocked_to, reason
+       FROM room_blocks
+       WHERE room_id = ?
+         AND id != ?
+         AND blocked_from < ?
+         AND blocked_to > ?
+       LIMIT 1`
+    )
+    .bind(roomId, excludeBlockId || 0, blockedTo, blockedFrom)
+    .first<{ id: number; blocked_from: string; blocked_to: string; reason?: string }>();
+
+  if (blockConflict) {
+    return {
+      hasOverlap: true,
+      conflictBlock: blockConflict,
+      errorMessage: `Phòng ${roomNameDisplay} đã có một lịch khóa khác (#${blockConflict.id}) từ ${formatDateTimeVi(blockConflict.blocked_from)} đến ${formatDateTimeVi(blockConflict.blocked_to)}${blockConflict.reason ? ` (${blockConflict.reason})` : ""}.`,
+    };
+  }
+
+  return { hasOverlap: false };
+}

@@ -1,7 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Input } from "../ui/Input";
+import {
+  TIME_SLOTS_30MIN,
+  getVnToday,
+  isPastTimeSlot,
+  roundToNearest30Min,
+  timeStrToMinutes,
+} from "@/lib/timelineUtils";
 
 interface CustomFieldsProps {
   checkinDate: string;
@@ -28,9 +35,15 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
   onChangeCheckoutTime,
   onChangeCustomPrice,
 }) => {
+  const todayStr = useMemo(() => getVnToday(), []);
+
+  // Standardize times to 30-minute steps
+  const normalizedCheckinTime = roundToNearest30Min(checkinTime || "14:00");
+  const normalizedCheckoutTime = roundToNearest30Min(checkoutTime || "12:00");
+
   // Compute duration
-  const inDate = new Date(`${checkinDate}T${checkinTime}:00`);
-  const outDate = new Date(`${checkoutDate}T${checkoutTime}:00`);
+  const inDate = new Date(`${checkinDate}T${normalizedCheckinTime}:00`);
+  const outDate = new Date(`${checkoutDate}T${normalizedCheckoutTime}:00`);
   const diffMs = outDate.getTime() - inDate.getTime();
   const validDiff = !isNaN(diffMs) && diffMs > 0;
   const totalHours = validDiff ? Math.round(diffMs / (3600 * 1000)) : 0;
@@ -49,10 +62,16 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
         <div className="flex items-center gap-2">
           <span className="text-base">⚙️</span>
           <span className="text-xs font-bold text-fuchsia-300 uppercase tracking-wide">
-            Cấu hình đơn đặt phòng Tuỳ Chỉnh
+            Cấu hình đơn đặt phòng Tuỳ Chỉnh (Bước 30 phút)
           </span>
         </div>
-        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30">
+        <span
+          className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${
+            validDiff
+              ? "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30"
+              : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+          }`}
+        >
           Thời lượng: {durationStr}
         </span>
       </div>
@@ -61,9 +80,12 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Checkin Group */}
         <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-          <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-            <span>📥</span>
-            <span>Thời gian Nhận phòng (Check-in)</span>
+          <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span>📥</span>
+              <span>Thời gian Nhận phòng (Check-in)</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">Bước 30m</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -71,37 +93,97 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
               label="Ngày nhận"
               type="date"
               value={checkinDate}
-              onChange={(e) => e.target.value && onChangeCheckinDate(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                onChangeCheckinDate(val);
+                if (checkoutDate < val) {
+                  onChangeCheckoutDate(val);
+                }
+              }}
             />
-            <Input
-              label="Giờ nhận"
-              type="time"
-              value={checkinTime}
-              onChange={(e) => e.target.value && onChangeCheckinTime(e.target.value)}
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Giờ nhận (30m)
+              </label>
+              <select
+                value={normalizedCheckinTime}
+                onChange={(e) => onChangeCheckinTime(e.target.value)}
+                className="w-full rounded-xl bg-[#131b28] border border-slate-700 px-3 py-2 text-sm text-slate-100 font-mono font-medium focus:outline-none focus:border-emerald-500 shadow-inner"
+              >
+                {TIME_SLOTS_30MIN.map((slot) => {
+                  const isPast = isPastTimeSlot(checkinDate, slot);
+                  return (
+                    <option
+                      key={slot}
+                      value={slot}
+                      disabled={isPast}
+                      className={
+                        isPast
+                          ? "text-slate-600 bg-slate-950 font-normal"
+                          : "text-slate-100 bg-[#131b28] font-semibold"
+                      }
+                    >
+                      {slot} {isPast ? "(Đã qua)" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
         </div>
 
         {/* Checkout Group */}
         <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-          <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-            <span>📤</span>
-            <span>Thời gian Trả phòng (Check-out)</span>
+          <div className="text-xs font-bold text-amber-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span>📤</span>
+              <span>Thời gian Trả phòng (Check-out)</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">Bước 30m</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <Input
               label="Ngày trả"
               type="date"
+              min={checkinDate || todayStr}
               value={checkoutDate}
               onChange={(e) => e.target.value && onChangeCheckoutDate(e.target.value)}
             />
-            <Input
-              label="Giờ trả"
-              type="time"
-              value={checkoutTime}
-              onChange={(e) => e.target.value && onChangeCheckoutTime(e.target.value)}
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Giờ trả (30m)
+              </label>
+              <select
+                value={normalizedCheckoutTime}
+                onChange={(e) => onChangeCheckoutTime(e.target.value)}
+                className="w-full rounded-xl bg-[#131b28] border border-slate-700 px-3 py-2 text-sm text-slate-100 font-mono font-medium focus:outline-none focus:border-amber-500 shadow-inner"
+              >
+                {TIME_SLOTS_30MIN.map((slot) => {
+                  const isPast = isPastTimeSlot(checkoutDate, slot);
+                  const isBeforeOrEqualIn =
+                    checkoutDate === checkinDate &&
+                    timeStrToMinutes(slot) <= timeStrToMinutes(normalizedCheckinTime);
+                  const isSlotDisabled = isPast || isBeforeOrEqualIn;
+
+                  return (
+                    <option
+                      key={slot}
+                      value={slot}
+                      disabled={isSlotDisabled}
+                      className={
+                        isSlotDisabled
+                          ? "text-slate-600 bg-slate-950 font-normal"
+                          : "text-slate-100 bg-[#131b28] font-semibold"
+                      }
+                    >
+                      {slot} {isPast ? "(Đã qua)" : isBeforeOrEqualIn ? "(Trước giờ nhận)" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
         </div>
       </div>

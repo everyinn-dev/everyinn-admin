@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { GanttRoomRow, DayInfo } from "./GanttRoomRow";
 import {
   TIMELINE_SLOTS,
@@ -22,6 +22,7 @@ interface GanttChartProps {
   currentDate: string; // YYYY-MM-DD
   rooms: GanttRoomData[];
   onBookingClick: (booking: GanttBookingItem) => void;
+  onBlockClick?: (block: GanttBlockItem, room: GanttRoomData) => void;
   scrollTrigger?: number; // increments when user clicks "Hôm nay"
 }
 
@@ -31,6 +32,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
   currentDate,
   rooms,
   onBookingClick,
+  onBlockClick,
   scrollTrigger = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -296,6 +298,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                   timelineEndMs={timelineEndMs}
                   isMonthView={isMonth}
                   onBookingClick={onBookingClick}
+                  onBlockClick={onBlockClick}
                 />
               ))
             )}
@@ -324,6 +327,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             <span className="text-slate-200">Tuỳ Chỉnh</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <span className="w-5 h-3.5 rounded bg-[repeating-linear-gradient(45deg,rgba(180,83,9,0.5),rgba(180,83,9,0.5)_4px,rgba(245,158,11,0.3)_4px,rgba(245,158,11,0.3)_8px)] border-2 border-amber-400 text-[9px] flex items-center justify-center font-bold shadow-sm">
+              🔒
+            </span>
+            <span className="text-amber-200 font-semibold">Khóa phòng (Bảo trì)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded border border-dashed border-amber-500/80 bg-amber-500/20" />
             <span className="text-slate-200">🧹 Dọn phòng (1h)</span>
           </div>
@@ -336,7 +345,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         </div>
 
         <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <span>💡 Nhấn vào thanh đặt phòng để xem chi tiết / chỉnh sửa / gia hạn</span>
+          <span>💡 Nhấn vào thanh đặt phòng hoặc khóa phòng để xem chi tiết / chỉnh sửa</span>
         </div>
       </div>
     </div>
