@@ -12,7 +12,6 @@ import { Spinner } from "@/components/ui/Spinner";
 import { GanttBookingItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
 
-export const dynamic = "force-dynamic";
 
 function DashboardContent() {
   const router = useRouter();
@@ -293,6 +292,9 @@ function DashboardContent() {
             booking={selectedBooking}
             onClose={() => setSelectedBooking(null)}
             onBookingCancelled={() => {
+              fetchData();
+            }}
+            onBookingUpdated={() => {
               fetchData();
             }}
           />

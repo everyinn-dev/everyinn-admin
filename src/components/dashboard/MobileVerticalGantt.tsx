@@ -449,6 +449,34 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     );
                   })}
 
+                  {/* Turnover / Cleaning Buffer Bars (1h after checkout) */}
+                  {room.bookings.map((booking) => {
+                    if (booking.status === "cancelled") return null;
+                    const checkoutMs = new Date(booking.checkoutAt).getTime();
+                    const cleanUntilMs = checkoutMs + 60 * 60 * 1000;
+                    if (cleanUntilMs < timelineStartMs || checkoutMs > timelineEndMs) return null;
+
+                    const top = timeToTimelineY(checkoutMs);
+                    const bottom = timeToTimelineY(Math.min(cleanUntilMs, timelineEndMs));
+                    const durationPx = Math.max(14, bottom - top);
+
+                    return (
+                      <div
+                        key={`clean-${booking.id}`}
+                        className="absolute left-1 right-1 rounded-b-lg border-x border-b border-dashed border-amber-500/70 bg-amber-500/15 text-[9px] text-amber-300 font-medium px-1 flex items-center justify-center overflow-hidden z-5 pointer-events-none select-none shadow-sm"
+                        style={{
+                          top: `${top}px`,
+                          height: `${durationPx}px`,
+                        }}
+                        title={`Dọn phòng: 1h sau trả phòng (#${booking.id})`}
+                      >
+                        <span className="flex items-center gap-1 font-bold text-amber-200">
+                          🧹 {durationPx >= 28 ? "Dọn phòng" : "Dọn"}
+                        </span>
+                      </div>
+                    );
+                  })}
+
                   {/* Booking Bars */}
                   {room.bookings.map((booking) => {
                     const checkinMs = new Date(booking.checkinAt).getTime();
@@ -586,6 +614,10 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
             <div className="flex items-center gap-1 text-[11px]">
               <span className="w-2.5 h-2.5 rounded bg-fuchsia-500 border border-fuchsia-400" />
               <span>Tuỳ chỉnh</span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px]">
+              <span className="w-2.5 h-2.5 rounded border border-dashed border-amber-500/80 bg-amber-500/20" />
+              <span>🧹 Dọn (1h)</span>
             </div>
             <div className="flex items-center gap-1 text-[11px]">
               <span className="text-[10px] text-indigo-300 font-bold font-mono">🌙 01h-07h</span>

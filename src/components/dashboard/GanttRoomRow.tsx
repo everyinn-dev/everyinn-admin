@@ -138,6 +138,41 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
           );
         })}
 
+        {/* Turnover / Cleaning Buffer Bars (1h after checkout) */}
+        {room.bookings.map((booking) => {
+          if (booking.status === "cancelled") return null;
+          const checkoutMs = new Date(booking.checkoutAt).getTime();
+          const cleanUntilMs = checkoutMs + 60 * 60 * 1000;
+          if (cleanUntilMs < timelineStartMs || checkoutMs > timelineEndMs) return null;
+
+          const left = timeToTimelineX(checkoutMs);
+          const right = timeToTimelineX(Math.min(cleanUntilMs, timelineEndMs));
+          const width = Math.max(6, right - left);
+
+          return (
+            <div
+              key={`clean-${booking.id}`}
+              className="absolute top-1.5 bottom-1.5 rounded-r-md border border-dashed border-amber-500/70 bg-amber-500/15 text-[10px] text-amber-300 font-medium flex items-center justify-center overflow-hidden z-5 pointer-events-none select-none transition-opacity"
+              style={{ left: `${left}px`, width: `${width}px` }}
+              title={`Dọn phòng (1h): ${new Date(checkoutMs).toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })} - ${new Date(cleanUntilMs).toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`}
+            >
+              {width >= 34 ? (
+                <span className="truncate px-1 text-[9px] flex items-center gap-1 font-bold text-amber-200">
+                  🧹 Dọn
+                </span>
+              ) : width >= 14 ? (
+                <span className="text-[10px]">🧹</span>
+              ) : null}
+            </div>
+          );
+        })}
+
         {/* Booking Bars */}
         {room.bookings.map((booking) => {
           const checkinMs = new Date(booking.checkinAt).getTime();

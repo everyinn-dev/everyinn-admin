@@ -6,7 +6,6 @@ import { BookingForm } from "@/components/bookings/BookingForm";
 import { Spinner } from "@/components/ui/Spinner";
 import { BookingRulesConfig, PricingRule, Room } from "@/types";
 
-export const dynamic = "force-dynamic";
 
 export default function NewBookingPage() {
   const [rooms, setRooms] = useState<Room[]>([]);

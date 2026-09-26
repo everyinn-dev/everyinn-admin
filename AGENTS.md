@@ -102,6 +102,10 @@ To optimize Cloudflare D1 query quota and accelerate latency:
   - Visual 24h room timeline dashboard (`/dashboard`)
   - Create booking form (`/bookings/new`) with Mini CDP phone auto-lookup & live price breakdown
   - Bookings history list (`/bookings`)
+  - Centralized booking overlap & 1h turnover cleaning buffer validator (`src/lib/validators.ts`)
+  - Gantt chart visual turnover buffer bars (1h after checkout, amber dashed) on desktop & mobile
+  - Inline booking editing & +1h checkout in `BookingDetailDrawer`
+  - Floating Toast Notification System (`src/components/ui/Toast`) with slide-in-from-right animation, auto-dismiss timer bar, pause-on-hover, and contextual themes (Success, Warning/Validation, System Error, Info)
   - Verified OpenNext Cloudflare bundle build
 - **Phase 2 (Upcoming)**:
   - 5-minute temporary room hold timer
