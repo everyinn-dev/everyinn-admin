@@ -5,9 +5,10 @@ import { generateBookingId } from "@/lib/bookingId";
 import { calculatePrice } from "@/lib/pricing";
 import { upsertMemberOnBooking } from "@/lib/cdp";
 import { logEvent } from "@/lib/audit";
-import { BookingType, PricingRule, Room } from "@/types";
+import { BookingType } from "@/types";
 import { getCachedRooms, getCachedPricingRules } from "@/lib/masterData";
 import { invalidatePrefix } from "@/lib/cache";
+import { checkBookingOverlapWithBuffer } from "@/lib/validators";
 
 export async function GET(req: NextRequest) {
   try {
@@ -148,32 +149,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Phòng không tồn tại hoặc đã ngừng hoạt động." }, { status: 404 });
     }
 
-    // 2. Overlap collision check
+    // 2. Overlap & 1h turnover cleaning buffer collision check
     const checkinIso = checkinDate.toISOString();
     const checkoutIso = checkoutDate.toISOString();
 
-    const overlap = await db
-      .prepare(
-        `SELECT id, checkin_at, checkout_at, status
-         FROM bookings
-         WHERE room_id = ?
-           AND status != 'cancelled'
-           AND checkin_at < ?
-           AND checkout_at > ?
-         LIMIT 1`
-      )
-      .bind(roomId, checkoutIso, checkinIso)
-      .first<{ id: string; checkin_at: string; checkout_at: string; status: string }>();
+    const overlapResult = await checkBookingOverlapWithBuffer(
+      db,
+      {
+        roomId,
+        checkinAt: checkinIso,
+        checkoutAt: checkoutIso,
+      },
+      room.name
+    );
 
-    if (overlap) {
+    if (overlapResult.hasOverlap) {
       return NextResponse.json(
-        {
-          error: `Phòng ${room.name} đã có lịch đặt (#${overlap.id}) từ ${new Date(
-            overlap.checkin_at
-          ).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} đến ${new Date(
-            overlap.checkout_at
-          ).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}.`,
-        },
+        { error: overlapResult.errorMessage || "Khung giờ phòng đã bị trùng lặp hoặc chưa đủ 1 giờ dọn phòng." },
         { status: 409 }
       );
     }

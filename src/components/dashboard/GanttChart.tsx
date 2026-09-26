@@ -324,6 +324,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             <span className="text-slate-200">Tuỳ Chỉnh</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded border border-dashed border-amber-500/80 bg-amber-500/20" />
+            <span className="text-slate-200">🧹 Dọn phòng (1h)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="px-1.5 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/40 text-[10px] text-indigo-300 font-bold font-mono">
               🌙 01h - 07h
             </span>
@@ -332,7 +336,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         </div>
 
         <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <span>💡 Nhấn vào thanh đặt phòng để xem chi tiết / hủy phòng</span>
+          <span>💡 Nhấn vào thanh đặt phòng để xem chi tiết / chỉnh sửa / gia hạn</span>
         </div>
       </div>
     </div>
