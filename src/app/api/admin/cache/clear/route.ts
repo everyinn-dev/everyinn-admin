@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { invalidateAllMasterCache } from "@/lib/masterData";
+import { invalidateAll } from "@/lib/cache";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    invalidateAll();
     invalidateAllMasterCache();
 
     return NextResponse.json({
