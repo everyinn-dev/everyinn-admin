@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { DateNavBar } from "@/components/dashboard/DateNavBar";
@@ -15,6 +15,7 @@ import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
 import { getDashboardPrefs, setDashboardPrefs } from "@/lib/localCache";
 import { apiFetch } from "@/lib/apiClient";
+import { subscribeToSyncEvents } from "@/lib/syncEvents";
 
 
 function DashboardContent() {
@@ -50,38 +51,114 @@ function DashboardContent() {
     room: GanttRoomData;
   } | null>(null);
 
+  // ETag tracking to avoid redundant D1 scans and re-renders
+  const lastEtagRef = useRef<string | null>(null);
+  const lastKeyRef = useRef<string>("");
+
   // Persist dashboard prefs whenever viewMode or roomFilter changes
   useEffect(() => {
     setDashboardPrefs({ viewMode, roomFilter });
   }, [viewMode, roomFilter]);
 
-  // Fetch Gantt data according to viewMode
-  const fetchData = async () => {
+  // Fetch Gantt data according to viewMode with ETag and strict cache-busting
+  const fetchData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
+      const currentKey = viewMode === "month" ? `m-${month}` : `d-${date}`;
+      // If user switched month or date, clear ETag to ensure fresh fetch for new view
+      if (lastKeyRef.current !== currentKey) {
+        lastEtagRef.current = null;
+        lastKeyRef.current = currentKey;
+      }
+
+      const timestamp = Date.now();
       const url =
         viewMode === "month"
-          ? `/api/dashboard/gantt?month=${month}`
-          : `/api/dashboard/gantt?date=${date}`;
+          ? `/api/dashboard/gantt?month=${month}&_t=${timestamp}`
+          : `/api/dashboard/gantt?date=${date}&_t=${timestamp}`;
 
-      const res = await apiFetch(url);
+      const headers: Record<string, string> = {
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      };
+      if (lastEtagRef.current) {
+        headers["If-None-Match"] = lastEtagRef.current;
+      }
+
+      const res = await apiFetch(url, {
+        cache: "no-store",
+        headers,
+      });
+
+      // HTTP 304 Not Modified: Data is identical, zero DOM re-render, zero DB scanning
+      if (res.status === 304) {
+        return;
+      }
+
       if (!res.ok) {
         if (res.status === 401) {
           return; // apiFetch already cleans cache and dispatches redirect
         }
         throw new Error("Lỗi tải dữ liệu phòng.");
       }
+
+      const etag = res.headers.get("ETag");
+      if (etag) {
+        lastEtagRef.current = etag;
+      }
+
       const data = (await res.json()) as any;
       setRoomsData(data.rooms || []);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
+  // Primary fetch when viewMode / month / date changes
   useEffect(() => {
     fetchData();
+  }, [viewMode, month, date]);
+
+  // 1. Cross-tab real-time sync (BroadcastChannel)
+  useEffect(() => {
+    const unsubscribe = subscribeToSyncEvents((eventType) => {
+      if (eventType === "BOOKINGS_CHANGED" || eventType === "ROOM_BLOCKS_CHANGED") {
+        fetchData(true);
+      }
+    });
+    return unsubscribe;
+  }, [viewMode, month, date]);
+
+  // 2. Tab focus & visibility change sync (fetches fresh when admin switches back to this tab)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchData(true);
+      }
+    };
+    const onFocus = () => {
+      fetchData(true);
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [viewMode, month, date]);
+
+  // 3. 20-second gentle background polling for multi-admin updates (protected by ETag 304)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchData(true);
+      }
+    }, 20000);
+
+    return () => clearInterval(interval);
   }, [viewMode, month, date]);
 
   const handleViewModeChange = (mode: "month" | "day") => {

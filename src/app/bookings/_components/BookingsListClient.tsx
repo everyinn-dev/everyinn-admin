@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
@@ -15,6 +15,7 @@ import {
   getBookingsFilterState, setBookingsFilterState,
 } from "@/lib/localCache";
 import { apiFetch } from "@/lib/apiClient";
+import { subscribeToSyncEvents } from "@/lib/syncEvents";
 import { DailyRosterModal } from "@/components/bookings/DailyRosterModal";
 
 interface StaffOption {
@@ -33,6 +34,7 @@ export const BookingsListClient: React.FC = () => {
 
   // Filter states
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(savedFilter?.status ?? "");
   const [roomId, setRoomId] = useState(savedFilter?.roomId ?? "");
   const [bookingType, setBookingType] = useState(savedFilter?.bookingType ?? "");
   const [createdBy, setCreatedBy] = useState(savedFilter?.createdBy ?? "");
@@ -93,10 +95,20 @@ export const BookingsListClient: React.FC = () => {
     fetchMasterData();
   }, []);
 
+  // ETag tracking for Bookings List to eliminate unnecessary D1 reads & re-renders
+  const lastEtagRef = useRef<string | null>(null);
+  const lastFilterKeyRef = useRef<string>("");
+
   // 2. Fetch bookings with server-side pagination, search & filters
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
+      const currentFilterKey = `${page}-${pageSize}-${sortBy}-${sortDir}-${search}-${status}-${roomId}-${bookingType}-${createdBy}-${createdFrom}-${createdTo}`;
+      if (lastFilterKeyRef.current !== currentFilterKey) {
+        lastEtagRef.current = null;
+        lastFilterKeyRef.current = currentFilterKey;
+      }
+
       const params = new URLSearchParams();
       params.set("page", page.toString());
       params.set("pageSize", pageSize.toString());
@@ -106,14 +118,39 @@ export const BookingsListClient: React.FC = () => {
       if (search && search.trim().length >= 3) {
         params.set("search", search.trim());
       }
+      if (status) params.set("status", status);
       if (roomId) params.set("roomId", roomId);
       if (bookingType) params.set("bookingType", bookingType);
       if (createdBy) params.set("createdBy", createdBy);
       if (createdFrom) params.set("createdFrom", createdFrom);
       if (createdTo) params.set("createdTo", createdTo);
 
-      const res = await apiFetch(`/api/bookings?${params.toString()}`);
+      const timestamp = Date.now();
+      params.set("_t", String(timestamp));
+
+      const headers: Record<string, string> = {
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      };
+      if (lastEtagRef.current) {
+        headers["If-None-Match"] = lastEtagRef.current;
+      }
+
+      const res = await apiFetch(`/api/bookings?${params.toString()}`, {
+        cache: "no-store",
+        headers,
+      });
+
+      // 304 Not Modified: Data is identical, keep list, skip re-render
+      if (res.status === 304) {
+        return;
+      }
+
       if (res.ok) {
+        const etag = res.headers.get("ETag");
+        if (etag) {
+          lastEtagRef.current = etag;
+        }
         const data = (await res.json()) as BookingsListResponse;
         setBookings(data.bookings || []);
         setTotal(data.total || 0);
@@ -124,10 +161,35 @@ export const BookingsListClient: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortBy, sortDir, search, roomId, bookingType, createdBy, createdFrom, createdTo]);
+  }, [page, pageSize, sortBy, sortDir, search, status, roomId, bookingType, createdBy, createdFrom, createdTo]);
 
   useEffect(() => {
     fetchBookings();
+  }, [fetchBookings]);
+
+  // Cross-tab real-time sync
+  useEffect(() => {
+    const unsubscribe = subscribeToSyncEvents((type) => {
+      if (type === "BOOKINGS_CHANGED") {
+        fetchBookings();
+      }
+    });
+    return unsubscribe;
+  }, [fetchBookings]);
+
+  // Tab focus & visibility change sync
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchBookings();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
   }, [fetchBookings]);
 
   // Handle Sort toggle
@@ -143,12 +205,13 @@ export const BookingsListClient: React.FC = () => {
 
   // Persist filter/sort state to localStorage whenever it changes
   useEffect(() => {
-    setBookingsFilterState({ roomId, bookingType, createdBy, createdFrom, createdTo, sortBy, sortDir });
-  }, [roomId, bookingType, createdBy, createdFrom, createdTo, sortBy, sortDir]);
+    setBookingsFilterState({ status, roomId, bookingType, createdBy, createdFrom, createdTo, sortBy, sortDir });
+  }, [status, roomId, bookingType, createdBy, createdFrom, createdTo, sortBy, sortDir]);
 
   // Reset all filters to default
   const handleResetFilters = () => {
     setSearch("");
+    setStatus("");
     setRoomId("");
     setBookingType("");
     setCreatedBy("");
@@ -183,6 +246,13 @@ export const BookingsListClient: React.FC = () => {
       updatedByStaffId: b.updated_by_staff_id,
       updatedByStaffName: b.updated_by_staff_name,
       modNo: b.mod_no,
+      // No-Show and Refund tracking
+      noShowAt: b.no_show_at,
+      noShowBy: b.no_show_by,
+      noShowByStaffName: b.no_show_by_staff_name,
+      noShowReason: b.no_show_reason,
+      refundAmount: b.refund_amount,
+      originalPrice: b.original_price,
     });
   };
 
@@ -235,6 +305,11 @@ export const BookingsListClient: React.FC = () => {
         search={search}
         onSearchChange={(val) => {
           setSearch(val);
+          setPage(1);
+        }}
+        status={status}
+        onStatusChange={(val) => {
+          setStatus(val);
           setPage(1);
         }}
         roomId={roomId}

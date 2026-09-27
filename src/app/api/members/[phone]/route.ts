@@ -38,6 +38,7 @@ export async function GET(
         preferredRoomClass: member.preferred_room_class,
         lastBookedAt: member.last_booked_at,
         isBlocked: member.is_blocked,
+        noShowCount: member.no_show_count || 0,
         internalNotes: member.internal_notes,
       },
     });

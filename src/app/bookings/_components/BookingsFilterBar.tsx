@@ -12,6 +12,8 @@ interface StaffOption {
 interface BookingsFilterBarProps {
   search: string;
   onSearchChange: (value: string) => void;
+  status: string;
+  onStatusChange: (value: string) => void;
   roomId: string;
   onRoomChange: (value: string) => void;
   bookingType: string;
@@ -30,6 +32,8 @@ interface BookingsFilterBarProps {
 export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
   search,
   onSearchChange,
+  status,
+  onStatusChange,
   roomId,
   onRoomChange,
   bookingType,
@@ -70,7 +74,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
   }, [localSearch, search, onSearchChange]);
 
   const hasActiveFilters = Boolean(
-    (search && search.length >= 3) || roomId || bookingType || createdBy || createdFrom || createdTo
+    (search && search.length >= 3) || status || roomId || bookingType || createdBy || createdFrom || createdTo
   );
 
   return (
@@ -123,7 +127,22 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
       </div>
 
       {/* Filter Dropdowns & Date Range */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+        {/* Dropdown: Trạng thái */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-slate-400">Trạng thái</label>
+          <select
+            value={status}
+            onChange={(e) => onStatusChange(e.target.value)}
+            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="confirmed">Đã xác nhận</option>
+            <option value="no_show">🚫 No-Show</option>
+            <option value="cancelled">Đã hủy</option>
+          </select>
+        </div>
+
         {/* Dropdown: Phòng */}
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-slate-400">Phòng</label>

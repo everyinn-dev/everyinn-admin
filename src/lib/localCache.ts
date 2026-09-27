@@ -160,6 +160,7 @@ export interface DashboardPrefs {
 }
 
 export interface BookingsFilterState {
+  status?: string;
   roomId: string;
   bookingType: string;
   createdBy: string;

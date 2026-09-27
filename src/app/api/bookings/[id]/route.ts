@@ -9,6 +9,15 @@ import { calculatePrice } from "@/lib/pricing";
 import { lookupMember, calculateLoyaltyTier } from "@/lib/cdp";
 import { Booking, BookingType } from "@/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  "Pragma": "no-cache",
+  "Expires": "0",
+};
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -28,11 +37,13 @@ export async function GET(
            r.name as room_name, 
            r.room_class, 
            creator.full_name as created_by_staff_name,
-           updater.full_name as updated_by_staff_name
+           updater.full_name as updated_by_staff_name,
+           no_shower.full_name as no_show_by_staff_name
          FROM bookings b
          LEFT JOIN rooms r ON b.room_id = r.id
          LEFT JOIN staff creator ON b.created_by_staff_id = creator.id
          LEFT JOIN staff updater ON b.updated_by_staff_id = updater.id
+         LEFT JOIN staff no_shower ON b.no_show_by = no_shower.id
          WHERE b.id = ?
          LIMIT 1`
       )
@@ -43,7 +54,7 @@ export async function GET(
       return NextResponse.json({ error: "Không tìm thấy thông tin đặt phòng." }, { status: 404 });
     }
 
-    return NextResponse.json({ booking });
+    return NextResponse.json({ booking }, { headers: NO_CACHE_HEADERS });
   } catch (error) {
     console.error("GET booking by ID error:", error);
     return NextResponse.json({ error: "Lỗi tải thông tin đặt phòng." }, { status: 500 });
@@ -77,37 +88,137 @@ export async function PATCH(
     const rooms = await getCachedRooms(db);
     const now = new Date().toISOString();
 
-    // ── ACTION: CANCEL ───────────────────────────────────────────
-    if (action === "cancel") {
-      const cancelReason = body.cancelReason || "Lễ tân hủy";
+    // ── ACTION: NO SHOW ───────────────────────────────────────────
+    if (action === "no_show") {
+      if (existing.status !== "confirmed") {
+        return NextResponse.json(
+          { error: "Chỉ có thể đánh dấu No-Show cho đơn đặt phòng đang có hiệu lực (Đã xác nhận)." },
+          { status: 400 }
+        );
+      }
 
-      const updateStmt = db
+      // Check if checkout time has already passed
+      const checkoutDate = new Date(existing.checkout_at);
+      const currentDate = new Date();
+      if (currentDate > checkoutDate) {
+        return NextResponse.json(
+          { error: "Đơn đặt phòng này đã qua thời gian checkout. Không thể thao tác No-Show." },
+          { status: 400 }
+        );
+      }
+
+      const rawRefund = Number(body.refundAmount || 0);
+      const refundAmount = isNaN(rawRefund) || rawRefund < 0 ? 0 : Math.round(rawRefund);
+
+      if (refundAmount > existing.total_price) {
+        return NextResponse.json(
+          {
+            error: `Số tiền hoàn (${refundAmount.toLocaleString(
+              "vi-VN"
+            )} đ) không được lớn hơn tổng tiền đơn phòng (${existing.total_price.toLocaleString(
+              "vi-VN"
+            )} đ).`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const originalPrice = existing.total_price;
+      const netRetained = originalPrice - refundAmount;
+      const noShowReason = (body.noShowReason || body.reason || "Khách không đến / Hủy vi phạm quy định").trim();
+
+      // Build note update
+      const refundNote =
+        refundAmount > 0
+          ? `[NO-SHOW] Hoàn lại: ${refundAmount.toLocaleString(
+              "vi-VN"
+            )}đ, Thực thu giữ: ${netRetained.toLocaleString(
+              "vi-VN"
+            )}đ. Lý do: ${noShowReason}`
+          : `[NO-SHOW] Không hoàn tiền (giữ 100% ${originalPrice.toLocaleString(
+              "vi-VN"
+            )}đ). Lý do: ${noShowReason}`;
+
+      const updatedNote = existing.note ? `${existing.note} | ${refundNote}` : refundNote;
+
+      const updateBookingStmt = db
         .prepare(
           `UPDATE bookings SET
-            status = 'cancelled',
-            cancelled_at = ?,
-            cancel_reason = ?,
-            cancelled_by = ?,
+            status = 'no_show',
+            no_show_at = ?,
+            no_show_by = ?,
+            no_show_reason = ?,
+            refund_amount = ?,
+            original_price = ?,
+            total_price = ?,
+            note = ?,
             updated_at = ?,
             updated_by_staff_id = ?,
             mod_no = mod_no + 1
            WHERE id = ?`
         )
-        .bind(now, cancelReason, staff.id, now, staff.id, id);
+        .bind(
+          now,
+          staff.id,
+          noShowReason,
+          refundAmount,
+          originalPrice,
+          netRetained,
+          updatedNote,
+          now,
+          staff.id,
+          id
+        );
+
+      // Mini CDP: Increment no_show_count for member, and deduct refundAmount from total_spent if refund > 0
+      const updateMemberStmt = db
+        .prepare(
+          `UPDATE members SET
+            no_show_count = no_show_count + 1,
+            total_spent = MAX(0, total_spent - ?),
+            updated_at = ?,
+            mod_no = mod_no + 1
+           WHERE phone = ?`
+        )
+        .bind(refundAmount, now, existing.member_phone);
 
       const logStmt = getLogEventStatement(
         db,
-        "BOOKING_CANCELLED",
+        "BOOKING_NO_SHOW",
         "booking",
         id,
-        { cancelReason, cancelledByStaffId: staff.id },
+        {
+          originalPrice,
+          refundAmount,
+          netRetained,
+          noShowReason,
+          noShowByStaffId: staff.id,
+        },
         staff.id
       );
 
-      await db.batch([updateStmt, logStmt]);
+      await db.batch([updateBookingStmt, updateMemberStmt, logStmt]);
       invalidatePrefix("dashboard:gantt:");
 
-      return NextResponse.json({ success: true, message: "Đã hủy đặt phòng thành công." });
+      return NextResponse.json({
+        success: true,
+        message:
+          refundAmount > 0
+            ? `Đã đánh dấu No-Show thành công. Đã hoàn ${refundAmount.toLocaleString(
+                "vi-VN"
+              )} đ, thực thu giữ ${netRetained.toLocaleString("vi-VN")} đ.`
+            : `Đã đánh dấu No-Show thành công. Khách sạn thu giữ 100% (${netRetained.toLocaleString(
+                "vi-VN"
+              )} đ).`,
+        netRetained,
+        refundAmount,
+      });
+    }
+
+    // ── ACTION: CANCEL / HARD DELETE ─────────────────────────────
+    if (action === "cancel") {
+      const cancelReason = body.cancelReason || "Lễ tân hủy/xóa đặt phòng";
+      return await executeHardDeleteBooking(db, existing, staff, cancelReason);
     }
 
     // ── ACTION: EXTEND 1 HOUR ─────────────────────────────────────
@@ -401,6 +512,129 @@ export async function PATCH(
   } catch (error: any) {
     console.error("PATCH booking error:", error);
     return NextResponse.json({ error: error.message || "Lỗi cập nhật đặt phòng." }, { status: 500 });
+  }
+}
+
+/**
+ * Common logic to HARD DELETE a booking and roll back member CDP statistics.
+ */
+async function executeHardDeleteBooking(
+  db: any,
+  existing: Booking,
+  staff: { id: number },
+  cancelReason: string = "Lễ tân hủy/xóa"
+) {
+  const now = new Date().toISOString();
+
+  // 1. Delete booking completely from database (Hard delete)
+  const deleteBookingStmt = db.prepare("DELETE FROM bookings WHERE id = ?").bind(existing.id);
+  const statements: any[] = [deleteBookingStmt];
+
+  // 2. Roll back member CDP stats if member exists
+  const member = await lookupMember(db, existing.member_phone);
+  if (member) {
+    const isNightStay = existing.booking_type === "overnight" || existing.booking_type === "dayuse";
+    const nightsToDeduct = isNightStay ? 1 : 0;
+
+    const updatedBookings = Math.max(0, (member.total_bookings || 0) - 1);
+    const updatedSpent = Math.max(0, (member.total_spent || 0) - (existing.total_price || 0));
+    const updatedNights = Math.max(0, (member.total_nights || 0) - nightsToDeduct);
+    const updatedNoShow =
+      existing.status === "no_show"
+        ? Math.max(0, (member.no_show_count || 0) - 1)
+        : (member.no_show_count || 0);
+
+    const tiers = await getCachedCdpTiers(db);
+    const updatedTier = calculateLoyaltyTier(updatedSpent, updatedBookings, tiers);
+
+    const updateMemberStmt = db
+      .prepare(
+        `UPDATE members SET
+          total_bookings = ?,
+          total_spent = ?,
+          total_nights = ?,
+          no_show_count = ?,
+          loyalty_tier = ?,
+          updated_at = ?,
+          mod_no = mod_no + 1
+         WHERE phone = ?`
+      )
+      .bind(
+        updatedBookings,
+        updatedSpent,
+        updatedNights,
+        updatedNoShow,
+        updatedTier,
+        now,
+        existing.member_phone
+      );
+
+    statements.push(updateMemberStmt);
+  }
+
+  // 3. Log audit event
+  const logStmt = getLogEventStatement(
+    db,
+    "BOOKING_HARD_DELETED",
+    "booking",
+    existing.id,
+    {
+      bookingId: existing.id,
+      room_id: existing.room_id,
+      member_phone: existing.member_phone,
+      member_name: existing.member_name,
+      checkin_at: existing.checkin_at,
+      checkout_at: existing.checkout_at,
+      total_price: existing.total_price,
+      booking_type: existing.booking_type,
+      status: existing.status,
+      deletedByStaffId: staff.id,
+      cancelReason,
+    },
+    staff.id
+  );
+  statements.push(logStmt);
+
+  // Execute batch atomically
+  await db.batch(statements);
+
+  // Invalidate Gantt cache
+  invalidatePrefix("dashboard:gantt:");
+
+  return NextResponse.json({
+    success: true,
+    message: `Đã xóa hoàn toàn đặt phòng #${existing.id} và cập nhật lại hồ sơ CDP.`,
+  });
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const db = await getDb();
+    const staff = await getCurrentStaff(db);
+    if (!staff) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = (await req.json().catch(() => ({}))) as any;
+    const cancelReason = body?.cancelReason || "Lễ tân hủy/xóa đặt phòng";
+
+    const existing = await db
+      .prepare("SELECT * FROM bookings WHERE id = ?")
+      .bind(id)
+      .first<Booking>();
+
+    if (!existing) {
+      return NextResponse.json({ error: "Không tìm thấy thông tin đặt phòng." }, { status: 404 });
+    }
+
+    return await executeHardDeleteBooking(db, existing, staff, cancelReason);
+  } catch (error: any) {
+    console.error("DELETE booking error:", error);
+    return NextResponse.json({ error: error.message || "Lỗi hệ thống khi xóa đặt phòng." }, { status: 500 });
   }
 }
 

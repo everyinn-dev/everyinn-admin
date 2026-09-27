@@ -11,7 +11,7 @@ interface ToastItemProps {
 export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(100);
-  const startTimeRef = useRef<number>(Date.now());
+  const startTimeRef = useRef<number>(0);
   const remainingTimeRef = useRef<number>(toast.duration);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);

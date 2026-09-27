@@ -86,32 +86,52 @@ export const PhoneLookupField: React.FC<PhoneLookupFieldProps> = ({
 
       {/* CDP Recognition Alert */}
       {lookupAttempted && (
-        <div className="animate-in fade-in duration-200">
+        <div className="space-y-2 animate-in fade-in duration-200">
           {memberData ? (
-            <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 flex items-start justify-between gap-3 text-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-emerald-300">
-                    Khách quen: {memberData.full_name || memberData.fullName || "Khách hàng"}
-                  </span>
-                  <Badge tier={memberData.loyalty_tier} size="sm" />
+            <>
+              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 flex items-start justify-between gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-300">
+                      Khách quen: {memberData.full_name || memberData.fullName || "Khách hàng"}
+                    </span>
+                    <Badge tier={memberData.loyalty_tier || memberData.loyaltyTier || "new"} size="sm" />
+                  </div>
+                  <div className="text-slate-300 text-[11px] flex items-center gap-3">
+                    <span>
+                      Tổng đặt: <strong className="text-white">{memberData.total_bookings ?? memberData.totalBookings ?? 0} lần</strong>
+                    </span>
+                    <span>
+                      Chi tiêu:{" "}
+                      <strong className="text-emerald-400 font-mono">
+                        {Number(memberData.total_spent ?? memberData.totalSpent ?? 0).toLocaleString("vi-VN")} đ
+                      </strong>
+                    </span>
+                  </div>
                 </div>
-                <div className="text-slate-300 text-[11px] flex items-center gap-3">
-                  <span>
-                    Tổng đặt: <strong className="text-white">{memberData.total_bookings} lần</strong>
-                  </span>
-                  <span>
-                    Chi tiêu:{" "}
-                    <strong className="text-emerald-400 font-mono">
-                      {Number(memberData.total_spent).toLocaleString("vi-VN")} đ
-                    </strong>
-                  </span>
-                </div>
+                <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
+                  Tự động điền
+                </span>
               </div>
-              <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
-                Tự động điền
-              </span>
-            </div>
+
+              {/* No-Show Warning Alert */}
+              {((memberData.no_show_count ?? memberData.noShowCount ?? 0) > 0) && (
+                <div className="p-2.5 rounded-xl bg-rose-950/50 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2.5 animate-in fade-in">
+                  <span className="text-base shrink-0 leading-tight">⚠️</span>
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-rose-300 flex items-center gap-1.5">
+                      <span>Cảnh báo lịch sử No-Show:</span>
+                      <span className="px-1.5 py-0.2 rounded bg-rose-500/20 border border-rose-500/30 text-[11px] font-mono">
+                        {memberData.no_show_count ?? memberData.noShowCount} lần vi phạm
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-rose-300/80 leading-relaxed">
+                      Khách từng không đến hoặc hủy vi phạm quy định. Khuyến nghị yêu cầu thanh toán/cọc 100% trước khi xác nhận giữ phòng!
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
               <span>✨</span>

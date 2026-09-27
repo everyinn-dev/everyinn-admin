@@ -23,7 +23,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
   const [staff, setStaff] = useState<StaffIdentity | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => pathname !== "/login");
 
   // 1. Listen for global session expiration (triggered by 401s from any API or watchdog)
   useEffect(() => {
@@ -56,7 +56,6 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   useEffect(() => {
     // If on login page, don't verify shell
     if (pathname === "/login") {
-      setLoading(false);
       return;
     }
 

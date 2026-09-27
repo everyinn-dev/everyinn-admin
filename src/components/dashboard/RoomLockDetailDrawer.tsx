@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { GanttBlockItem, GanttRoomData } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Spinner";
+import { notifyDataChanged } from "@/lib/syncEvents";
 
 interface RoomLockDetailDrawerProps {
   block: GanttBlockItem | null;
@@ -66,6 +67,7 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
 
       toast.success(data.message || `Đã mở khóa phòng thành công.`);
       onBlockDeleted();
+      notifyDataChanged("ROOM_BLOCKS_CHANGED");
       onClose();
     } catch (err) {
       console.error(err);

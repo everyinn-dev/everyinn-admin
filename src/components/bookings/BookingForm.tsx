@@ -14,6 +14,7 @@ import { PriceSummaryCard } from "./PriceSummaryCard";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
+import { notifyDataChanged } from "@/lib/syncEvents";
 
 interface BookingFormProps {
   initialRooms: Room[];
@@ -32,17 +33,19 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const toast = useToast();
   const searchParams = useSearchParams();
 
-  // Query param prefill (if receptionist clicked "+ Đặt phòng này" from dashboard)
+  // Query param prefill (if receptionist clicked "+ Đặt phòng này" from dashboard or rebook from drawer)
   const queryRoomId = searchParams.get("roomId");
   const queryDate = searchParams.get("date");
   const queryHour = searchParams.get("hour");
+  const queryPhone = searchParams.get("phone");
+  const queryName = searchParams.get("name");
 
   // Today in Vietnam (UTC+7)
   const defaultDate =
     queryDate || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
+  const [phone, setPhone] = useState(queryPhone || "");
+  const [name, setName] = useState(queryName || "");
   const [instagram, setInstagram] = useState("");
   const [facebook, setFacebook] = useState("");
   const [numGuests, setNumGuests] = useState(2);
@@ -191,6 +194,20 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     setFoundMember(null);
   };
 
+  // Prefill phone lookup if navigated from Rebook button
+  useEffect(() => {
+    if (queryPhone && queryPhone.trim().length >= 9) {
+      fetch(`/api/members/${queryPhone.trim()}`)
+        .then((res) => res.json() as any)
+        .then((data) => {
+          if (data && data.found && data.member) {
+            handleMemberFound(data.member);
+          }
+        })
+        .catch((err) => console.error("Prefill phone lookup error:", err));
+    }
+  }, [queryPhone]);
+
   // Direct social update for returning guests by phone key
   const handleDirectUpdateSocial = async () => {
     const cleanPhone = phone.trim();
@@ -335,6 +352,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       const successNotice = `Đã tạo thành công mã đặt phòng #${data.booking.id} cho ${name}!`;
       setSuccessMsg(`✅ ${successNotice} Đang chuyển hướng...`);
       toast.success(successNotice, "Tạo đơn thành công");
+      notifyDataChanged("BOOKINGS_CHANGED");
 
       setTimeout(() => {
         router.push(`/dashboard?date=${checkinAt.toISOString().slice(0, 10)}`);

@@ -116,7 +116,19 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   <div className="text-[11px] text-slate-400">{checkout.date}</div>
                 </td>
 
-                {/* 9. Tổng tiền */}
+                {/* 9. Trạng thái */}
+                <td className="py-3 px-3 whitespace-nowrap">
+                  <div className="space-y-0.5">
+                    <Badge status={b.status} size="sm" />
+                    {b.status === "no_show" && b.refund_amount && b.refund_amount > 0 ? (
+                      <div className="text-[10px] text-purple-300/80 font-mono">
+                        Hoàn {Number(b.refund_amount).toLocaleString("vi-VN")}đ
+                      </div>
+                    ) : null}
+                  </div>
+                </td>
+
+                {/* 10. Tổng tiền */}
                 <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400 whitespace-nowrap text-sm">
                   {Number(b.total_price || 0).toLocaleString("vi-VN")} đ
                 </td>

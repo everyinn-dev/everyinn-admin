@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { GanttRoomData } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Spinner";
+import { notifyDataChanged } from "@/lib/syncEvents";
 import {
   TIME_SLOTS_30MIN,
   getVnToday,
@@ -192,6 +193,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
 
       toast.success(data.message || `Đã khóa phòng thành công.`);
       onSuccess();
+      notifyDataChanged("ROOM_BLOCKS_CHANGED");
       onClose();
     } catch (err: any) {
       console.error(err);

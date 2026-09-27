@@ -7,6 +7,13 @@ import { getCachedRooms } from "@/lib/masterData";
 import { checkRoomBlockOverlap } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  "Pragma": "no-cache",
+  "Expires": "0",
+};
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,7 +52,7 @@ export async function GET(req: NextRequest) {
     const bound = params.length > 0 ? stmt.bind(...params) : stmt;
     const { results } = await bound.all();
 
-    return NextResponse.json({ blocks: results });
+    return NextResponse.json({ blocks: results }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("GET room blocks error:", error);
     return NextResponse.json({ error: "Failed to fetch room blocks" }, { status: 500 });

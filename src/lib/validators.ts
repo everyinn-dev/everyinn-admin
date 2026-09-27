@@ -106,7 +106,7 @@ export async function checkBookingOverlapWithBuffer(
       `SELECT id, checkin_at, checkout_at, member_name
        FROM bookings
        WHERE room_id = ?
-         AND status != 'cancelled'
+         AND status NOT IN ('cancelled', 'no_show')
          AND id != ?
          AND checkin_at < ?
          AND checkout_at > ?

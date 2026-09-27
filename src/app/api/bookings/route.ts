@@ -10,6 +10,15 @@ import { getCachedRooms, getCachedPricingRules } from "@/lib/masterData";
 import { invalidatePrefix } from "@/lib/cache";
 import { checkBookingOverlapWithBuffer } from "@/lib/validators";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  "Pragma": "no-cache",
+  "Expires": "0",
+};
+
 export async function GET(req: NextRequest) {
   try {
     const db = await getDb();
@@ -41,6 +50,7 @@ export async function GET(req: NextRequest) {
       total_price: "b.total_price",
       mod_no: "b.mod_no",
       updated_at: "b.updated_at",
+      status: "b.status",
     };
     const sortColumn = allowedSortColumns[sortByParam] || "b.checkin_at";
     const sortDir = sortDirParam === "asc" ? "ASC" : "DESC";
@@ -50,6 +60,24 @@ export async function GET(req: NextRequest) {
     const pageSizeParam = searchParams.get("pageSize") || searchParams.get("limit");
     const pageSize = Math.min(50, Math.max(1, parseInt(pageSizeParam || "20", 10)));
     const offset = (page - 1) * pageSize;
+
+    // 1. Lightweight Event-Version Check (1 D1 Row Read)
+    const eventRow = await db
+      .prepare("SELECT COALESCE(MAX(id), 0) as last_event_id FROM event_logs")
+      .first<{ last_event_id: number }>();
+    const lastEventId = eventRow?.last_event_id || 0;
+
+    const etag = `W/"ev-${lastEventId}-bk-${page}-${pageSize}-${sortByParam}-${sortDirParam}-${roomId || ""}-${status || ""}-${bookingType || ""}-${createdBy || ""}-${createdFrom || ""}-${createdTo || ""}-${search}"`;
+    const ifNoneMatch = req.headers.get("if-none-match");
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: {
+          ETag: etag,
+          "Cache-Control": "no-cache",
+        },
+      });
+    }
 
     // Base WHERE conditions
     let whereClause = "WHERE 1=1";
@@ -143,13 +171,21 @@ export async function GET(req: NextRequest) {
     const dataStmt = db.prepare(dataSql);
     const { results } = await dataStmt.bind(...dataParams).all();
 
-    return NextResponse.json({
-      bookings: results || [],
-      total,
-      page,
-      pageSize,
-      totalPages,
-    });
+    return NextResponse.json(
+      {
+        bookings: results || [],
+        total,
+        page,
+        pageSize,
+        totalPages,
+      },
+      {
+        headers: {
+          ...NO_CACHE_HEADERS,
+          ETag: etag,
+        },
+      }
+    );
   } catch (error) {
     console.error("GET bookings error:", error);
     return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 });

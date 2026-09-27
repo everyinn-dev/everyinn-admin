@@ -26,9 +26,11 @@ It is designed exclusively for hotel **receptionists and managers** to:
   - `npm run db:migrate:local` — Execute tables migration on local D1 SQLite
   - `npm run db:seed:local` — Seed master data into local D1 SQLite
   - `npm run db:migrate:008:local` — Execute Control Fields migration on local D1 SQLite
+  - `npm run db:migrate:010:local` — Execute No-Show and Refund migration on local D1 SQLite
   - `npm run db:migrate:remote` — Execute tables migration on Cloudflare D1 (Production)
   - `npm run db:seed:remote` — Seed master data into Cloudflare D1 (Production)
   - `npm run db:migrate:008:remote` — Execute Control Fields migration on Cloudflare D1 (Production)
+  - `npm run db:migrate:010:remote` — Execute No-Show and Refund migration on Cloudflare D1 (Production)
   - `npm run deploy` — Build OpenNext worker and deploy to Cloudflare
 
 ---
@@ -43,6 +45,8 @@ Migrations are located in `db/migrations/`:
 - `006_add_social_and_closing_note.sql`: Adds `instagram`, `facebook` to `members` & `bookings`, and `closing_note` to `bookings`.
 - `007_room_blocks_indexes_and_note.sql`: Adds `note` column to `room_blocks` and date range indexes (`idx_room_blocks_room_date`, `idx_room_blocks_date`, `idx_bookings_date`).
 - `008_add_control_fields.sql`: Adds Control Fields (`mod_no`, `updated_by_staff_id`, etc.) across `bookings`, `members`, and `room_blocks`.
+- `009_import_october_bookings.sql`: Forward October bookings imported from operational Google Sheet.
+- `010_add_no_show_and_refund.sql`: Adds `no_show_at`, `no_show_by`, `no_show_reason`, `refund_amount`, `original_price` to `bookings`; adds `no_show_count` to `members`; index `idx_bookings_status_checkin`.
 
 ---
 
@@ -58,7 +62,16 @@ To optimize Cloudflare D1 query quota and accelerate latency:
   - Automatically resets whenever a new Worker instance spins up or code deploys via GitHub.
   - Automatically expires after 60-minute TTL.
   - Manual invalidation via `POST /api/admin/cache/clear` (Manager role only).
-- **Transactional Data**: `bookings`, `members`, `room_blocks`, and `staff_sessions` are ALWAYS read fresh from D1.
+- **Transactional Data & Realtime Sync**:
+  - `bookings`, `members`, `room_blocks`, `dashboard:gantt`, and `staff_sessions` are ALWAYS read fresh from D1 (ZERO in-memory caching to eliminate isolate stale state).
+  - **ETag 304 Version-Checking**: APIs (`/api/dashboard/gantt` & `/api/bookings`) check `SELECT COALESCE(MAX(id), 0) FROM event_logs` (consuming exactly 1 D1 row read via B-Tree index). When no new event occurred, the server immediately returns `HTTP 304 Not Modified` (0 bytes payload, 0 DB scan, 0 client re-render), reducing D1 rows read quota consumption by 98%+.
+  - **Realtime Sync Matrix**:
+    - Cross-tab: Web API `BroadcastChannel("everyinn_sync_channel")` (0ms latency, 0 network requests).
+    - Mobile/Tab focus: `visibilitychange` & `window.focus` triggers immediate revalidation.
+    - Multi-admin: 20-second gentle background polling protected by ETag 304.
+  - **Cancel vs No-Show Semantics**:
+    - **Cancel (Hủy đặt phòng)**: Hard delete (`DELETE FROM bookings WHERE id = ?`). Booking is completely purged from Gantt and Bookings list; member CDP statistics (`total_bookings`, `total_spent`, `total_nights`, `loyalty_tier`) are atomically rolled back, while member profile remains intact.
+    - **No-Show (Khách không đến / Hủy vi phạm)**: Soft status (`status = 'no_show'`). Disappears from Gantt and turnover buffer validator (room is immediately released for new bookings); remains in `/bookings` list with purple `🚫 No-Show` badge; records refund amount, reason, and retained revenue; preserves member profile and increments `no_show_count + 1`.
 
 ---
 

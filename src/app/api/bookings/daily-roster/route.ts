@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN staff s_cr ON s_cr.id = b.created_by_staff_id
           LEFT JOIN staff s_up ON s_up.id = b.updated_by_staff_id
           LEFT JOIN members m ON m.phone = b.member_phone
-          WHERE b.status != 'cancelled'
+          WHERE b.status NOT IN ('cancelled', 'no_show')
             AND b.checkin_at >= ?
             AND b.checkin_at <= ?
           ORDER BY b.checkin_at ASC`
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN staff s_cr ON s_cr.id = b.created_by_staff_id
           LEFT JOIN staff s_up ON s_up.id = b.updated_by_staff_id
           LEFT JOIN members m ON m.phone = b.member_phone
-          WHERE b.status != 'cancelled'
+          WHERE b.status NOT IN ('cancelled', 'no_show')
             AND b.checkout_at >= ?
             AND b.checkout_at <= ?
           ORDER BY b.checkout_at ASC`

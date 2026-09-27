@@ -84,8 +84,29 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
           </div>
         </th>
 
-        {/* 9. Tổng tiền */}
-        <th className="py-3 px-3 text-right whitespace-nowrap">Tổng tiền</th>
+        {/* 9. Trạng thái (Sortable) */}
+        <th
+          onClick={() => onSort("status")}
+          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          title="Bấm để sắp xếp theo trạng thái"
+        >
+          <div className="inline-flex items-center gap-1.5">
+            <span>Trạng thái</span>
+            {renderSortIcon("status")}
+          </div>
+        </th>
+
+        {/* 10. Tổng tiền (Sortable) */}
+        <th
+          onClick={() => onSort("total_price")}
+          className="py-3 px-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          title="Bấm để sắp xếp theo tổng tiền"
+        >
+          <div className="inline-flex items-center justify-end gap-1.5 w-full">
+            <span>Tổng tiền</span>
+            {renderSortIcon("total_price")}
+          </div>
+        </th>
 
         {/* 10. Người tạo */}
         <th className="py-3 px-3 text-left whitespace-nowrap">Người tạo</th>

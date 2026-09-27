@@ -1,6 +1,6 @@
 export type RoomClass = 'haven' | 'signature';
 export type BookingType = 'hourly' | 'overnight' | 'dayuse' | 'custom';
-export type BookingStatus = 'confirmed' | 'pending' | 'holding' | 'cancelled';
+export type BookingStatus = 'confirmed' | 'pending' | 'holding' | 'cancelled' | 'no_show';
 export type LoyaltyTier = 'new' | 'bronze' | 'silver' | 'gold';
 export type StaffRole = 'receptionist' | 'manager';
 
@@ -95,19 +95,29 @@ export interface Member {
   full_name?: string;
   fullName?: string;
   total_bookings: number;
+  totalBookings?: number;
   total_spent: number;
+  totalSpent?: number;
   total_nights: number;
+  totalNights?: number;
   first_booked_at?: string;
   last_booked_at?: string;
+  lastBookedAt?: string;
   loyalty_tier: LoyaltyTier;
+  loyaltyTier?: LoyaltyTier;
   preferred_room_class?: string;
+  preferredRoomClass?: string;
   instagram?: string;
   facebook?: string;
   internal_notes?: string;
+  internalNotes?: string;
   is_blocked: number;
+  isBlocked?: number;
+  no_show_count?: number;
+  noShowCount?: number;
   portal_opt_in: number;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 /**
@@ -156,6 +166,14 @@ export interface Booking extends ControlFields {
   cancelled_at?: string;
   cancel_reason?: string;
   cancelled_by?: number;
+
+  // No-Show and Refund tracking
+  no_show_at?: string;
+  no_show_by?: number;
+  no_show_by_staff_name?: string | null;
+  no_show_reason?: string;
+  refund_amount?: number;
+  original_price?: number;
 }
 
 export interface RoomBlock {
@@ -202,6 +220,13 @@ export interface GanttBookingItem {
   updatedByStaffId?: number | null;
   updatedByStaffName?: string | null;
   modNo?: number;
+  // No-Show and Refund tracking
+  noShowAt?: string;
+  noShowBy?: number;
+  noShowByStaffName?: string | null;
+  noShowReason?: string;
+  refundAmount?: number;
+  originalPrice?: number;
 }
 
 export interface GanttBlockItem {

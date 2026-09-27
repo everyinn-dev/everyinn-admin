@@ -14,7 +14,7 @@ interface BadgeProps {
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
-  variant = "default",
+  variant: _variant = "default",
   type,
   roomClass,
   tier,
@@ -132,6 +132,10 @@ export const Badge: React.FC<BadgeProps> = ({
       cancelled: {
         label: "Đã hủy",
         style: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+      },
+      no_show: {
+        label: "🚫 No-Show",
+        style: "bg-purple-500/15 text-purple-300 border-purple-500/30",
       },
     };
     const s = statusStyles[status] || statusStyles.confirmed;
