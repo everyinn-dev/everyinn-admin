@@ -13,6 +13,8 @@ import { RoomLockDetailDrawer } from "@/components/dashboard/RoomLockDetailDrawe
 import { Spinner } from "@/components/ui/Spinner";
 import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
+import { getDashboardPrefs, setDashboardPrefs } from "@/lib/localCache";
+import { apiFetch } from "@/lib/apiClient";
 
 
 function DashboardContent() {
@@ -22,8 +24,11 @@ function DashboardContent() {
   const vnToday = useMemo(() => getVnToday(), []);
   const vnCurrentMonth = useMemo(() => getVnCurrentMonth(), []);
 
+  // Restore UI prefs from localStorage (persistent, no TTL)
+  const savedPrefs = typeof window !== "undefined" ? getDashboardPrefs() : null;
+
   // View mode: Month view (default) vs Day view
-  const initialMode = (searchParams.get("view") as "month" | "day") || "month";
+  const initialMode = (searchParams.get("view") as "month" | "day") || savedPrefs?.viewMode || "month";
   const [viewMode, setViewMode] = useState<"month" | "day">(initialMode);
 
   // Month & Day state
@@ -33,8 +38,8 @@ function DashboardContent() {
   // Scroll to today trigger
   const [scrollTrigger, setScrollTrigger] = useState<number>(0);
 
-  // Room filter & data
-  const [roomFilter, setRoomFilter] = useState<"all" | "haven" | "signature">("all");
+  // Room filter & data (restore from prefs)
+  const [roomFilter, setRoomFilter] = useState<"all" | "haven" | "signature">(savedPrefs?.roomFilter ?? "all");
   const [roomsData, setRoomsData] = useState<GanttRoomData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<GanttBookingItem | null>(null);
@@ -45,6 +50,11 @@ function DashboardContent() {
     room: GanttRoomData;
   } | null>(null);
 
+  // Persist dashboard prefs whenever viewMode or roomFilter changes
+  useEffect(() => {
+    setDashboardPrefs({ viewMode, roomFilter });
+  }, [viewMode, roomFilter]);
+
   // Fetch Gantt data according to viewMode
   const fetchData = async () => {
     try {
@@ -54,11 +64,10 @@ function DashboardContent() {
           ? `/api/dashboard/gantt?month=${month}`
           : `/api/dashboard/gantt?date=${date}`;
 
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (!res.ok) {
         if (res.status === 401) {
-          router.push("/login");
-          return;
+          return; // apiFetch already cleans cache and dispatches redirect
         }
         throw new Error("Lỗi tải dữ liệu phòng.");
       }

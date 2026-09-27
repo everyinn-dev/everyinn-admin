@@ -20,13 +20,15 @@ It is designed exclusively for hotel **receptionists and managers** to:
 - **Framework**: Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
 - **Runtime & Deployment**: Cloudflare Workers via `@opennextjs/cloudflare` + `wrangler`
 - **Database**: Cloudflare D1 (SQLite) with local & remote migrations
-- **Session Auth**: Password hashing with `bcryptjs`, HttpOnly session cookies stored in `staff_sessions` table
+- **Session Auth**: Password hashing with `bcryptjs`, 1-Day Stateless JWT sessions signed via native Web Crypto API (`crypto.subtle` HS256) stored in HttpOnly cookies (`everyinn_admin_session`) — eliminating redundant D1 queries on every request with zero overhead.
 - **Build / Deploy Commands**:
   - `npm run dev` — Run local Next.js dev server with local D1 context
   - `npm run db:migrate:local` — Execute tables migration on local D1 SQLite
   - `npm run db:seed:local` — Seed master data into local D1 SQLite
+  - `npm run db:migrate:008:local` — Execute Control Fields migration on local D1 SQLite
   - `npm run db:migrate:remote` — Execute tables migration on Cloudflare D1 (Production)
   - `npm run db:seed:remote` — Seed master data into Cloudflare D1 (Production)
+  - `npm run db:migrate:008:remote` — Execute Control Fields migration on Cloudflare D1 (Production)
   - `npm run deploy` — Build OpenNext worker and deploy to Cloudflare
 
 ---
@@ -40,6 +42,7 @@ Migrations are located in `db/migrations/`:
 - `005_import_sheet_bookings.sql`: Historical bookings imported from operational Google Sheet.
 - `006_add_social_and_closing_note.sql`: Adds `instagram`, `facebook` to `members` & `bookings`, and `closing_note` to `bookings`.
 - `007_room_blocks_indexes_and_note.sql`: Adds `note` column to `room_blocks` and date range indexes (`idx_room_blocks_room_date`, `idx_room_blocks_date`, `idx_bookings_date`).
+- `008_add_control_fields.sql`: Adds Control Fields (`mod_no`, `updated_by_staff_id`, etc.) across `bookings`, `members`, and `room_blocks`.
 
 ---
 

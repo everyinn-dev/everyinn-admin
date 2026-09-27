@@ -23,10 +23,16 @@ export async function GET(
     const { id } = await params;
     const booking = await db
       .prepare(
-        `SELECT b.*, r.name as room_name, r.room_class, s.full_name as created_by_staff_name
+        `SELECT 
+           b.*, 
+           r.name as room_name, 
+           r.room_class, 
+           creator.full_name as created_by_staff_name,
+           updater.full_name as updated_by_staff_name
          FROM bookings b
          LEFT JOIN rooms r ON b.room_id = r.id
-         LEFT JOIN staff s ON b.created_by_staff_id = s.id
+         LEFT JOIN staff creator ON b.created_by_staff_id = creator.id
+         LEFT JOIN staff updater ON b.updated_by_staff_id = updater.id
          WHERE b.id = ?
          LIMIT 1`
       )
@@ -82,10 +88,12 @@ export async function PATCH(
             cancelled_at = ?,
             cancel_reason = ?,
             cancelled_by = ?,
-            updated_at = ?
+            updated_at = ?,
+            updated_by_staff_id = ?,
+            mod_no = mod_no + 1
            WHERE id = ?`
         )
-        .bind(now, cancelReason, staff.id, now, id);
+        .bind(now, cancelReason, staff.id, now, staff.id, id);
 
       const logStmt = getLogEventStatement(
         db,
@@ -154,10 +162,12 @@ export async function PATCH(
             extra_fee = ?,
             total_price = ?,
             late_checkout_hours = ?,
-            updated_at = ?
+            updated_at = ?,
+            updated_by_staff_id = ?,
+            mod_no = mod_no + 1
            WHERE id = ?`
         )
-        .bind(newCheckoutIso, newExtraFee, newTotalPrice, newLateHours, now, id);
+        .bind(newCheckoutIso, newExtraFee, newTotalPrice, newLateHours, now, staff.id, id);
 
       const logStmt = getLogEventStatement(
         db,
@@ -203,6 +213,10 @@ export async function PATCH(
           extra_fee: newExtraFee,
           total_price: newTotalPrice,
           late_checkout_hours: newLateHours,
+          updated_at: now,
+          updated_by_staff_id: staff.id,
+          updated_by_staff_name: staff.full_name,
+          mod_no: (existing.mod_no || 0) + 1,
         },
       });
     }
@@ -292,7 +306,9 @@ export async function PATCH(
             total_price = ?,
             note = ?,
             closing_note = ?,
-            updated_at = ?
+            updated_at = ?,
+            updated_by_staff_id = ?,
+            mod_no = mod_no + 1
            WHERE id = ?`
         )
         .bind(
@@ -307,6 +323,7 @@ export async function PATCH(
           note !== undefined ? (note || null) : existing.note,
           closingNote !== undefined ? (closingNote || null) : existing.closing_note,
           now,
+          staff.id,
           id
         );
 
@@ -372,6 +389,10 @@ export async function PATCH(
           total_price: pricing.totalPrice,
           note: note !== undefined ? (note || null) : existing.note,
           closing_note: closingNote !== undefined ? (closingNote || null) : existing.closing_note,
+          updated_at: now,
+          updated_by_staff_id: staff.id,
+          updated_by_staff_name: staff.full_name,
+          mod_no: (existing.mod_no || 0) + 1,
         },
       });
     }

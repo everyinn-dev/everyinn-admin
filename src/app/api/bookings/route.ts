@@ -22,42 +22,134 @@ export async function GET(req: NextRequest) {
     const date = searchParams.get("date"); // YYYY-MM-DD
     const roomId = searchParams.get("roomId");
     const status = searchParams.get("status");
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const rawSearch = searchParams.get("search")?.trim() || "";
+    // Only trigger search if at least 3 characters entered
+    const search = rawSearch.length >= 3 ? rawSearch : "";
+    const bookingType = searchParams.get("bookingType")?.trim() || "";
+    const createdBy = searchParams.get("createdBy")?.trim() || "";
+    const createdFrom = searchParams.get("createdFrom")?.trim() || "";
+    const createdTo = searchParams.get("createdTo")?.trim() || "";
 
-    let query = `
-      SELECT b.*, r.name as room_name, r.room_class
-      FROM bookings b
-      LEFT JOIN rooms r ON b.room_id = r.id
-      WHERE 1=1
-    `;
+    // Sorting
+    const sortByParam = searchParams.get("sortBy")?.trim() || "checkin_at";
+    const sortDirParam = searchParams.get("sortDir")?.trim()?.toLowerCase() || "desc";
+
+    const allowedSortColumns: Record<string, string> = {
+      checkin_at: "b.checkin_at",
+      checkout_at: "b.checkout_at",
+      created_at: "b.created_at",
+      total_price: "b.total_price",
+      mod_no: "b.mod_no",
+      updated_at: "b.updated_at",
+    };
+    const sortColumn = allowedSortColumns[sortByParam] || "b.checkin_at";
+    const sortDir = sortDirParam === "asc" ? "ASC" : "DESC";
+
+    // Pagination
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSizeParam = searchParams.get("pageSize") || searchParams.get("limit");
+    const pageSize = Math.min(50, Math.max(1, parseInt(pageSizeParam || "20", 10)));
+    const offset = (page - 1) * pageSize;
+
+    // Base WHERE conditions
+    let whereClause = "WHERE 1=1";
     const params: any[] = [];
 
-    if (roomId) {
-      query += ` AND b.room_id = ?`;
+    if (roomId && roomId !== "all") {
+      whereClause += " AND b.room_id = ?";
       params.push(roomId);
     }
 
-    if (status) {
-      query += ` AND b.status = ?`;
+    if (status && status !== "all") {
+      whereClause += " AND b.status = ?";
       params.push(status);
+    }
+
+    if (bookingType && bookingType !== "all") {
+      whereClause += " AND b.booking_type = ?";
+      params.push(bookingType);
+    }
+
+    if (createdBy && createdBy !== "all") {
+      const staffIdNum = parseInt(createdBy, 10);
+      if (!isNaN(staffIdNum)) {
+        whereClause += " AND b.created_by_staff_id = ?";
+        params.push(staffIdNum);
+      }
+    }
+
+    if (createdFrom) {
+      whereClause += " AND b.created_at >= ?";
+      params.push(`${createdFrom}T00:00:00`);
+    }
+
+    if (createdTo) {
+      whereClause += " AND b.created_at <= ?";
+      params.push(`${createdTo}T23:59:59`);
+    }
+
+    if (search) {
+      const searchPattern = `%${search}%`;
+      whereClause += ` AND (
+        b.member_name LIKE ? OR 
+        b.member_phone LIKE ? OR 
+        b.instagram LIKE ? OR 
+        b.facebook LIKE ? OR 
+        b.id LIKE ?
+      )`;
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     if (date) {
       // Find bookings overlapping with this date
       const startOfDay = `${date}T00:00:00`;
       const endOfDay = `${date}T23:59:59`;
-      query += ` AND b.checkin_at <= ? AND b.checkout_at >= ?`;
+      whereClause += " AND b.checkin_at <= ? AND b.checkout_at >= ?";
       params.push(endOfDay, startOfDay);
     }
 
-    query += ` ORDER BY b.checkin_at DESC LIMIT ?`;
-    params.push(limit);
+    // 1. Count query for total
+    const countSql = `
+      SELECT COUNT(*) as count
+      FROM bookings b
+      LEFT JOIN rooms r ON b.room_id = r.id
+      LEFT JOIN staff creator ON b.created_by_staff_id = creator.id
+      LEFT JOIN staff updater ON b.updated_by_staff_id = updater.id
+      ${whereClause}
+    `;
+    const countStmt = db.prepare(countSql);
+    const countBound = params.length > 0 ? countStmt.bind(...params) : countStmt;
+    const totalResult = await countBound.first<{ count: number }>();
+    const total = totalResult?.count || 0;
+    const totalPages = Math.ceil(total / pageSize) || 1;
 
-    const stmt = db.prepare(query);
-    const bound = params.length > 0 ? stmt.bind(...params) : stmt;
-    const { results } = await bound.all();
+    // 2. Data query with Control Fields
+    const dataSql = `
+      SELECT 
+        b.*, 
+        r.name as room_name, 
+        r.room_class, 
+        creator.full_name as created_by_staff_name,
+        updater.full_name as updated_by_staff_name
+      FROM bookings b
+      LEFT JOIN rooms r ON b.room_id = r.id
+      LEFT JOIN staff creator ON b.created_by_staff_id = creator.id
+      LEFT JOIN staff updater ON b.updated_by_staff_id = updater.id
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortDir}
+      LIMIT ? OFFSET ?
+    `;
+    const dataParams = [...params, pageSize, offset];
+    const dataStmt = db.prepare(dataSql);
+    const { results } = await dataStmt.bind(...dataParams).all();
 
-    return NextResponse.json({ bookings: results });
+    return NextResponse.json({
+      bookings: results || [],
+      total,
+      page,
+      pageSize,
+      totalPages,
+    });
   } catch (error) {
     console.error("GET bookings error:", error);
     return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 });
@@ -187,18 +279,18 @@ export async function POST(req: NextRequest) {
     const bookingId = generateBookingId();
     const nowIso = new Date().toISOString();
 
-    // 5. Insert Booking
+    // 5. Insert Booking with Control Fields (mod_no=0, created_by, updated_by)
     await db
       .prepare(
         `INSERT INTO bookings (
           id, property_id, room_id, member_phone, member_name, instagram, facebook, num_guests,
           booking_type, checkin_at, checkout_at, late_checkout_hours, closing_note, note,
-          created_by_staff_id, status, base_price, extra_fee, discount_amount, total_price,
+          created_by_staff_id, updated_by_staff_id, mod_no, status, base_price, extra_fee, discount_amount, total_price,
           created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?
         )`
       )
@@ -218,6 +310,8 @@ export async function POST(req: NextRequest) {
         cleanClosingNote || null,
         note,
         staff.id,
+        staff.id,
+        0,
         status,
         pricing.basePrice,
         pricing.totalExtraFee,

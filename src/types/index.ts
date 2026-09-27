@@ -110,7 +110,20 @@ export interface Member {
   updated_at: string;
 }
 
-export interface Booking {
+/**
+ * Standard Control Fields (Audit & Modification Tracking) for all operational tables.
+ */
+export interface ControlFields {
+  created_at: string;
+  created_by_staff_id?: number | null;
+  created_by_staff_name?: string | null;
+  updated_at: string;
+  updated_by_staff_id?: number | null;
+  updated_by_staff_name?: string | null;
+  mod_no: number;
+}
+
+export interface Booking extends ControlFields {
   id: string;
   property_id: string;
   room_id: string;
@@ -127,8 +140,6 @@ export interface Booking {
   facebook?: string;
   closing_note?: string;
   note?: string;
-  created_by_staff_id?: number;
-  created_by_staff_name?: string;
   status: BookingStatus;
 
   base_price: number;
@@ -145,9 +156,6 @@ export interface Booking {
   cancelled_at?: string;
   cancel_reason?: string;
   cancelled_by?: number;
-
-  created_at: string;
-  updated_at: string;
 }
 
 export interface RoomBlock {
@@ -186,6 +194,14 @@ export interface GanttBookingItem {
   facebook?: string;
   closingNote?: string;
   note?: string;
+  // Control fields
+  createdAt?: string;
+  createdByStaffId?: number | null;
+  createdByStaffName?: string | null;
+  updatedAt?: string;
+  updatedByStaffId?: number | null;
+  updatedByStaffName?: string | null;
+  modNo?: number;
 }
 
 export interface GanttBlockItem {
@@ -214,5 +230,13 @@ export interface GanttDataResponse {
   month?: string; // YYYY-MM (when query is for a full month)
   daysInMonth?: number;
   rooms: GanttRoomData[];
+}
+
+export interface BookingsListResponse {
+  bookings: Booking[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 

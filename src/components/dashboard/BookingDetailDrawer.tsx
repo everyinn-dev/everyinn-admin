@@ -6,6 +6,7 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { BookingEditForm } from "./BookingEditForm";
 import { useToast } from "../ui/Toast";
+import { apiFetch } from "@/lib/apiClient";
 
 interface BookingDetailDrawerProps {
   booking: GanttBookingItem | null;
@@ -65,7 +66,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       setExtendError("");
       setExtendSuccess("");
 
-      const res = await fetch(`/api/bookings/${currentBooking.id}`, {
+      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "extend1h" }),
@@ -90,6 +91,9 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
         ...currentBooking,
         checkoutAt: data.booking.checkout_at,
         totalPrice: data.booking.total_price,
+        modNo: data.booking.mod_no !== undefined ? data.booking.mod_no : (currentBooking.modNo || 0) + 1,
+        updatedAt: data.booking.updated_at || new Date().toISOString(),
+        updatedByStaffName: data.booking.updated_by_staff_name || currentBooking.updatedByStaffName,
       };
       setCurrentBooking(updated);
       onBookingUpdated?.(updated);
@@ -110,6 +114,9 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       totalPrice: updatedData.total_price ?? currentBooking.totalPrice,
       note: updatedData.note !== undefined ? updatedData.note : currentBooking.note,
       closingNote: updatedData.closing_note !== undefined ? updatedData.closing_note : currentBooking.closingNote,
+      modNo: updatedData.mod_no !== undefined ? updatedData.mod_no : (currentBooking.modNo || 0) + 1,
+      updatedAt: updatedData.updated_at || new Date().toISOString(),
+      updatedByStaffName: updatedData.updated_by_staff_name || currentBooking.updatedByStaffName,
     };
     setCurrentBooking(updated);
     setMode("view");
@@ -121,7 +128,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     try {
       setCancelling(true);
       setErrorMsg("");
-      const res = await fetch(`/api/bookings/${currentBooking.id}`, {
+      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "cancel", cancelReason }),
@@ -330,6 +337,53 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                   <p className="text-slate-300 leading-relaxed">{currentBooking.note}</p>
                 </div>
               )}
+
+              {/* Control Fields (Audit & Modification Tracking) */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🛡️</span>
+                    <span>Thông tin kiểm soát (Control Fields)</span>
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                      (currentBooking.modNo || 0) > 0
+                        ? "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+                        : "bg-slate-800 text-slate-400 border border-slate-700"
+                    }`}
+                  >
+                    {(currentBooking.modNo || 0) > 0
+                      ? `mod_no: ${currentBooking.modNo} (Đã sửa)`
+                      : "mod_no: 0 (Bản gốc)"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs">
+                  <div className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/60 space-y-1">
+                    <span className="text-[10px] text-slate-400 block font-medium">Người & Ngày tạo:</span>
+                    <div className="font-semibold text-slate-200">
+                      {currentBooking.createdByStaffName || "Hệ thống"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      {currentBooking.createdAt ? formatDateTime(new Date(currentBooking.createdAt)) : "-"}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/60 space-y-1">
+                    <span className="text-[10px] text-slate-400 block font-medium">Chỉnh sửa cuối:</span>
+                    <div className="font-semibold text-slate-200">
+                      {(currentBooking.modNo || 0) > 0
+                        ? currentBooking.updatedByStaffName || "Nhân viên"
+                        : "Chưa chỉnh sửa"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      {(currentBooking.modNo || 0) > 0 && currentBooking.updatedAt
+                        ? formatDateTime(new Date(currentBooking.updatedAt))
+                        : "-"}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* Cancel Confirmation Prompt */}
               {showConfirmCancel && (

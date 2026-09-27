@@ -5,6 +5,14 @@ import { AdminShell } from "@/components/layout/AdminShell";
 import { BookingForm } from "@/components/bookings/BookingForm";
 import { Spinner } from "@/components/ui/Spinner";
 import { BookingRulesConfig, PricingRule, Room } from "@/types";
+import {
+  getCachedRoomsClient,
+  setCachedRoomsClient,
+  getCachedPricingRulesClient,
+  setCachedPricingRulesClient,
+  getCachedConfigsClient,
+  setCachedConfigsClient,
+} from "@/lib/localCache";
 
 
 export default function NewBookingPage() {
@@ -17,26 +25,56 @@ export default function NewBookingPage() {
   useEffect(() => {
     async function loadMasterData() {
       try {
+        // Fast-path: serve all 3 datasets from localStorage cache (TTL 60 min)
+        const cachedRooms = getCachedRoomsClient();
+        const cachedPricing = getCachedPricingRulesClient();
+        const cachedConfigs = getCachedConfigsClient();
+
+        if (cachedRooms && cachedPricing && cachedConfigs) {
+          setRooms(cachedRooms);
+          setPricingRules(cachedPricing);
+          setBookingRules(cachedConfigs.bookingRules);
+          setHourlySlots(cachedConfigs.hourlySlots);
+          setLoading(false);
+          return; // Zero fetch calls — instant form ready!
+        }
+
+        // Cache miss: fetch in parallel only what's missing
         const [roomsRes, rulesRes, configsRes] = await Promise.all([
-          fetch("/api/rooms"),
-          fetch("/api/pricing-rules"),
-          fetch("/api/configs"),
+          cachedRooms ? null : fetch("/api/rooms"),
+          cachedPricing ? null : fetch("/api/pricing-rules"),
+          cachedConfigs ? null : fetch("/api/configs"),
         ]);
 
-        if (roomsRes.ok) {
+        if (cachedRooms) {
+          setRooms(cachedRooms);
+        } else if (roomsRes?.ok) {
           const roomsData = (await roomsRes.json()) as any;
-          setRooms(roomsData.rooms || []);
+          const fetchedRooms: Room[] = roomsData.rooms || [];
+          setRooms(fetchedRooms);
+          setCachedRoomsClient(fetchedRooms);
         }
 
-        if (rulesRes.ok) {
+        if (cachedPricing) {
+          setPricingRules(cachedPricing);
+        } else if (rulesRes?.ok) {
           const rulesData = (await rulesRes.json()) as any;
-          setPricingRules(rulesData.pricingRules || []);
+          const fetchedRules: PricingRule[] = rulesData.pricingRules || [];
+          setPricingRules(fetchedRules);
+          setCachedPricingRulesClient(fetchedRules);
         }
 
-        if (configsRes.ok) {
+        if (cachedConfigs) {
+          setBookingRules(cachedConfigs.bookingRules);
+          setHourlySlots(cachedConfigs.hourlySlots);
+        } else if (configsRes?.ok) {
           const configsData = (await configsRes.json()) as any;
           setBookingRules(configsData.bookingRules);
           setHourlySlots(configsData.hourlySlots);
+          setCachedConfigsClient({
+            bookingRules: configsData.bookingRules,
+            hourlySlots: configsData.hourlySlots,
+          });
         }
       } catch (e) {
         console.error("Failed to load master data:", e);

@@ -43,9 +43,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const sessionToken = await createSession(db, staffUser.id);
+    const sessionToken = await createSession(db, {
+      id: staffUser.id,
+      phone: staffUser.phone,
+      full_name: staffUser.full_name,
+      role: staffUser.role,
+    });
     await logEvent(db, "STAFF_LOGIN", "staff", String(staffUser.id), { phone: cleanPhone }, staffUser.id);
 
+    const expiresAt = Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
     const response = NextResponse.json({
       success: true,
       staff: {
@@ -53,6 +59,7 @@ export async function POST(req: NextRequest) {
         phone: staffUser.phone,
         fullName: staffUser.full_name,
         role: staffUser.role,
+        expiresAt,
       },
     });
 
@@ -62,7 +69,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60,
+      maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60, // 1 day
       path: "/",
     });
 

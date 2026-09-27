@@ -6,6 +6,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { Spinner } from "../ui/Spinner";
+import {
+  getCachedStaffIdentity,
+  setCachedStaffIdentity,
+  clearAllCache,
+  onSessionExpired,
+  dispatchSessionExpired,
+  StaffIdentity,
+} from "@/lib/localCache";
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -14,9 +22,37 @@ interface AdminShellProps {
 export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const [staff, setStaff] = useState<{ fullName: string; role: string; phone: string } | null>(null);
+  const [staff, setStaff] = useState<StaffIdentity | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 1. Listen for global session expiration (triggered by 401s from any API or watchdog)
+  useEffect(() => {
+    const unsubscribe = onSessionExpired((reason) => {
+      clearAllCache();
+      router.push(`/login?reason=${reason}`);
+    });
+    return unsubscribe;
+  }, [router]);
+
+  // 2. Proactive watchdog: auto-logout timer when session expires
+  useEffect(() => {
+    if (!staff?.expiresAt) return;
+
+    const remainingMs = staff.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      dispatchSessionExpired("expired");
+      return;
+    }
+
+    // Schedule auto-logout when session duration elapses
+    const timer = setTimeout(() => {
+      dispatchSessionExpired("expired");
+    }, remainingMs);
+
+    return () => clearTimeout(timer);
+  }, [staff?.expiresAt]);
+
+  // 3. Auth verification on mount / pathname change
   useEffect(() => {
     // If on login page, don't verify shell
     if (pathname === "/login") {
@@ -25,21 +61,66 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
     }
 
     async function checkAuth() {
+      // Fast-path: restore staff identity from localStorage cache
+      const cached = getCachedStaffIdentity();
+      if (cached) {
+        // If expired according to timestamp, trigger immediate logout
+        if (cached.expiresAt && Date.now() >= cached.expiresAt) {
+          dispatchSessionExpired("expired");
+          return;
+        }
+
+        setStaff(cached);
+        setLoading(false);
+
+        // Silently verify in background to ensure JWT cookie is still valid
+        fetch("/api/auth/me")
+          .then(async (res) => {
+            if (!res.ok) {
+              dispatchSessionExpired("unauthorized");
+            } else {
+              const data = (await res.json()) as any;
+              if (data.authenticated && data.staff) {
+                const refreshedStaff: StaffIdentity = {
+                  id: data.staff.id ?? 0,
+                  phone: data.staff.phone,
+                  fullName: data.staff.fullName,
+                  role: data.staff.role,
+                  expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
+                };
+                setStaff(refreshedStaff);
+                setCachedStaffIdentity(refreshedStaff);
+              }
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+
+      // Cache miss: verify with server
       try {
         const res = await fetch("/api/auth/me");
         if (!res.ok) {
-          router.push("/login");
+          dispatchSessionExpired("unauthorized");
           return;
         }
         const data = (await res.json()) as any;
         if (data.authenticated && data.staff) {
-          setStaff(data.staff);
+          const freshStaff: StaffIdentity = {
+            id: data.staff.id ?? 0,
+            phone: data.staff.phone,
+            fullName: data.staff.fullName,
+            role: data.staff.role,
+            expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
+          };
+          setStaff(freshStaff);
+          setCachedStaffIdentity(freshStaff);
         } else {
-          router.push("/login");
+          dispatchSessionExpired("unauthorized");
         }
       } catch (e) {
-        console.error(e);
-        router.push("/login");
+        console.error("Auth check failed:", e);
+        dispatchSessionExpired("network_error");
       } finally {
         setLoading(false);
       }

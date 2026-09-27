@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "../ui/Button";
+import { clearAllCache } from "@/lib/localCache";
 
 interface TopbarProps {
   staff?: {
@@ -47,10 +48,12 @@ export const Topbar: React.FC<TopbarProps> = ({ staff }) => {
     try {
       setLoggingOut(true);
       await fetch("/api/auth/logout", { method: "POST" });
+      clearAllCache(); // Purge all localStorage cache on logout
       router.push("/login");
       router.refresh();
     } catch (e) {
       console.error(e);
+      clearAllCache();
       router.push("/login");
     } finally {
       setLoggingOut(false);
