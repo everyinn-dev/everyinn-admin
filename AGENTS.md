@@ -6,7 +6,7 @@
 ---
 
 ## 🏨 1. Project Overview & Business Purpose
-This repository is the **Internal Admin Panel** for **Every Inn Vạn Hạnh** (397/24 Sư Vạn Hạnh, P.12, Q.10, TP.HCM).
+This repository is the **Internal Admin Panel** for **Every Inn Phan Xích Long** (Phan Xích Long, Phường Cầu Kiệu (Phú Nhuận cũ), TP. Hồ Chí Minh).
 It is designed exclusively for hotel **receptionists and managers** to:
 1. View real-time room availability via a 24-hour visual Gantt timeline chart (`/dashboard`).
 2. Rapidly book rooms for walk-in or phone-in guests on a single streamlined form (`/bookings/new`).

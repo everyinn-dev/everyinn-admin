@@ -78,7 +78,7 @@ export const Topbar: React.FC<TopbarProps> = ({ staff }) => {
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium leading-none">
-              Chi nhánh Vạn Hạnh · Quận 10
+              Chi nhánh Phan Xích Long · Cầu Kiệu (Phú Nhuận)
             </p>
           </div>
         </Link>

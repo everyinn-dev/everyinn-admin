@@ -4,7 +4,7 @@ import { BookingsListClient } from "./_components/BookingsListClient";
 
 export const metadata = {
   title: "Danh Sách Đặt Phòng | Every Inn Admin",
-  description: "Quản lý và tra cứu toàn bộ danh sách đặt phòng tại Every Inn Vạn Hạnh",
+  description: "Quản lý và tra cứu toàn bộ danh sách đặt phòng tại Every Inn Phan Xích Long",
 };
 
 export default function BookingsListPage() {

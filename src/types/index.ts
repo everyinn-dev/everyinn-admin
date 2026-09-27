@@ -240,3 +240,57 @@ export interface BookingsListResponse {
   totalPages: number;
 }
 
+// Daily Roster (Operational Hub) Types
+export interface DailyRosterItem {
+  id: string;
+  roomId: string;
+  roomName: string;
+  roomNumber: string;
+  roomClass: RoomClass;
+  floor: number;
+  guestName: string;
+  phone: string;
+  instagram?: string;
+  facebook?: string;
+  bookingType: BookingType;
+  checkinAt: string;
+  checkoutAt: string;
+  turnoverStartAt?: string;
+  turnoverEndAt?: string;
+  totalPrice: number;
+  status: BookingStatus;
+  doorCode?: string;
+  doorCodeSentAt?: string;
+  closingNote?: string;
+  note?: string;
+  loyaltyTier?: LoyaltyTier;
+  totalBookings?: number;
+  lateCheckoutHours: number;
+  // Control fields
+  createdAt?: string;
+  createdByStaffId?: number | null;
+  createdByStaffName?: string | null;
+  updatedAt?: string;
+  updatedByStaffId?: number | null;
+  updatedByStaffName?: string | null;
+  modNo?: number;
+}
+
+export interface DailyRosterSummary {
+  totalCheckins: number;
+  totalCheckouts: number;
+  hourlyCount: number;
+  overnightCount: number;
+  dayuseCount: number;
+  customCount: number;
+  doorCodeMissingCount: number;
+}
+
+export interface DailyRosterResponse {
+  date: string; // YYYY-MM-DD
+  summary: DailyRosterSummary;
+  checkins: DailyRosterItem[];
+  checkouts: DailyRosterItem[];
+}
+
+

@@ -3,8 +3,8 @@ INSERT OR IGNORE INTO properties (
   id, name, address, bank_id, bank_account, bank_holder_name, checkin_instruction, wifi_ssid, wifi_password
 ) VALUES (
   'prop-01',
-  'Every Inn Vạn Hạnh',
-  '397/24 Sư Vạn Hạnh, Phường 12, Quận 10, TP. Hồ Chí Minh',
+  'Every Inn Phan Xích Long',
+  'Phan Xích Long, Phường Cầu Kiệu (Phú Nhuận cũ), TP. Hồ Chí Minh',
   'MB',
   '987654321',
   'EVERY INN HOSPITALITY',

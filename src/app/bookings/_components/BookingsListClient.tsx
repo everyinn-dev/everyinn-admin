@@ -15,6 +15,7 @@ import {
   getBookingsFilterState, setBookingsFilterState,
 } from "@/lib/localCache";
 import { apiFetch } from "@/lib/apiClient";
+import { DailyRosterModal } from "@/components/bookings/DailyRosterModal";
 
 interface StaffOption {
   id: number;
@@ -52,6 +53,7 @@ export const BookingsListClient: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedBooking, setSelectedBooking] = useState<GanttBookingItem | null>(null);
+  const [isRosterOpen, setIsRosterOpen] = useState<boolean>(false);
 
   // 1. Fetch master rooms & staff on mount — serve from localStorage cache (TTL 60 min)
   useEffect(() => {
@@ -197,19 +199,35 @@ export const BookingsListClient: React.FC = () => {
           </p>
         </div>
 
-        <Link href="/bookings/new">
+        <div className="flex items-center gap-3 flex-wrap">
           <Button
             size="md"
-            variant="primary"
+            variant="outline"
+            className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 shadow-sm font-bold"
+            onClick={() => setIsRosterOpen(true)}
             leftIcon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             }
           >
-            Tạo Đặt Phòng Mới
+            Lịch Check-in / Out Ngày
           </Button>
-        </Link>
+
+          <Link href="/bookings/new">
+            <Button
+              size="md"
+              variant="primary"
+              leftIcon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                </svg>
+              }
+            >
+              Tạo Đặt Phòng Mới
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}
@@ -306,6 +324,15 @@ export const BookingsListClient: React.FC = () => {
           }}
         />
       )}
+
+      {/* Daily Operational Roster Modal (Check-in & Check-out Dispatch) */}
+      <DailyRosterModal
+        isOpen={isRosterOpen}
+        onClose={() => setIsRosterOpen(false)}
+        onSelectBooking={(ganttItem) => {
+          setSelectedBooking(ganttItem);
+        }}
+      />
     </div>
   );
 };
