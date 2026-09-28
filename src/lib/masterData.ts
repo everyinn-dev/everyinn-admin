@@ -1,4 +1,12 @@
-import { BookingRulesConfig, CdpTiersConfig, HourlySlotsConfig, PricingRule, Room } from "@/types";
+import {
+  BookingRulesConfig,
+  CdpTiersConfig,
+  HourlySlotsConfig,
+  PricingRule,
+  Promotion,
+  PromotionCategory,
+  Room,
+} from "@/types";
 import { getOrSet, invalidatePrefix } from "./cache";
 
 export const MASTER_DATA_TTL = 3600; // 60 minutes in seconds
@@ -125,8 +133,55 @@ export async function getCachedHourlySlots(db: D1Database): Promise<number[]> {
 }
 
 /**
+ * Get active promotion categories cached for 60 minutes
+ */
+export async function getCachedPromotionCategories(db: D1Database): Promise<PromotionCategory[]> {
+  return getOrSet("master:promotion_categories", MASTER_DATA_TTL, async () => {
+    const { results } = await db
+      .prepare(
+        `SELECT id, name, code, description, icon, badge_color, sort_order, is_active, created_at, updated_at
+         FROM promotion_categories
+         WHERE is_active = 1
+         ORDER BY sort_order ASC, name ASC`
+      )
+      .all<PromotionCategory>();
+    return results || [];
+  });
+}
+
+/**
+ * Get active promotions cached for 60 minutes
+ */
+export async function getCachedActivePromotions(db: D1Database): Promise<Promotion[]> {
+  return getOrSet("master:promotions:active", MASTER_DATA_TTL, async () => {
+    const { results } = await db
+      .prepare(
+        `SELECT p.*, c.name as category_name, c.code as category_code, c.icon as category_icon, c.badge_color as category_color
+         FROM promotions p
+         LEFT JOIN promotion_categories c ON p.category_id = c.id
+         WHERE p.is_active = 1
+         ORDER BY p.created_at DESC`
+      )
+      .all<any>();
+
+    return (results || []).map((row) => ({
+      ...row,
+      applicable_room_classes: typeof row.applicable_room_classes === "string" ? JSON.parse(row.applicable_room_classes) : (row.applicable_room_classes || []),
+      applicable_booking_types: typeof row.applicable_booking_types === "string" ? JSON.parse(row.applicable_booking_types) : (row.applicable_booking_types || []),
+      applicable_loyalty_tiers: typeof row.applicable_loyalty_tiers === "string" ? JSON.parse(row.applicable_loyalty_tiers) : (row.applicable_loyalty_tiers || []),
+      applicable_days_of_week: typeof row.applicable_days_of_week === "string" ? JSON.parse(row.applicable_days_of_week) : (row.applicable_days_of_week || [0, 1, 2, 3, 4, 5, 6]),
+    }));
+  });
+}
+
+export function invalidatePromotionsCache(): void {
+  invalidatePrefix("master:promotion");
+}
+
+/**
  * Manually invalidate all master data caches
  */
 export function invalidateAllMasterCache(): void {
   invalidatePrefix("master:");
 }
+

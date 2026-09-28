@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookingRulesConfig, BookingType, Member, PricingRule, Room } from "@/types";
+import { BookingRulesConfig, BookingType, Member, PricingRule, Promotion, Room } from "@/types";
 import { calculatePrice } from "@/lib/pricing";
 import { PhoneLookupField } from "./PhoneLookupField";
 import { BookingTypeTabs } from "./BookingTypeTabs";
@@ -11,6 +11,8 @@ import { OvernightFields } from "./OvernightFields";
 import { DayUseFields } from "./DayUseFields";
 import { CustomFields } from "./CustomFields";
 import { PriceSummaryCard } from "./PriceSummaryCard";
+import { PromotionSelector } from "./PromotionSelector";
+import { DepositSection } from "./DepositSection";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
@@ -97,6 +99,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [customCheckoutDate, setCustomCheckoutDate] = useState(nextDayStr);
   const [customCheckoutTime, setCustomCheckoutTime] = useState("12:00");
   const [customPrice, setCustomPrice] = useState<number>(0);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+
+  // Deposit state
+  const [isDeposit, setIsDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState<number>(0);
+  const [depositDueDate, setDepositDueDate] = useState<string>("");
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -167,6 +176,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       pricingRules: initialPricingRules,
       extraHourFee: bookingRules?.extra_hour_fee,
       customPrice: bookingType === "custom" ? customPrice : 0,
+      discountAmount,
     });
   }, [
     bookingType,
@@ -177,6 +187,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     initialPricingRules,
     bookingRules,
     customPrice,
+    discountAmount,
   ]);
 
   // CDP Auto-fill callback (Phone lookup found returning member)
@@ -313,6 +324,27 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       }
     }
 
+    if (isDeposit) {
+      if (depositAmount <= 0) {
+        const err = "Vui lòng nhập số tiền đặt cọc (lớn hơn 0).";
+        setErrorMsg(err);
+        toast.warning(err, "Chưa nhập tiền cọc");
+        return;
+      }
+      if (depositAmount > pricing.totalPrice) {
+        const err = "Số tiền cọc không được lớn hơn tổng giá trị đơn phòng.";
+        setErrorMsg(err);
+        toast.warning(err, "Tiền cọc không hợp lệ");
+        return;
+      }
+      if (!depositDueDate.trim()) {
+        const err = "Vui lòng chọn hạn thanh toán số tiền còn lại.";
+        setErrorMsg(err);
+        toast.warning(err, "Chưa chọn hạn nộp cọc");
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
       const payload = {
@@ -327,9 +359,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         checkoutAt: checkoutAt.toISOString(),
         lateCheckoutHours: lateHours,
         customPrice: bookingType === "custom" ? customPrice : undefined,
+        discountAmount,
+        promotionId: selectedPromotion?.id,
+        promotionCode: selectedPromotion?.code,
         closingNote: closingNote.trim(),
         note: note.trim(),
         status: "confirmed",
+        isDeposit,
+        depositAmount: isDeposit ? depositAmount : 0,
+        depositDueDate: isDeposit ? depositDueDate.trim() : undefined,
       };
 
       const res = await fetch("/api/bookings", {
@@ -349,9 +387,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         throw new Error(errorText);
       }
 
-      const successNotice = `Đã tạo thành công mã đặt phòng #${data.booking.id} cho ${name}!`;
+      const successNotice = isDeposit
+        ? `Đã tạo đơn đặt cọc #${data.booking.id} cho ${name}! Đã ghi nhận cọc ${depositAmount.toLocaleString("vi-VN")}đ, hạn thu nốt ngày ${depositDueDate}.`
+        : `Đã tạo thành công mã đặt phòng #${data.booking.id} cho ${name}!`;
       setSuccessMsg(`✅ ${successNotice} Đang chuyển hướng...`);
-      toast.success(successNotice, "Tạo đơn thành công");
+      toast.success(successNotice, isDeposit ? "Đặt cọc thành công" : "Tạo đơn thành công");
       notifyDataChanged("BOOKINGS_CHANGED");
 
       setTimeout(() => {
@@ -365,7 +405,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
+    <form onSubmit={handleSubmit} noValidate className="max-w-4xl mx-auto space-y-6">
       {/* Alert Banners */}
       {errorMsg && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium flex items-center gap-2 animate-in fade-in">
@@ -647,10 +687,44 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         </div>
       </div>
 
-      {/* 3. Price Summary Card */}
-      <PriceSummaryCard pricing={pricing} selectedRoom={selectedRoom} />
+      {/* Promotion Selector */}
+      <PromotionSelector
+        roomClass={selectedRoom?.room_class || "haven"}
+        bookingType={bookingType}
+        checkinAt={checkinAt}
+        rawSubtotal={pricing.basePrice + pricing.totalExtraFee}
+        memberTier={foundMember?.loyalty_tier || foundMember?.loyaltyTier || "new"}
+        selectedPromotion={selectedPromotion}
+        onSelectPromotion={(promo, amount) => {
+          setSelectedPromotion(promo);
+          setDiscountAmount(amount);
+        }}
+      />
 
-      {/* 4. Action Buttons */}
+      {/* 3. Deposit Configuration Section */}
+      <DepositSection
+        isDeposit={isDeposit}
+        onToggleDeposit={setIsDeposit}
+        depositAmount={depositAmount}
+        onChangeDepositAmount={setDepositAmount}
+        depositDueDate={depositDueDate}
+        onChangeDepositDueDate={setDepositDueDate}
+        totalPrice={pricing.totalPrice}
+        checkinDateStr={checkinAt ? checkinAt.toISOString().slice(0, 10) : defaultDate}
+      />
+
+      {/* 4. Price Summary Card */}
+      <PriceSummaryCard
+        pricing={pricing}
+        selectedRoom={selectedRoom}
+        promotionName={selectedPromotion?.name}
+        isDeposit={isDeposit}
+        depositAmount={depositAmount}
+        remainingAmount={Math.max(0, pricing.totalPrice - depositAmount)}
+        depositDueDate={depositDueDate}
+      />
+
+      {/* 5. Action Buttons */}
       <div className="flex items-center justify-end gap-3 pt-2">
         <Button
           type="button"
@@ -665,9 +739,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           variant="primary"
           size="lg"
           isLoading={submitting}
-          leftIcon={<span>✅</span>}
+          leftIcon={<span>{isDeposit ? "🔒" : "✅"}</span>}
         >
-          Xác Nhận Tạo Đặt Phòng
+          {isDeposit
+            ? `Xác Nhận Đặt Cọc & Giữ Phòng (Đã thu ${depositAmount.toLocaleString("vi-VN")}đ)`
+            : "Xác Nhận Tạo Đặt Phòng"}
         </Button>
       </div>
     </form>

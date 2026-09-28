@@ -14,6 +14,8 @@ interface BookingsFilterBarProps {
   onSearchChange: (value: string) => void;
   status: string;
   onStatusChange: (value: string) => void;
+  depositStatus?: string;
+  onDepositStatusChange?: (value: string) => void;
   roomId: string;
   onRoomChange: (value: string) => void;
   bookingType: string;
@@ -34,6 +36,8 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
   onSearchChange,
   status,
   onStatusChange,
+  depositStatus = "",
+  onDepositStatusChange,
   roomId,
   onRoomChange,
   bookingType,
@@ -74,7 +78,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
   }, [localSearch, search, onSearchChange]);
 
   const hasActiveFilters = Boolean(
-    (search && search.length >= 3) || status || roomId || bookingType || createdBy || createdFrom || createdTo
+    (search && search.length >= 3) || status || depositStatus || roomId || bookingType || createdBy || createdFrom || createdTo
   );
 
   return (
@@ -127,7 +131,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
       </div>
 
       {/* Filter Dropdowns & Date Range */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5 text-xs">
         {/* Dropdown: Trạng thái */}
         <div className="space-y-1">
           <label className="text-[11px] font-bold text-slate-600">Trạng thái</label>
@@ -140,6 +144,21 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
             <option value="confirmed">Đã xác nhận</option>
             <option value="no_show">🚫 No-Show</option>
             <option value="cancelled">Đã hủy</option>
+          </select>
+        </div>
+
+        {/* Dropdown: Đặt cọc */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-bold text-slate-600">Đặt cọc</label>
+          <select
+            value={depositStatus}
+            onChange={(e) => onDepositStatusChange?.(e.target.value)}
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 transition-colors shadow-xs"
+          >
+            <option value="">Tất cả cọc</option>
+            <option value="deposit_paid">🪙 Đang nợ cọc (Chờ thu nốt)</option>
+            <option value="fully_paid">✅ Đã thu đủ 100%</option>
+            <option value="none">Không đặt cọc</option>
           </select>
         </div>
 

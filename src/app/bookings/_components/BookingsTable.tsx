@@ -128,9 +128,24 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   </div>
                 </td>
 
-                {/* 10. Tổng tiền */}
-                <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap text-sm">
-                  {Number(b.total_price || 0).toLocaleString("vi-VN")} đ
+                {/* 10. Tổng tiền & Đặt cọc */}
+                <td className="py-3 px-3 text-right whitespace-nowrap">
+                  <div className="font-mono font-bold text-emerald-700 text-sm">
+                    {Number(b.total_price || 0).toLocaleString("vi-VN")} đ
+                  </div>
+                  {b.is_deposit === 1 && (
+                    <div className="text-[10px] font-medium mt-0.5">
+                      {b.deposit_status === "fully_paid" ? (
+                        <span className="text-emerald-800 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          Đã thu đủ 100%
+                        </span>
+                      ) : (
+                        <span className="text-amber-900 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          Cọc {Number(b.paid_amount || b.deposit_amount || 0).toLocaleString("vi-VN")}đ (Thiếu {Number(b.remaining_amount || 0).toLocaleString("vi-VN")}đ)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </td>
 
                 {/* 10. Người tạo */}

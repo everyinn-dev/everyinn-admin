@@ -167,6 +167,10 @@ export interface Booking extends ControlFields {
   cancel_reason?: string;
   cancelled_by?: number;
 
+  // Promotion tracking
+  promotion_id?: string;
+  promotion_code?: string;
+
   // No-Show and Refund tracking
   no_show_at?: string;
   no_show_by?: number;
@@ -174,7 +178,26 @@ export interface Booking extends ControlFields {
   no_show_reason?: string;
   refund_amount?: number;
   original_price?: number;
+
+  // Deposit tracking
+  is_deposit?: number;
+  deposit_amount?: number;
+  paid_amount?: number;
+  remaining_amount?: number;
+  deposit_due_date?: string; // 'YYYY-MM-DD'
+  deposit_status?: DepositStatus;
+  deposit_paid_at?: string;
+  deposit_reminder_sent_at?: string;
+  deposit_reminder_sent_by?: number;
+  deposit_reminder_sent_by_staff_name?: string | null;
+  remaining_paid_at?: string;
+  remaining_paid_by?: number;
+  remaining_paid_by_staff_name?: string | null;
 }
+
+export type DepositStatus = 'none' | 'deposit_paid' | 'fully_paid';
+
+export * from "./promotions";
 
 export interface RoomBlock {
   id: number;
@@ -227,6 +250,16 @@ export interface GanttBookingItem {
   noShowReason?: string;
   refundAmount?: number;
   originalPrice?: number;
+  // Deposit tracking
+  isDeposit?: number;
+  depositAmount?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  depositDueDate?: string;
+  depositStatus?: DepositStatus;
+  depositPaidAt?: string;
+  depositReminderSentAt?: string;
+  remainingPaidAt?: string;
 }
 
 export interface GanttBlockItem {

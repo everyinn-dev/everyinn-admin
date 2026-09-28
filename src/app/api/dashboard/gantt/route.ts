@@ -100,6 +100,15 @@ export async function GET(req: NextRequest) {
             totalPrice: b.total_price,
             status: b.status,
             note: b.note,
+            isDeposit: b.is_deposit,
+            depositAmount: b.deposit_amount,
+            paidAmount: b.paid_amount,
+            remainingAmount: b.remaining_amount,
+            depositDueDate: b.deposit_due_date,
+            depositStatus: b.deposit_status,
+            depositPaidAt: b.deposit_paid_at,
+            depositReminderSentAt: b.deposit_reminder_sent_at,
+            remainingPaidAt: b.remaining_paid_at,
           }));
 
         const roomBlocks = (blocks || [])

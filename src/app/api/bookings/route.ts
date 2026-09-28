@@ -3,7 +3,8 @@ import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { generateBookingId } from "@/lib/bookingId";
 import { calculatePrice } from "@/lib/pricing";
-import { upsertMemberOnBooking } from "@/lib/cdp";
+import { upsertMemberOnBooking, lookupMember } from "@/lib/cdp";
+import { evaluatePromotion } from "@/lib/promotions";
 import { logEvent } from "@/lib/audit";
 import { BookingType } from "@/types";
 import { getCachedRooms, getCachedPricingRules } from "@/lib/masterData";
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
     // Only trigger search if at least 3 characters entered
     const search = rawSearch.length >= 3 ? rawSearch : "";
     const bookingType = searchParams.get("bookingType")?.trim() || "";
+    const depositStatus = searchParams.get("depositStatus")?.trim() || "";
     const createdBy = searchParams.get("createdBy")?.trim() || "";
     const createdFrom = searchParams.get("createdFrom")?.trim() || "";
     const createdTo = searchParams.get("createdTo")?.trim() || "";
@@ -67,7 +69,7 @@ export async function GET(req: NextRequest) {
       .first<{ last_event_id: number }>();
     const lastEventId = eventRow?.last_event_id || 0;
 
-    const etag = `W/"ev-${lastEventId}-bk-${page}-${pageSize}-${sortByParam}-${sortDirParam}-${roomId || ""}-${status || ""}-${bookingType || ""}-${createdBy || ""}-${createdFrom || ""}-${createdTo || ""}-${search}"`;
+    const etag = `W/"ev-${lastEventId}-bk-${page}-${pageSize}-${sortByParam}-${sortDirParam}-${roomId || ""}-${status || ""}-${bookingType || ""}-${depositStatus || ""}-${createdBy || ""}-${createdFrom || ""}-${createdTo || ""}-${search}"`;
     const ifNoneMatch = req.headers.get("if-none-match");
     if (ifNoneMatch && ifNoneMatch === etag) {
       return new NextResponse(null, {
@@ -91,6 +93,11 @@ export async function GET(req: NextRequest) {
     if (status && status !== "all") {
       whereClause += " AND b.status = ?";
       params.push(status);
+    }
+
+    if (depositStatus && depositStatus !== "all") {
+      whereClause += " AND b.deposit_status = ?";
+      params.push(depositStatus);
     }
 
     if (bookingType && bookingType !== "all") {
@@ -215,8 +222,20 @@ export async function POST(req: NextRequest) {
       checkoutAt,
       lateCheckoutHours = 0,
       customPrice = 0,
+      discountAmount = 0,
+      discount_amount = 0,
+      promotionId = "",
+      promotion_id = "",
+      promotionCode = "",
+      promotion_code = "",
       note = "",
       status = "confirmed",
+      isDeposit = false,
+      is_deposit = false,
+      depositAmount = 0,
+      deposit_amount = 0,
+      depositDueDate = "",
+      deposit_due_date = "",
     } = body;
 
     // Basic validation
@@ -301,7 +320,79 @@ export async function POST(req: NextRequest) {
     // 3. Fetch Pricing Rules from cached master data
     const pricingRules = await getCachedPricingRules(db);
 
-    // 4. Calculate locked price snapshot
+    // 4. Calculate locked price snapshot & validate promotion
+    const basePricing = calculatePrice({
+      bookingType: bookingType as BookingType,
+      roomClass: room.room_class,
+      checkinAt: checkinDate,
+      checkoutAt: checkoutDate,
+      lateCheckoutHours: Number(lateCheckoutHours) || 0,
+      pricingRules,
+      customPrice: Number(customPrice) || 0,
+      discountAmount: 0,
+    });
+
+    let appliedDiscountAmount = Number(discountAmount || discount_amount) || 0;
+    let appliedPromoId: string | null = null;
+    let appliedPromoCode: string | null = null;
+
+    const requestedPromo = (promotionId || promotion_id || promotionCode || promotion_code || "").trim();
+    if (requestedPromo) {
+      const promoRow = await db
+        .prepare(
+          `SELECT p.*, c.name as category_name
+           FROM promotions p
+           LEFT JOIN promotion_categories c ON p.category_id = c.id
+           WHERE p.id = ? OR p.code = ?
+           LIMIT 1`
+        )
+        .bind(requestedPromo, requestedPromo.toUpperCase())
+        .first<any>();
+
+      if (promoRow) {
+        const member = await lookupMember(db, cleanPhone);
+        const parsedPromo = {
+          ...promoRow,
+          applicable_room_classes:
+            typeof promoRow.applicable_room_classes === "string"
+              ? JSON.parse(promoRow.applicable_room_classes)
+              : promoRow.applicable_room_classes || [],
+          applicable_booking_types:
+            typeof promoRow.applicable_booking_types === "string"
+              ? JSON.parse(promoRow.applicable_booking_types)
+              : promoRow.applicable_booking_types || [],
+          applicable_loyalty_tiers:
+            typeof promoRow.applicable_loyalty_tiers === "string"
+              ? JSON.parse(promoRow.applicable_loyalty_tiers)
+              : promoRow.applicable_loyalty_tiers || [],
+          applicable_days_of_week:
+            typeof promoRow.applicable_days_of_week === "string"
+              ? JSON.parse(promoRow.applicable_days_of_week)
+              : promoRow.applicable_days_of_week || [0, 1, 2, 3, 4, 5, 6],
+        };
+
+        const promoEval = evaluatePromotion(parsedPromo, {
+          roomClass: room.room_class,
+          bookingType: bookingType as BookingType,
+          checkinAt: checkinDate,
+          rawSubtotal: basePricing.basePrice + basePricing.totalExtraFee,
+          memberTier: member?.loyalty_tier || "new",
+        });
+
+        if (promoEval.eligible) {
+          appliedDiscountAmount = promoEval.discountAmount;
+          appliedPromoId = parsedPromo.id;
+          appliedPromoCode = parsedPromo.code || null;
+
+          // Increment used_count for promotion
+          await db
+            .prepare("UPDATE promotions SET used_count = used_count + 1 WHERE id = ?")
+            .bind(parsedPromo.id)
+            .run();
+        }
+      }
+    }
+
     const pricing = calculatePrice({
       bookingType: bookingType as BookingType,
       roomClass: room.room_class,
@@ -310,24 +401,45 @@ export async function POST(req: NextRequest) {
       lateCheckoutHours: Number(lateCheckoutHours) || 0,
       pricingRules,
       customPrice: Number(customPrice) || 0,
+      discountAmount: appliedDiscountAmount,
     });
 
     const bookingId = generateBookingId();
     const nowIso = new Date().toISOString();
 
-    // 5. Insert Booking with Control Fields (mod_no=0, created_by, updated_by)
+    const isDepositVal = Boolean(isDeposit || is_deposit) ? 1 : 0;
+    let depositAmt = 0;
+    let paidAmt = pricing.totalPrice;
+    let remainingAmt = 0;
+    let depositStat = "none";
+    let depositDue: string | null = null;
+    let depositPaidDate: string | null = null;
+
+    if (isDepositVal === 1) {
+      const rawDeposit = Math.round(Number(depositAmount || deposit_amount) || 0);
+      depositAmt = Math.max(0, Math.min(rawDeposit, pricing.totalPrice));
+      paidAmt = depositAmt;
+      remainingAmt = Math.max(0, pricing.totalPrice - paidAmt);
+      depositStat = remainingAmt === 0 ? "fully_paid" : "deposit_paid";
+      depositDue = (depositDueDate || deposit_due_date || "").trim() || checkinIso.slice(0, 10);
+      depositPaidDate = nowIso;
+    }
+
+    // 5. Insert Booking with Control Fields, Promotion & Deposit (mod_no=0, created_by, updated_by)
     await db
       .prepare(
         `INSERT INTO bookings (
           id, property_id, room_id, member_phone, member_name, instagram, facebook, num_guests,
           booking_type, checkin_at, checkout_at, late_checkout_hours, closing_note, note,
           created_by_staff_id, updated_by_staff_id, mod_no, status, base_price, extra_fee, discount_amount, total_price,
-          created_at, updated_at
+          promotion_id, promotion_code, is_deposit, deposit_amount, paid_amount, remaining_amount,
+          deposit_due_date, deposit_status, deposit_paid_at, created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?
         )`
       )
       .bind(
@@ -353,18 +465,28 @@ export async function POST(req: NextRequest) {
         pricing.totalExtraFee,
         pricing.discountAmount,
         pricing.totalPrice,
+        appliedPromoId,
+        appliedPromoCode,
+        isDepositVal,
+        depositAmt,
+        paidAmt,
+        remainingAmt,
+        depositDue,
+        depositStat,
+        depositPaidDate,
         nowIso,
         nowIso
       )
       .run();
 
     // 6. CDP: Upsert member and recalculate loyalty tier (updates instagram/facebook by phone)
+    // For deposit bookings, only credit actual cash received (paidAmt) to total_spent; remainder is credited when completed
     const cdpResult = await upsertMemberOnBooking(db, {
       phone: cleanPhone,
       name: cleanName,
       instagram: cleanInstagram,
       facebook: cleanFacebook,
-      totalPrice: pricing.totalPrice,
+      totalPrice: isDepositVal === 1 ? paidAmt : pricing.totalPrice,
       bookingType: bookingType as BookingType,
       roomClass: room.room_class,
       staffId: staff.id,
@@ -386,6 +508,12 @@ export async function POST(req: NextRequest) {
         facebook: cleanFacebook,
         totalPrice: pricing.totalPrice,
         bookingType,
+        isDeposit: isDepositVal,
+        depositAmount: depositAmt,
+        paidAmount: paidAmt,
+        remainingAmount: remainingAmt,
+        depositDueDate: depositDue,
+        depositStatus: depositStat,
       },
       staff.id
     );
@@ -410,6 +538,12 @@ export async function POST(req: NextRequest) {
         checkoutAt: checkoutIso,
         totalPrice: pricing.totalPrice,
         status,
+        isDeposit: isDepositVal,
+        depositAmount: depositAmt,
+        paidAmount: paidAmt,
+        remainingAmount: remainingAmt,
+        depositDueDate: depositDue,
+        depositStatus: depositStat,
       },
       cdp: cdpResult,
     });

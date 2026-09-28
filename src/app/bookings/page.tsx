@@ -11,7 +11,9 @@ export default function BookingsListPage() {
   return (
     <AdminShell>
       <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        <BookingsListClient />
+        <React.Suspense fallback={<div className="py-24 text-center text-sm text-slate-500 font-semibold">Đang tải...</div>}>
+          <BookingsListClient />
+        </React.Suspense>
       </div>
     </AdminShell>
   );

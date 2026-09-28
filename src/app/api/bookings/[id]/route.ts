@@ -38,12 +38,16 @@ export async function GET(
            r.room_class, 
            creator.full_name as created_by_staff_name,
            updater.full_name as updated_by_staff_name,
-           no_shower.full_name as no_show_by_staff_name
+           no_shower.full_name as no_show_by_staff_name,
+           reminder_sender.full_name as deposit_reminder_sent_by_staff_name,
+           remaining_receiver.full_name as remaining_paid_by_staff_name
          FROM bookings b
          LEFT JOIN rooms r ON b.room_id = r.id
          LEFT JOIN staff creator ON b.created_by_staff_id = creator.id
          LEFT JOIN staff updater ON b.updated_by_staff_id = updater.id
          LEFT JOIN staff no_shower ON b.no_show_by = no_shower.id
+         LEFT JOIN staff reminder_sender ON b.deposit_reminder_sent_by = reminder_sender.id
+         LEFT JOIN staff remaining_receiver ON b.remaining_paid_by = remaining_receiver.id
          WHERE b.id = ?
          LIMIT 1`
       )
@@ -110,12 +114,17 @@ export async function PATCH(
       const rawRefund = Number(body.refundAmount || 0);
       const refundAmount = isNaN(rawRefund) || rawRefund < 0 ? 0 : Math.round(rawRefund);
 
-      if (refundAmount > existing.total_price) {
+      const actualCashReceived =
+        existing.is_deposit === 1
+          ? existing.paid_amount || existing.deposit_amount || 0
+          : existing.total_price;
+
+      if (refundAmount > actualCashReceived) {
         return NextResponse.json(
           {
             error: `Số tiền hoàn (${refundAmount.toLocaleString(
               "vi-VN"
-            )} đ) không được lớn hơn tổng tiền đơn phòng (${existing.total_price.toLocaleString(
+            )} đ) không được lớn hơn số tiền thực tế khách đã đóng (${actualCashReceived.toLocaleString(
               "vi-VN"
             )} đ).`,
           },
@@ -124,7 +133,7 @@ export async function PATCH(
       }
 
       const originalPrice = existing.total_price;
-      const netRetained = originalPrice - refundAmount;
+      const netRetained = actualCashReceived - refundAmount;
       const noShowReason = (body.noShowReason || body.reason || "Khách không đến / Hủy vi phạm quy định").trim();
 
       // Build note update
@@ -170,17 +179,23 @@ export async function PATCH(
           id
         );
 
-      // Mini CDP: Increment no_show_count for member, and deduct refundAmount from total_spent if refund > 0
+      // Mini CDP: Increment no_show_count for member, deduct refundAmount from total_spent, and recalculate loyalty_tier
+      const member = existing.member_phone ? await lookupMember(db, existing.member_phone) : null;
+      const updatedSpent = Math.max(0, (member?.total_spent || 0) - refundAmount);
+      const tiers = await getCachedCdpTiers(db);
+      const newTier = calculateLoyaltyTier(updatedSpent, member?.total_bookings || 1, tiers);
+
       const updateMemberStmt = db
         .prepare(
           `UPDATE members SET
             no_show_count = no_show_count + 1,
-            total_spent = MAX(0, total_spent - ?),
+            total_spent = ?,
+            loyalty_tier = ?,
             updated_at = ?,
             mod_no = mod_no + 1
            WHERE phone = ?`
         )
-        .bind(refundAmount, now, existing.member_phone);
+        .bind(updatedSpent, newTier, now, existing.member_phone);
 
       const logStmt = getLogEventStatement(
         db,
@@ -219,6 +234,170 @@ export async function PATCH(
     if (action === "cancel") {
       const cancelReason = body.cancelReason || "Lễ tân hủy/xóa đặt phòng";
       return await executeHardDeleteBooking(db, existing, staff, cancelReason);
+    }
+
+    // ── ACTION: COMPLETE DEPOSIT PAYMENT (BỔ SUNG THANH TOÁN PHẦN CÒN LẠI) ─
+    if (action === "complete_deposit_payment") {
+      if (existing.is_deposit !== 1) {
+        return NextResponse.json(
+          { error: "Đơn đặt phòng này không phải đơn đặt cọc." },
+          { status: 400 }
+        );
+      }
+      if (existing.deposit_status === "fully_paid") {
+        return NextResponse.json(
+          { error: "Đơn đặt phòng này đã được thanh toán đủ 100% trước đó." },
+          { status: 400 }
+        );
+      }
+      if (existing.status === "cancelled" || existing.status === "no_show") {
+        return NextResponse.json(
+          { error: "Không thể bổ sung thanh toán cho đơn đặt phòng đã hủy hoặc No-Show." },
+          { status: 400 }
+        );
+      }
+
+      const rawAmount = Number(body.paymentAmount !== undefined ? body.paymentAmount : existing.remaining_amount);
+      const paymentAmount = isNaN(rawAmount) || rawAmount <= 0 ? 0 : Math.round(rawAmount);
+
+      if (paymentAmount <= 0) {
+        return NextResponse.json(
+          { error: "Vui lòng nhập số tiền thanh toán hợp lệ (lớn hơn 0)." },
+          { status: 400 }
+        );
+      }
+
+      const newPaidAmount = (existing.paid_amount || 0) + paymentAmount;
+      const newRemainingAmount = Math.max(0, existing.total_price - newPaidAmount);
+      const newDepositStatus = newRemainingAmount === 0 ? "fully_paid" : "deposit_paid";
+      const noteAppend = body.note?.trim()
+        ? `\n[${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} ${now.slice(0, 10)}] Thu cọc nốt: +${paymentAmount.toLocaleString("vi-VN")}đ (${body.note.trim()})`
+        : "";
+      const updatedNote = (existing.note || "") + noteAppend;
+
+      const updateStmt = db
+        .prepare(
+          `UPDATE bookings SET
+            paid_amount = ?,
+            remaining_amount = ?,
+            deposit_status = ?,
+            remaining_paid_at = ?,
+            remaining_paid_by = ?,
+            note = ?,
+            updated_at = ?,
+            updated_by_staff_id = ?,
+            mod_no = mod_no + 1
+          WHERE id = ?`
+        )
+        .bind(
+          newPaidAmount,
+          newRemainingAmount,
+          newDepositStatus,
+          now,
+          staff.id,
+          updatedNote,
+          now,
+          staff.id,
+          id
+        );
+
+      const logStmt = getLogEventStatement(
+        db,
+        "BOOKING_DEPOSIT_COMPLETED",
+        "booking",
+        id,
+        {
+          bookingId: id,
+          previousPaid: existing.paid_amount || existing.deposit_amount,
+          paymentAmount,
+          newPaidAmount,
+          remainingAmount: newRemainingAmount,
+          depositStatus: newDepositStatus,
+          note: body.note || null,
+          staffId: staff.id,
+        },
+        staff.id
+      );
+
+      const batchStmts: any[] = [updateStmt, logStmt];
+
+      // Update Member CDP total_spent & recalculate loyalty tier
+      if (existing.member_phone && paymentAmount > 0) {
+        const member = await lookupMember(db, existing.member_phone);
+        if (member) {
+          const updatedSpent = (member.total_spent || 0) + paymentAmount;
+          const tiers = await getCachedCdpTiers(db);
+          const newTier = calculateLoyaltyTier(updatedSpent, member.total_bookings || 1, tiers);
+          const updateMemberStmt = db
+            .prepare(
+              `UPDATE members SET
+                total_spent = ?,
+                loyalty_tier = ?,
+                updated_at = ?,
+                mod_no = mod_no + 1
+               WHERE phone = ?`
+            )
+            .bind(updatedSpent, newTier, now, existing.member_phone);
+          batchStmts.push(updateMemberStmt);
+        }
+      }
+
+      await db.batch(batchStmts);
+      invalidatePrefix("dashboard:gantt:");
+
+      return NextResponse.json({
+        success: true,
+        message:
+          newDepositStatus === "fully_paid"
+            ? `Đã thu đủ ${paymentAmount.toLocaleString("vi-VN")} đ. Đơn đặt phòng #${id} đã hoàn tất thanh toán 100%! 🎉`
+            : `Đã thu thêm ${paymentAmount.toLocaleString("vi-VN")} đ. Còn lại: ${newRemainingAmount.toLocaleString("vi-VN")} đ.`,
+        paidAmount: newPaidAmount,
+        remainingAmount: newRemainingAmount,
+        depositStatus: newDepositStatus,
+      });
+    }
+
+    // ── ACTION: MARK DEPOSIT REMINDER SENT (ĐÃ GỬI NHẮC CỌC) ────────
+    if (action === "mark_deposit_reminder_sent") {
+      if (existing.is_deposit !== 1) {
+        return NextResponse.json(
+          { error: "Đơn đặt phòng này không phải đơn đặt cọc." },
+          { status: 400 }
+        );
+      }
+
+      const updateStmt = db
+        .prepare(
+          `UPDATE bookings SET
+            deposit_reminder_sent_at = ?,
+            deposit_reminder_sent_by = ?,
+            updated_at = ?,
+            updated_by_staff_id = ?,
+            mod_no = mod_no + 1
+          WHERE id = ?`
+        )
+        .bind(now, staff.id, now, staff.id, id);
+
+      const logStmt = getLogEventStatement(
+        db,
+        "BOOKING_DEPOSIT_REMINDER_SENT",
+        "booking",
+        id,
+        {
+          bookingId: id,
+          reminderSentAt: now,
+          staffId: staff.id,
+        },
+        staff.id
+      );
+
+      await db.batch([updateStmt, logStmt]);
+
+      return NextResponse.json({
+        success: true,
+        message: `Đã ghi nhận gửi nhắc cọc cho đơn #${id} thành công.`,
+        depositReminderSentAt: now,
+      });
     }
 
     // ── ACTION: EXTEND 1 HOUR ─────────────────────────────────────
@@ -265,6 +444,13 @@ export async function PATCH(
       const newExtraFee = (existing.extra_fee || 0) + extraFeeDelta;
       const newTotalPrice = (existing.total_price || 0) + extraFeeDelta;
       const newLateHours = (existing.late_checkout_hours || 0) + 1;
+      const isDepositBooking = existing.is_deposit === 1;
+      const newRemainingAmount = isDepositBooking
+        ? Math.max(0, newTotalPrice - (existing.paid_amount || 0))
+        : 0;
+      const newDepositStatus = isDepositBooking
+        ? (newRemainingAmount === 0 ? "fully_paid" : "deposit_paid")
+        : (existing.deposit_status || "none");
 
       const updateStmt = db
         .prepare(
@@ -273,12 +459,24 @@ export async function PATCH(
             extra_fee = ?,
             total_price = ?,
             late_checkout_hours = ?,
+            remaining_amount = ?,
+            deposit_status = ?,
             updated_at = ?,
             updated_by_staff_id = ?,
             mod_no = mod_no + 1
            WHERE id = ?`
         )
-        .bind(newCheckoutIso, newExtraFee, newTotalPrice, newLateHours, now, staff.id, id);
+        .bind(
+          newCheckoutIso,
+          newExtraFee,
+          newTotalPrice,
+          newLateHours,
+          newRemainingAmount,
+          newDepositStatus,
+          now,
+          staff.id,
+          id
+        );
 
       const logStmt = getLogEventStatement(
         db,
@@ -404,6 +602,14 @@ export async function PATCH(
 
       const priceDelta = pricing.totalPrice - (existing.total_price || 0);
 
+      const isDepositBooking = existing.is_deposit === 1;
+      const newRemaining = isDepositBooking
+        ? Math.max(0, pricing.totalPrice - (existing.paid_amount || 0))
+        : existing.remaining_amount || 0;
+      const newDepositStatus = isDepositBooking
+        ? (newRemaining === 0 ? "fully_paid" : "deposit_paid")
+        : (existing.deposit_status || "none");
+
       const updateStmt = db
         .prepare(
           `UPDATE bookings SET
@@ -415,6 +621,8 @@ export async function PATCH(
             base_price = ?,
             extra_fee = ?,
             total_price = ?,
+            remaining_amount = ?,
+            deposit_status = ?,
             note = ?,
             closing_note = ?,
             updated_at = ?,
@@ -431,6 +639,8 @@ export async function PATCH(
           pricing.basePrice,
           pricing.totalExtraFee,
           pricing.totalPrice,
+          newRemaining,
+          newDepositStatus,
           note !== undefined ? (note || null) : existing.note,
           closingNote !== undefined ? (closingNote || null) : existing.closing_note,
           now,
@@ -537,7 +747,11 @@ async function executeHardDeleteBooking(
     const nightsToDeduct = isNightStay ? 1 : 0;
 
     const updatedBookings = Math.max(0, (member.total_bookings || 0) - 1);
-    const updatedSpent = Math.max(0, (member.total_spent || 0) - (existing.total_price || 0));
+    const amountToDeduct =
+      existing.is_deposit === 1
+        ? (existing.paid_amount ?? existing.deposit_amount ?? 0)
+        : (existing.total_price || 0);
+    const updatedSpent = Math.max(0, (member.total_spent || 0) - amountToDeduct);
     const updatedNights = Math.max(0, (member.total_nights || 0) - nightsToDeduct);
     const updatedNoShow =
       existing.status === "no_show"

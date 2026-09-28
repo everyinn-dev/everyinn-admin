@@ -75,6 +75,18 @@ export const GanttBar: React.FC<GanttBarProps> = ({
       >
         <div className="flex items-center gap-1.5 truncate text-xs w-full">
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${styleConfig.dot}`} />
+          {booking.isDeposit === 1 && (
+            <span
+              title={booking.depositStatus === "fully_paid" ? "Đã thanh toán đủ 100%" : "Đơn cọc (Chờ thu nốt)"}
+              className={`text-[9px] px-1 rounded font-bold shrink-0 shadow-xs ${
+                booking.depositStatus === "fully_paid"
+                  ? "bg-emerald-300 text-emerald-950"
+                  : "bg-amber-300 text-amber-950 font-extrabold"
+              }`}
+            >
+              🪙 {booking.depositStatus === "fully_paid" ? "Đủ" : "Cọc"}
+            </span>
+          )}
           <span className="font-bold truncate text-[11px] leading-tight text-white drop-shadow-xs">{booking.guestName}</span>
           {widthPx >= 140 && (
             <span className="text-[10px] text-white/95 font-mono shrink-0 pl-1">
@@ -108,6 +120,35 @@ export const GanttBar: React.FC<GanttBarProps> = ({
               <div className="flex flex-col gap-0.5 text-[10px] text-slate-500 pt-0.5 border-t border-slate-100">
                 <span className="text-slate-400">Ghi chú:</span>
                 <span className="italic text-slate-700">{booking.note}</span>
+              </div>
+            )}
+            {booking.isDeposit === 1 && (
+              <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] space-y-1">
+                <div className="flex justify-between font-medium text-amber-900">
+                  <span>🔒 Đã cọc:</span>
+                  <span className="font-mono font-bold">
+                    {(booking.paidAmount || booking.depositAmount || 0).toLocaleString("vi-VN")} đ
+                  </span>
+                </div>
+                {booking.depositStatus !== "fully_paid" && (
+                  <div className="flex justify-between font-bold text-rose-800">
+                    <span>Còn thiếu:</span>
+                    <span className="font-mono">
+                      {(booking.remainingAmount ?? (booking.totalPrice - (booking.paidAmount || 0))).toLocaleString("vi-VN")} đ
+                    </span>
+                  </div>
+                )}
+                {booking.depositDueDate && (
+                  <div className="flex justify-between text-[10px] text-slate-600">
+                    <span>Hạn nộp nốt:</span>
+                    <span className="font-mono font-bold">
+                      {new Date(booking.depositDueDate).toLocaleDateString("vi-VN", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
             <div className="flex justify-between pt-1.5 border-t border-slate-100 font-semibold">

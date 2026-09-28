@@ -46,6 +46,16 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   const [refundAmount, setRefundAmount] = useState<number>(0);
   const [noShowError, setNoShowError] = useState("");
 
+  // Complete Deposit Payment state
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentNote, setPaymentNote] = useState("");
+  const [completingPayment, setCompletingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+
+  // Reminder state
+  const [markingReminder, setMarkingReminder] = useState(false);
+
   // Synchronize prop updates
   useEffect(() => {
     setCurrentBooking(booking);
@@ -57,6 +67,15 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     setHasRefund(false);
     setRefundAmount(0);
     setNoShowError("");
+    setShowPaymentForm(false);
+    setPaymentError("");
+    setPaymentNote("");
+    if (booking) {
+      const remaining = booking.remainingAmount !== undefined
+        ? booking.remainingAmount
+        : Math.max(0, booking.totalPrice - (booking.paidAmount || booking.depositAmount || 0));
+      setPaymentAmount(remaining);
+    }
   }, [booking]);
 
   if (!currentBooking) return null;
@@ -64,6 +83,11 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   const checkin = new Date(currentBooking.checkinAt);
   const checkout = new Date(currentBooking.checkoutAt);
   const isPastCheckout = new Date() > checkout;
+
+  const actualCashReceived =
+    currentBooking.isDeposit === 1 || (currentBooking as any).is_deposit === 1
+      ? (currentBooking.paidAmount ?? (currentBooking as any).paid_amount ?? currentBooking.depositAmount ?? (currentBooking as any).deposit_amount ?? 0)
+      : (currentBooking.totalPrice || 0);
 
   const formatDateTime = (date: Date) => {
     return date.toLocaleString("vi-VN", {
@@ -177,7 +201,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     try {
       setNoShowing(true);
       setNoShowError("");
-      const actualRefund = hasRefund ? Math.max(0, refundAmount) : 0;
+      const actualRefund = hasRefund ? Math.min(actualCashReceived, Math.max(0, refundAmount)) : 0;
 
       const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
         method: "PATCH",
@@ -202,7 +226,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       );
       setShowConfirmNoShow(false);
 
-      const netRetained = data.netRetained ?? (currentBooking.totalPrice - actualRefund);
+      const netRetained = data.netRetained ?? (actualCashReceived - actualRefund);
       const updated: GanttBookingItem = {
         ...currentBooking,
         status: "no_show",
@@ -220,6 +244,71 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       setNoShowError(err.message || "Lỗi khi đánh dấu No-Show.");
     } finally {
       setNoShowing(false);
+    }
+  };
+
+  const handleCompletePayment = async () => {
+    try {
+      setCompletingPayment(true);
+      setPaymentError("");
+      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "complete_deposit_payment",
+          paymentAmount,
+          note: paymentNote,
+        }),
+      });
+
+      const data = (await res.json()) as any;
+      if (!res.ok) {
+        throw new Error(data.error || "Không thể bổ sung thanh toán.");
+      }
+
+      toast.success(data.message || "Đã bổ sung thanh toán thành công!", "Thanh toán thành công");
+      const updated: GanttBookingItem = {
+        ...currentBooking,
+        paidAmount: data.paidAmount,
+        remainingAmount: data.remainingAmount,
+        depositStatus: data.depositStatus,
+        remainingPaidAt: new Date().toISOString(),
+      };
+      setCurrentBooking(updated);
+      setShowPaymentForm(false);
+      onBookingUpdated?.(updated);
+      notifyDataChanged("BOOKINGS_CHANGED");
+    } catch (err: any) {
+      setPaymentError(err.message || "Lỗi khi bổ sung thanh toán.");
+    } finally {
+      setCompletingPayment(false);
+    }
+  };
+
+  const handleMarkReminderSent = async () => {
+    try {
+      setMarkingReminder(true);
+      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_deposit_reminder_sent" }),
+      });
+      const data = (await res.json()) as any;
+      if (!res.ok) {
+        throw new Error(data.error || "Không thể ghi nhận gửi nhắc cọc.");
+      }
+      toast.success("Đã ghi nhận gửi nhắc cọc cho khách!", "Gửi nhắc thành công");
+      const updated: GanttBookingItem = {
+        ...currentBooking,
+        depositReminderSentAt: data.depositReminderSentAt,
+      };
+      setCurrentBooking(updated);
+      onBookingUpdated?.(updated);
+      notifyDataChanged("BOOKINGS_CHANGED");
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi ghi nhận gửi nhắc cọc.", "Lỗi");
+    } finally {
+      setMarkingReminder(false);
     }
   };
 
@@ -364,6 +453,99 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                       <span>{extendSuccess}</span>
                     </div>
                   )}
+
+                  {/* Complete Deposit Payment CTA & Form */}
+                  {currentBooking.isDeposit === 1 && currentBooking.depositStatus === "deposit_paid" && (
+                    <div className="pt-1 space-y-2.5">
+                      {!showPaymentForm ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const remaining =
+                              currentBooking.remainingAmount !== undefined
+                                ? currentBooking.remainingAmount
+                                : Math.max(0, currentBooking.totalPrice - (currentBooking.paidAmount || currentBooking.depositAmount || 0));
+                            setPaymentAmount(remaining);
+                            setShowPaymentForm(true);
+                          }}
+                          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold text-xs shadow-sm border border-amber-500 flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                        >
+                          <span>💰</span>
+                          <span>Bổ Sung Thanh Toán Phần Còn Lại</span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-800/40 font-mono text-[11px]">
+                            ({(currentBooking.remainingAmount ?? (currentBooking.totalPrice - (currentBooking.paidAmount || 0))).toLocaleString("vi-VN")} đ)
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 space-y-3 shadow-xs animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                              <span>💰</span> Bổ sung thanh toán cọc
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowPaymentForm(false)}
+                              className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                            >
+                              ✕ Đóng
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                Số tiền thu thêm (VNĐ):
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={paymentAmount || ""}
+                                onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
+                                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-amber-600"
+                                placeholder="Nhập số tiền thu thêm..."
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                Ghi chú thanh toán (Tùy chọn):
+                              </label>
+                              <input
+                                type="text"
+                                value={paymentNote}
+                                onChange={(e) => setPaymentNote(e.target.value)}
+                                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-amber-600"
+                                placeholder="VD: Khách chuyển khoản VCB, trả tiền mặt tại quầy..."
+                              />
+                            </div>
+                          </div>
+
+                          {paymentError && (
+                            <p className="text-[11px] text-rose-700 font-medium">⚠️ {paymentError}</p>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowPaymentForm(false)}
+                              className="flex-1 py-1.5 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              disabled={completingPayment}
+                              onClick={handleCompletePayment}
+                              className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                            >
+                              {completingPayment ? "Đang lưu..." : "Xác Nhận Đã Thu"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -435,16 +617,79 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               </div>
 
               {/* Pricing Info */}
-              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/80 via-slate-50 to-white border border-emerald-200 space-y-2 shadow-xs">
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/80 via-slate-50 to-white border border-emerald-200 space-y-3 shadow-xs">
                 <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                  <span>Tổng tiền thanh toán:</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
-                    Thanh toán tại quầy
+                  <span>Tổng giá trị đơn phòng:</span>
+                  <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                    currentBooking.isDeposit === 1
+                      ? currentBooking.depositStatus === "fully_paid"
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                        : "bg-amber-100 text-amber-900 border border-amber-300"
+                      : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                  }`}>
+                    {currentBooking.isDeposit === 1
+                      ? currentBooking.depositStatus === "fully_paid"
+                        ? "Đã thu đủ 100%"
+                        : "Đơn đặt cọc (Chờ thu nốt)"
+                      : "Thanh toán tại quầy"}
                   </span>
                 </div>
                 <div className="text-2xl font-extrabold text-emerald-700 font-mono tracking-tight">
                   {Number(currentBooking.totalPrice).toLocaleString("vi-VN")} đ
                 </div>
+
+                {/* Deposit Details Breakdown */}
+                {currentBooking.isDeposit === 1 && (
+                  <div className="pt-2.5 border-t border-slate-200 space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-slate-700">
+                      <span className="text-slate-500">Đã thanh toán (Cọc):</span>
+                      <span className="font-mono font-bold text-emerald-800">
+                        {(currentBooking.paidAmount || currentBooking.depositAmount || 0).toLocaleString("vi-VN")} đ
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-slate-700">
+                      <span className="text-slate-500">Số tiền còn thiếu:</span>
+                      <span className={`font-mono font-bold ${
+                        (currentBooking.remainingAmount || 0) > 0 ? "text-amber-900 font-extrabold" : "text-emerald-700"
+                      }`}>
+                        {(currentBooking.remainingAmount ?? (currentBooking.totalPrice - (currentBooking.paidAmount || 0))).toLocaleString("vi-VN")} đ
+                      </span>
+                    </div>
+
+                    {currentBooking.depositDueDate && (
+                      <div className="flex justify-between items-center text-slate-700">
+                        <span className="text-slate-500">Hạn nộp phần còn lại:</span>
+                        <span className="font-bold text-slate-900 font-mono">
+                          {new Date(currentBooking.depositDueDate).toLocaleDateString("vi-VN", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Reminder Status & Quick Action */}
+                    <div className="pt-1.5 border-t border-dashed border-slate-200 flex items-center justify-between text-[11px]">
+                      {currentBooking.depositReminderSentAt ? (
+                        <span className="text-emerald-800 font-medium flex items-center gap-1">
+                          <span>✅</span> Đã gửi nhắc cọc ({new Date(currentBooking.depositReminderSentAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })})
+                        </span>
+                      ) : currentBooking.depositStatus === "deposit_paid" ? (
+                        <button
+                          type="button"
+                          disabled={markingReminder}
+                          onClick={handleMarkReminderSent}
+                          className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-amber-900 border border-amber-300 font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                        >
+                          <span>💬</span>
+                          <span>{markingReminder ? "Đang lưu..." : "Đánh dấu đã gửi nhắc cọc"}</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Closing Note / Agreement with Guest */}
@@ -592,7 +837,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                           }}
                           className="accent-purple-600 cursor-pointer"
                         />
-                        <span>Không hoàn tiền (Thu giữ 100%: <strong>{(currentBooking.totalPrice || 0).toLocaleString("vi-VN")}đ</strong>)</span>
+                        <span>Không hoàn tiền (Thu giữ 100%: <strong>{actualCashReceived.toLocaleString("vi-VN")}đ</strong>)</span>
                       </label>
 
                       <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer">
@@ -602,7 +847,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                           checked={hasRefund}
                           onChange={() => {
                             setHasRefund(true);
-                            setRefundAmount(Math.round((currentBooking.totalPrice || 0) * 0.5));
+                            setRefundAmount(Math.round(actualCashReceived * 0.5));
                           }}
                           className="accent-purple-600 cursor-pointer"
                         />
@@ -616,21 +861,21 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                           <span className="text-slate-500 text-[11px] font-medium">Gợi ý nhanh:</span>
                           <button
                             type="button"
-                            onClick={() => setRefundAmount(Math.round((currentBooking.totalPrice || 0) * 0.3))}
+                            onClick={() => setRefundAmount(Math.round(actualCashReceived * 0.3))}
                             className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-purple-800 font-bold border border-slate-200 cursor-pointer shadow-xs"
                           >
                             Hoàn 30%
                           </button>
                           <button
                             type="button"
-                            onClick={() => setRefundAmount(Math.round((currentBooking.totalPrice || 0) * 0.5))}
+                            onClick={() => setRefundAmount(Math.round(actualCashReceived * 0.5))}
                             className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-purple-800 font-bold border border-slate-200 cursor-pointer shadow-xs"
                           >
                             Hoàn 50%
                           </button>
                           <button
                             type="button"
-                            onClick={() => setRefundAmount(currentBooking.totalPrice || 0)}
+                            onClick={() => setRefundAmount(actualCashReceived)}
                             className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-purple-800 font-bold border border-slate-200 cursor-pointer shadow-xs"
                           >
                             Hoàn 100%
@@ -639,31 +884,31 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
 
                         <div>
                           <label className="text-[11px] text-slate-600 block mb-1 font-medium">
-                            Số tiền hoàn trả (VNĐ):
+                            Số tiền hoàn trả (VNĐ, tối đa {actualCashReceived.toLocaleString("vi-VN")}đ):
                           </label>
                           <input
                             type="number"
                             min={0}
-                            max={currentBooking.totalPrice || 0}
-                            step={10000}
+                            max={actualCashReceived}
+                            step="any"
                             value={refundAmount}
-                            onChange={(e) => setRefundAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                            onChange={(e) => setRefundAmount(Math.min(actualCashReceived, Math.max(0, parseInt(e.target.value) || 0)))}
                             className="w-full px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 shadow-xs"
                           />
                         </div>
 
                         <div className="p-2 rounded bg-slate-50 text-[11px] space-y-0.5 border border-slate-200">
                           <div className="flex justify-between text-slate-500">
-                            <span>Giá trị ban đầu:</span>
-                            <span className="font-mono font-bold">{(currentBooking.totalPrice || 0).toLocaleString("vi-VN")}đ</span>
+                            <span>Khách đã đóng thực tế:</span>
+                            <span className="font-mono font-bold">{actualCashReceived.toLocaleString("vi-VN")}đ</span>
                           </div>
                           <div className="flex justify-between text-rose-700 font-medium">
                             <span>Số tiền hoàn trả:</span>
                             <span className="font-mono font-bold">-{refundAmount.toLocaleString("vi-VN")}đ</span>
                           </div>
                           <div className="flex justify-between text-emerald-800 font-bold pt-1 border-t border-slate-200">
-                            <span>Doanh thu giữ lại:</span>
-                            <span className="font-mono">{Math.max(0, (currentBooking.totalPrice || 0) - refundAmount).toLocaleString("vi-VN")}đ</span>
+                            <span>Doanh thu giữ lại thực tế:</span>
+                            <span className="font-mono">{Math.max(0, actualCashReceived - refundAmount).toLocaleString("vi-VN")}đ</span>
                           </div>
                         </div>
                       </div>

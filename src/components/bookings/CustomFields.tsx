@@ -206,7 +206,7 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
             <input
               type="number"
               min="0"
-              step="10000"
+              step="any"
               placeholder="Nhập số tiền thỏa thuận (VD: 800000, 1500000...)"
               value={customPrice === 0 ? "" : customPrice}
               onChange={(e) => onChangeCustomPrice(Math.max(0, parseInt(e.target.value, 10) || 0))}

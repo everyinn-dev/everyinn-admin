@@ -282,7 +282,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} noValidate className="space-y-5">
       {errorMessage && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-900 flex items-start gap-2 shadow-xs">
           <span className="text-base shrink-0">⚠️</span>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { BookingDetailDrawer } from "@/components/dashboard/BookingDetailDrawer";
@@ -25,6 +26,11 @@ interface StaffOption {
 }
 
 export const BookingsListClient: React.FC = () => {
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams?.get("search") || searchParams?.get("bookingId") || "";
+  const initialDepositStatus = searchParams?.get("depositStatus") || "";
+  const autoOpen = searchParams?.get("autoOpen") === "true";
+
   // Master data for filters
   const [rooms, setRooms] = useState<Room[]>([]);
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
@@ -33,8 +39,9 @@ export const BookingsListClient: React.FC = () => {
   const savedFilter = typeof window !== "undefined" ? getBookingsFilterState() : null;
 
   // Filter states
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [status, setStatus] = useState(savedFilter?.status ?? "");
+  const [depositStatus, setDepositStatus] = useState(initialDepositStatus);
   const [roomId, setRoomId] = useState(savedFilter?.roomId ?? "");
   const [bookingType, setBookingType] = useState(savedFilter?.bookingType ?? "");
   const [createdBy, setCreatedBy] = useState(savedFilter?.createdBy ?? "");
@@ -103,7 +110,7 @@ export const BookingsListClient: React.FC = () => {
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
-      const currentFilterKey = `${page}-${pageSize}-${sortBy}-${sortDir}-${search}-${status}-${roomId}-${bookingType}-${createdBy}-${createdFrom}-${createdTo}`;
+      const currentFilterKey = `${page}-${pageSize}-${sortBy}-${sortDir}-${search}-${status}-${depositStatus}-${roomId}-${bookingType}-${createdBy}-${createdFrom}-${createdTo}`;
       if (lastFilterKeyRef.current !== currentFilterKey) {
         lastEtagRef.current = null;
         lastFilterKeyRef.current = currentFilterKey;
@@ -119,6 +126,7 @@ export const BookingsListClient: React.FC = () => {
         params.set("search", search.trim());
       }
       if (status) params.set("status", status);
+      if (depositStatus) params.set("depositStatus", depositStatus);
       if (roomId) params.set("roomId", roomId);
       if (bookingType) params.set("bookingType", bookingType);
       if (createdBy) params.set("createdBy", createdBy);
@@ -152,16 +160,22 @@ export const BookingsListClient: React.FC = () => {
           lastEtagRef.current = etag;
         }
         const data = (await res.json()) as BookingsListResponse;
-        setBookings(data.bookings || []);
+        const fetched = data.bookings || [];
+        setBookings(fetched);
         setTotal(data.total || 0);
         setTotalPages(data.totalPages || 1);
+
+        // Auto open if query specified autoOpen and exactly 1 booking matched
+        if (autoOpen && fetched.length === 1) {
+          handleSelectBooking(fetched[0]);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch bookings list:", err);
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortBy, sortDir, search, status, roomId, bookingType, createdBy, createdFrom, createdTo]);
+  }, [page, pageSize, sortBy, sortDir, search, status, depositStatus, roomId, bookingType, createdBy, createdFrom, createdTo, autoOpen]);
 
   useEffect(() => {
     fetchBookings();
@@ -212,6 +226,7 @@ export const BookingsListClient: React.FC = () => {
   const handleResetFilters = () => {
     setSearch("");
     setStatus("");
+    setDepositStatus("");
     setRoomId("");
     setBookingType("");
     setCreatedBy("");
@@ -253,6 +268,16 @@ export const BookingsListClient: React.FC = () => {
       noShowReason: b.no_show_reason,
       refundAmount: b.refund_amount,
       originalPrice: b.original_price,
+      // Deposit tracking
+      isDeposit: b.is_deposit,
+      depositAmount: b.deposit_amount,
+      paidAmount: b.paid_amount,
+      remainingAmount: b.remaining_amount,
+      depositDueDate: b.deposit_due_date,
+      depositStatus: b.deposit_status,
+      depositPaidAt: b.deposit_paid_at,
+      depositReminderSentAt: b.deposit_reminder_sent_at,
+      remainingPaidAt: b.remaining_paid_at,
     });
   };
 
@@ -310,6 +335,11 @@ export const BookingsListClient: React.FC = () => {
         status={status}
         onStatusChange={(val) => {
           setStatus(val);
+          setPage(1);
+        }}
+        depositStatus={depositStatus}
+        onDepositStatusChange={(val) => {
+          setDepositStatus(val);
           setPage(1);
         }}
         roomId={roomId}

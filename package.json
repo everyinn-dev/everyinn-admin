@@ -20,6 +20,8 @@
     "db:migrate:008:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/008_add_control_fields.sql",
     "db:migrate:009:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/009_import_october_bookings.sql",
     "db:migrate:010:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/010_add_no_show_and_refund.sql",
+    "db:migrate:011:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/011_promotions_and_categories.sql",
+    "db:migrate:012:local": "wrangler d1 execute everyinn-admin --local --file=./db/migrations/012_add_deposit_management.sql",
     "db:migrate:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/001_tables.sql",
     "db:seed:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/002_seed.sql",
     "db:migrate:003:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/003_refactor_rooms_pricing.sql",
@@ -29,7 +31,9 @@
     "db:migrate:007:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/007_room_blocks_indexes_and_note.sql",
     "db:migrate:008:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/008_add_control_fields.sql",
     "db:migrate:009:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/009_import_october_bookings.sql",
-    "db:migrate:010:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/010_add_no_show_and_refund.sql"
+    "db:migrate:010:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/010_add_no_show_and_refund.sql",
+    "db:migrate:011:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/011_promotions_and_categories.sql",
+    "db:migrate:012:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/012_add_deposit_management.sql"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.14.0",
