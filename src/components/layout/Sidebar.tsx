@@ -53,7 +53,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 border-r border-slate-800/80 bg-[#0d131f]/70 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 hidden lg:flex">
+    <aside className="w-64 border-r border-slate-200 bg-slate-50/90 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 hidden lg:flex">
       <div className="space-y-6">
         <div>
           <p className="px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -72,11 +72,11 @@ export const Sidebar: React.FC = () => {
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10 font-semibold"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs font-bold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
-                  <span className={isActive ? "text-emerald-400" : "text-slate-400"}>
+                  <span className={isActive ? "text-emerald-700" : "text-slate-500"}>
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
@@ -87,21 +87,21 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Room Types Quick Legend */}
-        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
             Phân loại phòng
           </p>
-          <div className="space-y-1.5 text-xs text-slate-300">
+          <div className="space-y-1.5 text-xs text-slate-700">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+              <span className="flex items-center gap-2 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
                 <span>Haven (10P)</span>
               </span>
               <span className="text-[11px] text-slate-500 font-mono">101, 102...</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
+              <span className="flex items-center gap-2 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
                 <span>Signature (5P)</span>
               </span>
               <span className="text-[11px] text-slate-500 font-mono">x03</span>
@@ -111,14 +111,14 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Footer Info */}
-      <div className="pt-4 border-t border-slate-800/80 text-[11px] text-slate-500">
+      <div className="pt-4 border-t border-slate-200 text-[11px] text-slate-500">
         <div className="flex items-center justify-between">
-          <span>Every Inn Admin</span>
-          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">
+          <span className="font-medium">Every Inn Admin</span>
+          <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono text-[10px] font-semibold">
             v1.0 MVP
           </span>
         </div>
-        <p className="mt-1 text-[10px]">Cloudflare D1 & Worker</p>
+        <p className="mt-1 text-[10px] text-slate-400">Cloudflare D1 & Worker</p>
       </div>
     </aside>
   );

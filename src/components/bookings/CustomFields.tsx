@@ -57,19 +57,19 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
     : "Thời gian không hợp lệ";
 
   return (
-    <div className="space-y-4 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+    <div className="space-y-4 p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-xs">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
         <div className="flex items-center gap-2">
           <span className="text-base">⚙️</span>
-          <span className="text-xs font-bold text-fuchsia-300 uppercase tracking-wide">
+          <span className="text-xs font-bold text-fuchsia-900 uppercase tracking-wide">
             Cấu hình đơn đặt phòng Tuỳ Chỉnh (Bước 30 phút)
           </span>
         </div>
         <span
-          className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${
+          className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${
             validDiff
-              ? "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30"
-              : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+              ? "bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300"
+              : "bg-rose-100 text-rose-900 border-rose-300"
           }`}
         >
           Thời lượng: {durationStr}
@@ -79,13 +79,13 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
       {/* Grid checkin - checkout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Checkin Group */}
-        <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-          <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
+        <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-3 shadow-xs">
+          <div className="text-xs font-bold text-emerald-800 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <span>📥</span>
               <span>Thời gian Nhận phòng (Check-in)</span>
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">Bước 30m</span>
+            <span className="text-[10px] text-slate-500 font-mono">Bước 30m</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -103,13 +103,13 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
               }}
             />
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Giờ nhận (30m)
               </label>
               <select
                 value={normalizedCheckinTime}
                 onChange={(e) => onChangeCheckinTime(e.target.value)}
-                className="w-full rounded-xl bg-[#131b28] border border-slate-700 px-3 py-2 text-sm text-slate-100 font-mono font-medium focus:outline-none focus:border-emerald-500 shadow-inner"
+                className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 font-mono font-semibold focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
               >
                 {TIME_SLOTS_30MIN.map((slot) => {
                   const isPast = isPastTimeSlot(checkinDate, slot);
@@ -120,8 +120,8 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
                       disabled={isPast}
                       className={
                         isPast
-                          ? "text-slate-600 bg-slate-950 font-normal"
-                          : "text-slate-100 bg-[#131b28] font-semibold"
+                          ? "text-slate-400 bg-slate-100 font-normal"
+                          : "text-slate-900 bg-white font-semibold"
                       }
                     >
                       {slot} {isPast ? "(Đã qua)" : ""}
@@ -134,13 +134,13 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
         </div>
 
         {/* Checkout Group */}
-        <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-          <div className="text-xs font-bold text-amber-400 flex items-center justify-between">
+        <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-3 shadow-xs">
+          <div className="text-xs font-bold text-amber-800 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <span>📤</span>
               <span>Thời gian Trả phòng (Check-out)</span>
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">Bước 30m</span>
+            <span className="text-[10px] text-slate-500 font-mono">Bước 30m</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -152,13 +152,13 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
               onChange={(e) => e.target.value && onChangeCheckoutDate(e.target.value)}
             />
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Giờ trả (30m)
               </label>
               <select
                 value={normalizedCheckoutTime}
                 onChange={(e) => onChangeCheckoutTime(e.target.value)}
-                className="w-full rounded-xl bg-[#131b28] border border-slate-700 px-3 py-2 text-sm text-slate-100 font-mono font-medium focus:outline-none focus:border-amber-500 shadow-inner"
+                className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 font-mono font-semibold focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 shadow-xs"
               >
                 {TIME_SLOTS_30MIN.map((slot) => {
                   const isPast = isPastTimeSlot(checkoutDate, slot);
@@ -174,8 +174,8 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
                       disabled={isSlotDisabled}
                       className={
                         isSlotDisabled
-                          ? "text-slate-600 bg-slate-950 font-normal"
-                          : "text-slate-100 bg-[#131b28] font-semibold"
+                          ? "text-slate-400 bg-slate-100 font-normal"
+                          : "text-slate-900 bg-white font-semibold"
                       }
                     >
                       {slot} {isPast ? "(Đã qua)" : isBeforeOrEqualIn ? "(Trước giờ nhận)" : ""}
@@ -189,14 +189,14 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
       </div>
 
       {/* Custom Price Input */}
-      <div className="p-3 rounded-xl bg-fuchsia-950/20 border border-fuchsia-500/30 space-y-2">
+      <div className="p-3.5 rounded-xl bg-fuchsia-50/70 border border-fuchsia-200 space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
             <span>💰</span>
             <span>Số tiền thanh toán thỏa thuận (VNĐ)</span>
-            <span className="text-rose-400">*</span>
+            <span className="text-rose-500">*</span>
           </label>
-          <span className="text-xs font-mono font-extrabold text-fuchsia-300">
+          <span className="text-xs font-mono font-extrabold text-fuchsia-900">
             {customPrice > 0 ? `${customPrice.toLocaleString("vi-VN")} đ` : "0 đ"}
           </span>
         </div>
@@ -210,7 +210,7 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
               placeholder="Nhập số tiền thỏa thuận (VD: 800000, 1500000...)"
               value={customPrice === 0 ? "" : customPrice}
               onChange={(e) => onChangeCustomPrice(Math.max(0, parseInt(e.target.value, 10) || 0))}
-              className="w-full rounded-xl bg-[#131b28] border border-fuchsia-500/40 px-3.5 py-2.5 text-base font-mono font-bold text-emerald-300 focus:outline-none focus:border-fuchsia-400 shadow-inner"
+              className="w-full rounded-xl bg-white border border-fuchsia-300 px-3.5 py-2.5 text-base font-mono font-bold text-emerald-800 focus:outline-none focus:border-fuchsia-600 focus:ring-2 focus:ring-fuchsia-600/20 shadow-xs"
             />
           </div>
 
@@ -221,7 +221,7 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
                 key={preset}
                 type="button"
                 onClick={() => onChangeCustomPrice(preset)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-slate-300 hover:text-white transition-colors border border-slate-700 active:scale-95"
+                className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-[11px] font-mono font-bold text-slate-700 transition-colors border border-slate-300 active:scale-95 shadow-xs"
               >
                 {preset / 1000}k
               </button>
@@ -229,7 +229,7 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
           </div>
         </div>
 
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-slate-600 font-medium">
           💡 Với đơn tuỳ chỉnh, số tiền trên sẽ được khóa làm tổng tiền thanh toán trực tiếp của đơn đặt.
         </p>
       </div>

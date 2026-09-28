@@ -237,10 +237,10 @@ function DashboardContent() {
         {/* Page Title & Quick Summary Stats (Synchronized with Tab) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
               Bảng Quản Lý Phòng & Tiến Độ (Gantt)
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
               {viewMode === "month"
                 ? `Lịch đặt phòng toàn diện theo tháng (${month}) • Gộp giờ đêm 01h-07h trực quan`
                 : `Theo dõi chi tiết 24 giờ trong ngày (${date}) • Cập nhật theo thời gian thực`}
@@ -249,29 +249,29 @@ function DashboardContent() {
 
           {/* Quick Metrics: Shown by Tab (Tháng or Ngày) */}
           <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto pb-1">
-            <div className="px-3.5 py-2 rounded-xl bg-[#121927] border border-slate-800 text-xs shadow-inner shrink-0">
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+            <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
+              <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
                 Đang có khách
               </span>
-              <span className="text-base font-extrabold text-amber-400 font-mono">
+              <span className="text-base font-extrabold text-amber-700 font-mono">
                 {stats.occupiedCount} / {stats.totalRooms} phòng
               </span>
             </div>
 
-            <div className="px-3.5 py-2 rounded-xl bg-[#121927] border border-slate-800 text-xs shadow-inner shrink-0">
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+            <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
+              <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
                 {viewMode === "month" ? "Lịch đặt tháng này" : "Lịch đặt trong ngày"}
               </span>
-              <span className="text-base font-extrabold text-emerald-400 font-mono">
+              <span className="text-base font-extrabold text-emerald-700 font-mono">
                 {stats.totalBookings} lượt
               </span>
             </div>
 
-            <div className="px-3.5 py-2 rounded-xl bg-[#121927] border border-slate-800 text-xs hidden sm:block shadow-inner shrink-0">
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+            <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs hidden sm:block shadow-2xs shrink-0">
+              <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
                 {viewMode === "month" ? "Doanh thu tháng" : "Doanh thu ngày"}
               </span>
-              <span className="text-base font-extrabold text-teal-300 font-mono">
+              <span className="text-base font-extrabold text-teal-700 font-mono">
                 {stats.totalRevenue.toLocaleString("vi-VN")} đ
               </span>
             </div>
@@ -297,9 +297,9 @@ function DashboardContent() {
 
         {/* Content Display */}
         {loading && roomsData.length === 0 ? (
-          <div className="h-96 rounded-2xl bg-[#0d131f] border border-slate-800 flex flex-col items-center justify-center gap-3 shadow-xl">
+          <div className="h-96 rounded-2xl bg-white border border-slate-200 flex flex-col items-center justify-center gap-3 shadow-sm">
             <Spinner size="lg" />
-            <p className="text-sm text-slate-400 font-medium">Đang tải lịch đặt phòng...</p>
+            <p className="text-sm text-slate-600 font-medium">Đang tải lịch đặt phòng...</p>
           </div>
         ) : (
           <>
@@ -321,22 +321,22 @@ function DashboardContent() {
               {/* Header with Title & View Switcher */}
               <div className="flex items-center justify-between px-1">
                 <div>
-                  <h2 className="text-sm font-bold text-white tracking-tight">
+                  <h2 className="text-sm font-bold text-slate-900 tracking-tight">
                     {viewMode === "month" ? "Biểu đồ Gantt Tháng" : "Biểu đồ Gantt Ngày"}
                   </h2>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500">
                     Cột theo từng phòng • Hàng lướt dọc theo thời gian
                   </p>
                 </div>
 
                 {/* View Switcher: Gantt vs Card */}
-                <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs shrink-0">
+                <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-xs shrink-0">
                   <button
                     onClick={() => setMobileView("gantt")}
                     className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
                       mobileView === "gantt"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-white text-emerald-800 border border-slate-200 shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                     title="Xem biểu đồ Gantt dọc"
                   >
@@ -346,8 +346,8 @@ function DashboardContent() {
                     onClick={() => setMobileView("cards")}
                     className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
                       mobileView === "cards"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-white text-emerald-800 border border-slate-200 shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                     title="Xem danh sách dạng thẻ"
                   >
@@ -422,9 +422,9 @@ export default function DashboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0b0f17] flex flex-col items-center justify-center gap-3">
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
           <Spinner size="lg" />
-          <p className="text-sm text-slate-400 font-medium">Đang tải bảng phòng...</p>
+          <p className="text-sm text-slate-600 font-medium">Đang tải bảng phòng...</p>
         </div>
       }
     >

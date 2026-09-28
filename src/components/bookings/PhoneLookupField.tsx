@@ -73,7 +73,7 @@ export const PhoneLookupField: React.FC<PhoneLookupFieldProps> = ({
             type="button"
             onClick={() => doLookup(phone)}
             disabled={loading || phone.trim().length < 9}
-            className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 disabled:opacity-40 transition-colors text-xs font-semibold flex items-center gap-1"
+            className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200 disabled:opacity-40 transition-colors text-xs font-semibold flex items-center gap-1"
           >
             {loading ? (
               <span className="animate-spin text-xs">⏳</span>
@@ -89,43 +89,43 @@ export const PhoneLookupField: React.FC<PhoneLookupFieldProps> = ({
         <div className="space-y-2 animate-in fade-in duration-200">
           {memberData ? (
             <>
-              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 flex items-start justify-between gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start justify-between gap-3 text-xs shadow-xs">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-emerald-300">
+                    <span className="font-bold text-emerald-900">
                       Khách quen: {memberData.full_name || memberData.fullName || "Khách hàng"}
                     </span>
                     <Badge tier={memberData.loyalty_tier || memberData.loyaltyTier || "new"} size="sm" />
                   </div>
-                  <div className="text-slate-300 text-[11px] flex items-center gap-3">
+                  <div className="text-slate-600 text-[11px] flex items-center gap-3">
                     <span>
-                      Tổng đặt: <strong className="text-white">{memberData.total_bookings ?? memberData.totalBookings ?? 0} lần</strong>
+                      Tổng đặt: <strong className="text-slate-900">{memberData.total_bookings ?? memberData.totalBookings ?? 0} lần</strong>
                     </span>
                     <span>
                       Chi tiêu:{" "}
-                      <strong className="text-emerald-400 font-mono">
+                      <strong className="text-emerald-700 font-mono">
                         {Number(memberData.total_spent ?? memberData.totalSpent ?? 0).toLocaleString("vi-VN")} đ
                       </strong>
                     </span>
                   </div>
                 </div>
-                <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
+                <span className="text-[10px] text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-200 shrink-0 font-medium">
                   Tự động điền
                 </span>
               </div>
 
               {/* No-Show Warning Alert */}
               {((memberData.no_show_count ?? memberData.noShowCount ?? 0) > 0) && (
-                <div className="p-2.5 rounded-xl bg-rose-950/50 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in shadow-xs">
                   <span className="text-base shrink-0 leading-tight">⚠️</span>
                   <div className="space-y-0.5">
-                    <div className="font-bold text-rose-300 flex items-center gap-1.5">
+                    <div className="font-bold text-rose-900 flex items-center gap-1.5">
                       <span>Cảnh báo lịch sử No-Show:</span>
-                      <span className="px-1.5 py-0.2 rounded bg-rose-500/20 border border-rose-500/30 text-[11px] font-mono">
+                      <span className="px-1.5 py-0.2 rounded bg-rose-100 border border-rose-200 text-[11px] font-mono text-rose-800">
                         {memberData.no_show_count ?? memberData.noShowCount} lần vi phạm
                       </span>
                     </div>
-                    <p className="text-[11px] text-rose-300/80 leading-relaxed">
+                    <p className="text-[11px] text-rose-700 leading-relaxed">
                       Khách từng không đến hoặc hủy vi phạm quy định. Khuyến nghị yêu cầu thanh toán/cọc 100% trước khi xác nhận giữ phòng!
                     </p>
                   </div>
@@ -133,7 +133,7 @@ export const PhoneLookupField: React.FC<PhoneLookupFieldProps> = ({
               )}
             </>
           ) : (
-            <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
               <span>✨</span>
               <span>
                 Khách mới — hồ sơ thành viên sẽ tự động lưu vào CDP sau khi đặt phòng.

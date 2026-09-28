@@ -64,12 +64,12 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
   const maxSlot = Math.max(...slots);
 
   return (
-    <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-        <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-xs">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+        <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
           <span>🌙</span> Quy tắc đặt qua đêm (12 tiếng trọn đêm)
         </span>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-slate-500 font-medium">
           Khung giờ nhận: {minSlot}:00 - {maxSlot}:00
         </span>
       </div>
@@ -77,26 +77,26 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Date */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label className="block text-xs font-bold text-slate-700 mb-1">
             Đêm ngày
           </label>
           <input
             type="date"
             value={checkinDate}
             onChange={(e) => e.target.value && onChangeDate(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 shadow-xs"
           />
         </div>
 
         {/* Start Hour */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label className="block text-xs font-bold text-slate-700 mb-1">
             Giờ nhận phòng
           </label>
           <select
             value={startHour}
             onChange={(e) => onChangeStartHour(Number(e.target.value))}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 font-medium"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 font-semibold shadow-xs"
           >
             {startHourOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -108,13 +108,13 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
 
         {/* Late Checkout Hours */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label className="block text-xs font-bold text-slate-700 mb-1">
             Trả phòng trễ (Late Checkout)
           </label>
           <select
             value={lateCheckoutHours}
             onChange={(e) => onChangeLateCheckout(Number(e.target.value))}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 font-semibold text-indigo-300"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-indigo-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 font-bold shadow-xs"
           >
             {lateCheckoutOptions.map((h) => (
               <option key={h} value={h}>
@@ -126,12 +126,12 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
       </div>
 
       {/* Summary preview */}
-      <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="text-slate-300">
-          <span className="text-slate-400">Thời lượng: </span>
-          <strong className="text-indigo-400">12 Giờ tiêu chuẩn</strong>
+      <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+        <div className="text-slate-600">
+          <span className="text-slate-500 font-medium">Thời lượng: </span>
+          <strong className="text-indigo-800 font-bold">12 Giờ tiêu chuẩn</strong>
           {lateCheckoutHours > 0 && (
-            <span className="text-amber-300 font-medium">
+            <span className="text-amber-800 font-semibold">
               {" "}
               + {lateCheckoutHours} giờ trễ (+
               {Number(lateCheckoutHours * unitFee).toLocaleString("vi-VN")}đ)
@@ -139,8 +139,8 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
           )}
         </div>
         <div className="text-right">
-          <span className="text-slate-400">Trả phòng dự kiến: </span>
-          <strong className="text-white font-mono">{calculatedCheckout}</strong>
+          <span className="text-slate-500 font-medium">Trả phòng dự kiến: </span>
+          <strong className="text-slate-900 font-mono font-bold">{calculatedCheckout}</strong>
         </div>
       </div>
     </div>

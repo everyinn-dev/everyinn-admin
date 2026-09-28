@@ -41,8 +41,8 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
 
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase">
-        Hình thức đặt phòng <span className="text-rose-400">*</span>
+      <label className="block text-xs font-bold text-slate-700 tracking-wide uppercase">
+        Hình thức đặt phòng <span className="text-rose-500">*</span>
       </label>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
         {types.map((t) => {
@@ -57,9 +57,9 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
               className={`p-3 rounded-xl border text-left transition-all relative select-none cursor-pointer ${
                 isSelected
                   ? isCustom
-                    ? "bg-fuchsia-500/15 border-fuchsia-500/60 shadow-lg shadow-fuchsia-500/10 ring-1 ring-fuchsia-500"
-                    : "bg-emerald-500/15 border-emerald-500/60 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500"
-                  : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40"
+                    ? "bg-fuchsia-50 border-fuchsia-500 shadow-xs ring-2 ring-fuchsia-500/20"
+                    : "bg-emerald-50 border-emerald-600 shadow-xs ring-2 ring-emerald-600/20"
+                  : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-xs"
               }`}
             >
               <div className="flex items-center gap-1.5">
@@ -68,23 +68,23 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
                   className={`text-sm font-bold truncate ${
                     isSelected
                       ? isCustom
-                        ? "text-fuchsia-300"
-                        : "text-emerald-300"
-                      : "text-slate-200"
+                        ? "text-fuchsia-900"
+                        : "text-emerald-900"
+                      : "text-slate-800"
                   }`}
                 >
                   {t.label}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1 line-clamp-1">
+              <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 font-medium">
                 {t.desc}
               </p>
               {isSelected && (
                 <div
                   className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
                     isCustom
-                      ? "bg-fuchsia-400 shadow-[0_0_6px_#c026d3]"
-                      : "bg-emerald-400 shadow-[0_0_6px_#10b981]"
+                      ? "bg-fuchsia-600 shadow-[0_0_6px_#c026d3]"
+                      : "bg-emerald-600 shadow-[0_0_6px_#059669]"
                   }`}
                 />
               )}

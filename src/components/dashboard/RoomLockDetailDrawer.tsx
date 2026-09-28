@@ -80,31 +80,31 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
   const durationStr = calculateDurationHours(block.blockedFrom, block.blockedTo);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-[#0d131f] border-l border-slate-800 shadow-2xl h-full flex flex-col z-50 text-xs">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
+      <div className="relative w-full max-w-md bg-white border-l border-slate-200 shadow-2xl h-full flex flex-col z-50 text-xs">
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-[#121927]/60">
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 text-sm shadow-xs">
               🔒
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-white tracking-tight">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">
                   Khóa Phòng #{block.id}
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] text-amber-300 font-bold uppercase">
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[10px] text-amber-900 font-bold uppercase">
                   Đang khóa
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 font-medium">
                 {room ? `${room.name} (Phòng ${room.roomNumber})` : `Phòng ID: ${block.roomId}`}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-7 h-7 rounded-lg bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors font-bold cursor-pointer"
           >
             ✕
           </button>
@@ -113,60 +113,60 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
         {/* Content Body */}
         <div className="flex-1 p-5 overflow-y-auto space-y-4">
           {/* Room info card */}
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between shadow-xs">
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Phòng</span>
-              <span className="text-base font-extrabold text-white">
+              <span className="text-slate-500 block text-[10px] uppercase font-bold">Phòng</span>
+              <span className="text-base font-extrabold text-slate-900">
                 {room ? room.name : block.roomId}
               </span>
             </div>
             {room && (
-              <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 uppercase font-mono text-[10px] font-bold">
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 uppercase font-mono text-[10px] font-bold shadow-xs">
                 {room.roomClass}
               </span>
             )}
           </div>
 
           {/* Reason & Notes */}
-          <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-2">
-            <span className="text-amber-400 block text-[10px] uppercase font-bold tracking-wider">
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 space-y-2 shadow-xs">
+            <span className="text-amber-900 block text-[10px] uppercase font-bold tracking-wider">
               Lý do khóa phòng
             </span>
-            <div className="text-sm font-bold text-amber-100 flex items-center gap-1.5">
+            <div className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
               <span>⚠️</span>
               <span>{block.reason || "Bảo trì phòng"}</span>
             </div>
             {block.note && (
-              <div className="pt-2 border-t border-amber-500/20 text-slate-300 text-xs italic">
-                <span className="text-slate-400 font-medium not-italic">Ghi chú: </span>
+              <div className="pt-2 border-t border-amber-200 text-slate-700 text-xs italic bg-white p-2.5 rounded-lg">
+                <span className="text-slate-500 font-bold not-italic">Ghi chú: </span>
                 {block.note}
               </div>
             )}
           </div>
 
           {/* Time range */}
-          <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 uppercase font-semibold text-[10px]">
+              <span className="text-slate-500 uppercase font-bold text-[10px]">
                 Thời gian áp dụng
               </span>
               {durationStr && (
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-teal-300 font-mono text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-emerald-800 font-mono text-[10px] font-bold shadow-xs">
                   {durationStr}
                 </span>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80">
-                <span className="text-slate-400 block text-[10px] mb-0.5">Bắt đầu khóa:</span>
-                <span className="text-white font-medium font-mono text-[11px]">
+              <div className="p-2.5 rounded-lg bg-white border border-slate-200 shadow-xs">
+                <span className="text-slate-500 block text-[10px] mb-0.5 font-medium">Bắt đầu khóa:</span>
+                <span className="text-slate-900 font-bold font-mono text-[11px]">
                   {formatDateTimeVi(block.blockedFrom)}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80">
-                <span className="text-slate-400 block text-[10px] mb-0.5">Dự kiến mở:</span>
-                <span className="text-white font-medium font-mono text-[11px]">
+              <div className="p-2.5 rounded-lg bg-white border border-slate-200 shadow-xs">
+                <span className="text-slate-500 block text-[10px] mb-0.5 font-medium">Dự kiến mở:</span>
+                <span className="text-slate-900 font-bold font-mono text-[11px]">
                   {formatDateTimeVi(block.blockedTo)}
                 </span>
               </div>
@@ -174,50 +174,50 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
           </div>
 
           {/* Metadata */}
-          <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/60 text-slate-400 space-y-1 text-[11px]">
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 space-y-1 text-[11px] shadow-xs">
             {block.createdByStaffId && (
               <div className="flex items-center justify-between">
                 <span>Nhân viên tạo khóa:</span>
-                <span className="font-mono text-slate-200">NV #{block.createdByStaffId}</span>
+                <span className="font-mono text-slate-900 font-semibold">NV #{block.createdByStaffId}</span>
               </div>
             )}
             {block.createdAt && (
               <div className="flex items-center justify-between">
                 <span>Thời gian tạo:</span>
-                <span className="text-slate-300">{formatDateTimeVi(block.createdAt)}</span>
+                <span className="text-slate-800 font-medium">{formatDateTimeVi(block.createdAt)}</span>
               </div>
             )}
           </div>
 
           {/* Business notice */}
-          <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
-            💡 <strong className="text-slate-300">Quy tắc nghiệp vụ:</strong> Khi mở khóa phòng, phòng sẽ ngay lập tức chuyển về trạng thái sẵn sàng đón khách mà không cần cộng thêm 1 giờ dọn phòng.
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed shadow-xs">
+            💡 <strong className="text-slate-800">Quy tắc nghiệp vụ:</strong> Khi mở khóa phòng, phòng sẽ ngay lập tức chuyển về trạng thái sẵn sàng đón khách mà không cần cộng thêm 1 giờ dọn phòng.
           </div>
         </div>
 
         {/* Action Footer */}
-        <div className="p-4 border-t border-slate-800 bg-[#121927]/60 space-y-2">
+        <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
           {!showConfirmDelete ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition-colors text-center"
+                className="flex-1 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold transition-colors text-center cursor-pointer shadow-xs"
               >
                 Đóng
               </button>
               <button
                 type="button"
                 onClick={() => setShowConfirmDelete(true)}
-                className="flex-1 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-bold transition-all text-center flex items-center justify-center gap-1.5"
+                className="flex-1 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 font-bold transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <span>🔓</span>
                 <span>Mở khóa phòng</span>
               </button>
             </div>
           ) : (
-            <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-2 animate-in fade-in">
-              <p className="text-rose-200 font-medium text-[11px]">
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 space-y-2 animate-in fade-in shadow-xs">
+              <p className="text-rose-900 font-bold text-[11px]">
                 Bạn có chắc chắn muốn mở khóa phòng {room ? room.name : block.roomId} ngay bây giờ?
               </p>
               <div className="flex items-center gap-2">
@@ -225,7 +225,7 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
                   type="button"
                   onClick={() => setShowConfirmDelete(false)}
                   disabled={isDeleting}
-                  className="flex-1 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors font-medium text-[11px]"
+                  className="flex-1 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors font-semibold text-[11px] cursor-pointer shadow-xs"
                 >
                   Không, giữ khóa
                 </button>
@@ -233,7 +233,7 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex-1 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors text-[11px] flex items-center justify-center gap-1 shadow-sm"
+                  className="flex-1 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold transition-colors text-[11px] flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                 >
                   {isDeleting ? <Spinner size="sm" /> : <span>Xác nhận mở khóa</span>}
                 </button>

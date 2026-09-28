@@ -163,19 +163,19 @@ export const GanttChart: React.FC<GanttChartProps> = ({
   }, [isMonth, days]);
 
   return (
-    <div className="w-full rounded-2xl bg-[#0d131f] border border-slate-800 shadow-xl overflow-hidden flex flex-col">
+    <div className="w-full rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden flex flex-col">
       {/* Scrollable Timeline Container */}
       <div ref={containerRef} className="overflow-x-auto relative scroll-smooth select-none">
         <div style={{ width: `${totalTimelineWidth + 224}px`, minWidth: "100%" }}>
           {/* ================= HEADER: DAYS & HOURS ================= */}
-          <div className="flex border-b border-slate-700/80 bg-[#0b101a] sticky top-0 z-30 shadow-md">
+          <div className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-30 shadow-2xs">
             {/* Sticky Room Header Corner (Top Left) */}
-            <div className="w-48 sm:w-56 shrink-0 p-3 sm:px-4 text-xs font-bold text-slate-300 uppercase tracking-wider border-r border-slate-800 bg-[#0b101a] sticky left-0 z-40 flex items-center justify-between shadow-[3px_0_8px_rgba(0,0,0,0.4)]">
-              <span className="flex items-center gap-1.5">
+            <div className="w-48 sm:w-56 shrink-0 p-3 sm:px-4 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200 bg-slate-50 sticky left-0 z-40 flex items-center justify-between shadow-[2px_0_6px_rgba(0,0,0,0.03)]">
+              <span className="flex items-center gap-1.5 font-extrabold text-slate-900">
                 <span>🚪</span>
                 <span>Phòng</span>
               </span>
-              <span className="text-[10px] text-slate-400 font-semibold px-2 py-0.5 rounded-full bg-slate-800">
+              <span className="text-[10px] text-slate-700 font-bold px-2 py-0.5 rounded-full bg-slate-200">
                 {rooms.length} phòng
               </span>
             </div>
@@ -188,10 +188,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                   id={`gantt-day-${day.dateStr}`}
                   className={`flex flex-col shrink-0 ${
                     day.isToday
-                      ? `bg-emerald-950/20 border-r-2 border-emerald-500/70 ${
-                          highlightToday ? "ring-2 ring-emerald-400 ring-inset" : ""
+                      ? `bg-emerald-50/70 border-r-2 border-emerald-500 ${
+                          highlightToday ? "ring-2 ring-emerald-500 ring-inset" : ""
                         }`
-                      : "border-r-2 border-slate-600/90"
+                      : "border-r-2 border-slate-300"
                   }`}
                   style={{ width: `${dayWidth}px` }}
                 >
@@ -199,28 +199,28 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                   <div
                     className={`h-9 px-3 flex items-center justify-between border-b ${
                       day.isToday
-                        ? "bg-emerald-900/30 border-emerald-500/50 text-emerald-300"
-                        : "bg-slate-900/60 border-slate-800/80 text-slate-300"
+                        ? "bg-emerald-100/70 border-emerald-300 text-emerald-900"
+                        : "bg-slate-100/80 border-slate-200 text-slate-800"
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-extrabold uppercase font-mono tracking-tight">
+                      <span className="text-xs font-extrabold uppercase font-mono tracking-tight text-slate-900">
                         {day.weekday}
                       </span>
-                      <span className="text-xs font-semibold text-slate-200">
+                      <span className="text-xs font-bold text-slate-700">
                         {day.dateFormatted}
                       </span>
                     </div>
 
                     {day.isToday && (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-extrabold uppercase tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.5)]">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold uppercase tracking-wider shadow-2xs">
                         Hôm nay 📍
                       </span>
                     )}
                   </div>
 
                   {/* Row 2: Hour Grid Markers (19 slots) */}
-                  <div className="flex h-7 items-center bg-[#090d16] select-none">
+                  <div className="flex h-7 items-center bg-slate-50 select-none">
                     {TIMELINE_SLOTS.map((slot) => {
                       const width = slot.isNight ? slotWidthNight : slotWidthNormal;
                       const isKeyHour = [9, 12, 15, 21].includes(slot.hour);
@@ -230,17 +230,17 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                           key={slot.id}
                           className={`h-full shrink-0 flex items-center justify-center border-r font-mono text-[10px] ${
                             slot.isNight
-                              ? "bg-indigo-950/40 text-indigo-300 font-extrabold border-slate-700/80 px-1"
-                              : `border-slate-800/70 ${
+                              ? "bg-indigo-50/90 text-indigo-900 font-extrabold border-slate-200 px-1"
+                              : `border-slate-200/80 ${
                                   isKeyHour
                                     ? slot.hour === 21
-                                      ? "text-indigo-400 font-bold"
+                                      ? "text-indigo-700 font-extrabold"
                                       : slot.hour === 15
-                                      ? "text-amber-400 font-bold"
+                                      ? "text-amber-700 font-extrabold"
                                       : slot.hour === 12
-                                      ? "text-sky-400 font-bold"
-                                      : "text-emerald-400 font-bold"
-                                    : "text-slate-400"
+                                      ? "text-sky-700 font-extrabold"
+                                      : "text-emerald-700 font-extrabold"
+                                    : "text-slate-600 font-medium"
                                 }`
                           }`}
                           style={{ width: `${width}px` }}
@@ -273,8 +273,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                   left: `calc(14rem + ${nowPx}px)`, // 14rem = 224px (left corner room column)
                 }}
               >
-                <div className="h-full w-0.5 bg-rose-500 shadow-[0_0_10px_#f43f5e]" />
-                <div className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-rose-500 text-white text-[9px] font-bold tracking-wider uppercase shadow-md shadow-rose-900/50 whitespace-nowrap">
+                <div className="h-full w-0.5 bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+                <div className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-bold tracking-wider uppercase shadow-2xs whitespace-nowrap">
                   BÂY GIỜ
                 </div>
               </div>
@@ -307,44 +307,44 @@ export const GanttChart: React.FC<GanttChartProps> = ({
       </div>
 
       {/* ================= LEGEND & FOOTER ================= */}
-      <div className="p-3 bg-[#0a0f17] border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 px-4">
+      <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 px-4">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="font-semibold text-slate-300">Chú thích:</span>
+          <span className="font-bold text-slate-800">Chú thích:</span>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-gradient-to-r from-emerald-600 to-teal-500 border border-emerald-400/50" />
-            <span className="text-slate-200">Theo Giờ</span>
+            <span className="w-3.5 h-3 rounded bg-gradient-to-r from-emerald-600 to-teal-600 border border-emerald-700/30" />
+            <span className="text-slate-800 font-medium">Theo Giờ</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-gradient-to-r from-indigo-600 to-purple-600 border border-indigo-400/50" />
-            <span className="text-slate-200">Qua Đêm</span>
+            <span className="w-3.5 h-3 rounded bg-gradient-to-r from-indigo-600 to-violet-600 border border-indigo-700/30" />
+            <span className="text-slate-800 font-medium">Qua Đêm</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-gradient-to-r from-amber-600 to-orange-500 border border-amber-400/50" />
-            <span className="text-slate-200">Theo Ngày</span>
+            <span className="w-3.5 h-3 rounded bg-gradient-to-r from-amber-600 to-orange-500 border border-amber-700/30" />
+            <span className="text-slate-800 font-medium">Theo Ngày</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-gradient-to-r from-fuchsia-600 to-pink-500 border border-fuchsia-400/50" />
-            <span className="text-slate-200">Tuỳ Chỉnh</span>
+            <span className="w-3.5 h-3 rounded bg-gradient-to-r from-fuchsia-600 to-pink-600 border border-fuchsia-700/30" />
+            <span className="text-slate-800 font-medium">Tuỳ Chỉnh</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-5 h-3.5 rounded bg-[repeating-linear-gradient(45deg,rgba(180,83,9,0.5),rgba(180,83,9,0.5)_4px,rgba(245,158,11,0.3)_4px,rgba(245,158,11,0.3)_8px)] border-2 border-amber-400 text-[9px] flex items-center justify-center font-bold shadow-sm">
+            <span className="w-5 h-3.5 rounded bg-[repeating-linear-gradient(45deg,rgba(245,158,11,0.25),rgba(245,158,11,0.25)_3px,rgba(251,191,36,0.45)_3px,rgba(251,191,36,0.45)_6px)] bg-amber-100 border-2 border-amber-500 text-[9px] flex items-center justify-center font-bold text-amber-950 shadow-2xs">
               🔒
             </span>
-            <span className="text-amber-200 font-semibold">Khóa phòng (Bảo trì)</span>
+            <span className="text-amber-900 font-bold">Khóa phòng (Bảo trì)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded border border-dashed border-amber-500/80 bg-amber-500/20" />
-            <span className="text-slate-200">🧹 Dọn phòng (1h)</span>
+            <span className="w-3.5 h-3 rounded border border-dashed border-amber-400 bg-amber-50" />
+            <span className="text-amber-900 font-medium">🧹 Dọn phòng (1h)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="px-1.5 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/40 text-[10px] text-indigo-300 font-bold font-mono">
+            <span className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[10px] text-indigo-900 font-bold font-mono">
               🌙 01h - 07h
             </span>
-            <span className="text-slate-300">Khung giờ đêm</span>
+            <span className="text-slate-800 font-medium">Khung giờ đêm</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+        <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
           <span>💡 Nhấn vào thanh đặt phòng hoặc khóa phòng để xem chi tiết / chỉnh sửa</span>
         </div>
       </div>

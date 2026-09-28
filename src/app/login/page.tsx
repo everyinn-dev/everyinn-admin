@@ -63,29 +63,29 @@ function LoginForm() {
     <div className="w-full max-w-md space-y-8 z-10">
       {/* Brand Header */}
       <div className="text-center space-y-2">
-        <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 items-center justify-center text-white font-extrabold text-2xl shadow-xl shadow-emerald-500/20 mb-2">
+        <div className="inline-flex w-14 h-14 rounded-2xl bg-emerald-600 items-center justify-center text-white font-extrabold text-2xl shadow-lg shadow-emerald-600/20 mb-2">
           EI
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
           EVERY INN ADMIN
         </h1>
-        <p className="text-xs text-slate-400 font-medium">
+        <p className="text-xs text-slate-500 font-medium">
           Hệ thống Quản lý Bảng Phòng & Khách Hàng (CDP)
         </p>
       </div>
 
       {/* Login Card */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-[#0e1625]/80 border border-slate-800 shadow-2xl backdrop-blur-xl space-y-6">
-        <div className="border-b border-slate-800/80 pb-3">
-          <h2 className="text-base font-bold text-slate-100">Đăng nhập tài khoản</h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xl space-y-6">
+        <div className="border-b border-slate-100 pb-3">
+          <h2 className="text-base font-bold text-slate-900">Đăng nhập tài khoản</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
             Dành riêng cho Lễ tân và Quản lý khách sạn
           </p>
         </div>
 
         {/* Expired Session Alert */}
         {reason && (
-          <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
             <span>⏰</span>
             <span>
               {reason === "expired"
@@ -96,7 +96,7 @@ function LoginForm() {
         )}
 
         {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
             <span>⚠</span>
             <span>{errorMsg}</span>
           </div>
@@ -134,21 +134,21 @@ function LoginForm() {
         </form>
 
         {/* Quick test credentials reminder */}
-        <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
-          <div className="font-semibold text-slate-300">Tài khoản mặc định:</div>
+        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 space-y-1">
+          <div className="font-semibold text-slate-700">Tài khoản mặc định:</div>
           <div className="flex justify-between">
-            <span>Quản lý: <strong className="text-emerald-400 font-mono">0901234567</strong></span>
-            <span>MK: <strong className="text-slate-200 font-mono">everyinn2024</strong></span>
+            <span>Quản lý: <strong className="text-emerald-700 font-mono">0901234567</strong></span>
+            <span>MK: <strong className="text-slate-800 font-mono">everyinn2024</strong></span>
           </div>
           <div className="flex justify-between">
-            <span>Lễ tân: <strong className="text-sky-400 font-mono">0909998888</strong></span>
-            <span>MK: <strong className="text-slate-200 font-mono">everyinn2024</strong></span>
+            <span>Lễ tân: <strong className="text-sky-700 font-mono">0909998888</strong></span>
+            <span>MK: <strong className="text-slate-800 font-mono">everyinn2024</strong></span>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <p className="text-center text-xs text-slate-500">
+      <p className="text-center text-xs text-slate-400">
         Every Inn Hospitality Management System · Cloudflare D1
       </p>
     </div>
@@ -157,10 +157,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-[#080d16] flex flex-col justify-center items-center px-4 sm:px-6 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 sm:px-6 relative overflow-hidden">
       {/* Background ambient glow */}
-      <div className="absolute top-1/4 -left-20 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 -left-20 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
 
       <Suspense fallback={<div className="text-slate-400 text-sm">Đang tải...</div>}>
         <LoginForm />

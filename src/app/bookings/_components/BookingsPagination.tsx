@@ -45,12 +45,12 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-[#0d131f] border-t border-slate-800 text-xs text-slate-400">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-white border-t border-slate-200 text-xs text-slate-500">
       {/* Summary label */}
-      <div className="font-medium text-slate-400 text-center sm:text-left">
-        Hiển thị <span className="font-semibold text-slate-200">{from}</span>–
-        <span className="font-semibold text-slate-200">{to}</span> trên tổng số{" "}
-        <span className="font-semibold text-emerald-400 font-mono">{total}</span> đơn đặt phòng
+      <div className="font-medium text-slate-500 text-center sm:text-left">
+        Hiển thị <span className="font-semibold text-slate-800">{from}</span>–
+        <span className="font-semibold text-slate-800">{to}</span> trên tổng số{" "}
+        <span className="font-semibold text-emerald-700 font-mono">{total}</span> đơn đặt phòng
       </div>
 
       {/* Pagination controls */}
@@ -59,7 +59,7 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
         <button
           onClick={() => onPageChange(1)}
           disabled={page <= 1}
-          className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           title="Trang đầu tiên"
         >
           «
@@ -69,7 +69,7 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           title="Trang trước"
         >
           ‹
@@ -80,7 +80,7 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
           {getPageNumbers().map((p, idx) => {
             if (p === "...") {
               return (
-                <span key={`ellipsis-${idx}`} className="px-1 text-slate-600">
+                <span key={`ellipsis-${idx}`} className="px-1 text-slate-400">
                   ...
                 </span>
               );
@@ -95,8 +95,8 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
                 onClick={() => onPageChange(pageNum)}
                 className={`min-w-[28px] h-7 px-2 rounded-lg text-xs font-semibold transition-all ${
                   isCurrent
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
-                    : "bg-slate-900/80 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
                 {pageNum}
@@ -109,7 +109,7 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
-          className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           title="Trang sau"
         >
           ›
@@ -119,7 +119,7 @@ export const BookingsPagination: React.FC<BookingsPaginationProps> = ({
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={page >= totalPages}
-          className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           title="Trang cuối cùng"
         >
           »

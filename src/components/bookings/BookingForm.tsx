@@ -368,26 +368,26 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
       {/* Alert Banners */}
       {errorMsg && (
-        <div className="p-4 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-sm font-medium flex items-center gap-2 animate-in fade-in">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium flex items-center gap-2 animate-in fade-in">
           <span className="text-lg">⚠</span>
           <span>{errorMsg}</span>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-sm font-semibold flex items-center gap-2 animate-in fade-in">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold flex items-center gap-2 animate-in fade-in">
           <span className="text-lg">🎉</span>
           <span>{successMsg}</span>
         </div>
       )}
 
       {/* 1. Customer Information Card */}
-      <div className="rounded-2xl bg-[#0d131f] border border-slate-800 p-5 space-y-4 shadow-lg">
-        <div className="border-b border-slate-800/80 pb-2.5 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+      <div className="rounded-2xl bg-white border border-slate-200 p-5 space-y-4 shadow-xs">
+        <div className="border-b border-slate-100 pb-2.5 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
             <span>👤</span> Thông tin khách hàng (Tích hợp Mini CDP)
           </h2>
-          <span className="text-[11px] text-slate-400 font-medium">
+          <span className="text-[11px] text-slate-500 font-medium">
             Tự động nhớ hồ sơ khách quen
           </span>
         </div>
@@ -417,14 +417,14 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         </div>
 
         {/* Row 2: Instagram + Facebook (Mandatory 1 in 2) */}
-        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-bold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
               <span>📱</span> Tài khoản Mạng Xã Hội
-              <span className="text-rose-400 font-bold text-sm">*</span>
+              <span className="text-rose-500 font-bold text-sm">*</span>
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                 Bắt buộc có ít nhất 1 trong 2
               </span>
               {foundMember && (
@@ -432,7 +432,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   type="button"
                   onClick={handleDirectUpdateSocial}
                   disabled={updatingSocial || (!instagram.trim() && !facebook.trim())}
-                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-lg border border-emerald-500/30 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-40"
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-200 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-40"
                   title="Lưu cập nhật Insta/FB vào hồ sơ khách quen theo SĐT ngay lập tức"
                 >
                   {updatingSocial ? "⏳ Đang lưu..." : "💾 Cập nhật hồ sơ khách"}
@@ -442,14 +442,14 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           </div>
 
           {socialUpdateFeedback && (
-            <div className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-300 flex items-center gap-1.5 animate-in fade-in duration-200">
+            <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-1.5 animate-in fade-in duration-200">
               <span>✅</span>
               <span>{socialUpdateFeedback}</span>
             </div>
           )}
 
           {foundMember && (
-            <div className="text-[11px] text-slate-400 flex items-center gap-1.5 bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">
+            <div className="text-[11px] text-slate-600 flex items-center gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
               <span>ℹ️</span>
               <span>
                 Khách quen: Bạn có thể thay đổi Insta/FB bên dưới. Hệ thống sẽ cập nhật theo SĐT khi tạo đơn hoặc bấm &quot;Cập nhật hồ sơ khách&quot;.
@@ -459,7 +459,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Tài khoản Instagram
               </label>
               <div className="relative">
@@ -471,17 +471,17 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   placeholder="everyinn.hotel"
                   value={instagram}
                   onChange={(e) => setInstagram(e.target.value.replace(/^@/, ""))}
-                  className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 pl-7 pr-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+                  className="w-full rounded-xl bg-white border border-slate-300 pl-7 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 font-medium shadow-xs"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Tài khoản Facebook
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-xs text-blue-400">
+                <span className="absolute left-3 top-2.5 text-xs text-blue-600 font-bold">
                   f
                 </span>
                 <input
@@ -489,7 +489,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   placeholder="Tên Facebook hoặc link"
                   value={facebook}
                   onChange={(e) => setFacebook(e.target.value)}
-                  className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 pl-7 pr-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+                  className="w-full rounded-xl bg-white border border-slate-300 pl-7 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 font-medium shadow-xs"
                 />
               </div>
             </div>
@@ -498,28 +498,28 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
         {/* Row 3: Number of Guests */}
         <div className="pt-1">
-          <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1.5">
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
             Số lượng khách
           </label>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setNumGuests(Math.max(1, numGuests - 1))}
-              className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base flex items-center justify-center border border-slate-700 transition-colors cursor-pointer"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-base flex items-center justify-center border border-slate-300 transition-colors cursor-pointer shadow-xs"
             >
               −
             </button>
-            <span className="font-mono font-bold text-base text-white px-2">
+            <span className="font-mono font-bold text-base text-slate-900 px-2">
               {numGuests} người
             </span>
             <button
               type="button"
               onClick={() => setNumGuests(Math.min(4, numGuests + 1))}
-              className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base flex items-center justify-center border border-slate-700 transition-colors cursor-pointer"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-base flex items-center justify-center border border-slate-300 transition-colors cursor-pointer shadow-xs"
             >
               +
             </button>
-            <span className="text-xs text-slate-400 pl-2">
+            <span className="text-xs text-slate-500 pl-2">
               (Tiêu chuẩn 2 người / phòng)
             </span>
           </div>
@@ -527,7 +527,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       </div>
 
       {/* 2. Booking Type & Time Specs (With Room Selection At Bottom) */}
-      <div className="rounded-2xl bg-[#0d131f] border border-slate-800 p-5 space-y-5 shadow-lg">
+      <div className="rounded-2xl bg-white border border-slate-200 p-5 space-y-5 shadow-xs">
         <BookingTypeTabs
           selectedType={bookingType}
           onChangeType={(type) => setBookingType(type)}
@@ -586,16 +586,16 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         )}
 
         {/* Relocated: Room Selection At Bottom of Booking Type Card */}
-        <div className="pt-3 border-t border-slate-800">
-          <label className="block text-xs font-bold text-slate-200 tracking-wide uppercase mb-1.5 flex items-center gap-1.5">
+        <div className="pt-3 border-t border-slate-100">
+          <label className="block text-xs font-bold text-slate-800 tracking-wide uppercase mb-1.5 flex items-center gap-1.5">
             <span>🚪</span>
             <span>Chọn phòng trống</span>
-            <span className="text-rose-400">*</span>
+            <span className="text-rose-500">*</span>
           </label>
           <select
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer shadow-inner"
+            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 font-semibold cursor-pointer shadow-xs"
           >
             <optgroup label={`Haven (${initialRooms.filter((r) => r.room_class === "haven").length} Phòng - 22m²)`}>
               {initialRooms
@@ -620,7 +620,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
         {/* Closing / Confirmation Note with Guest */}
         <div className="pt-2">
-          <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1">
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1">
             Câu chốt với khách (Thoả thuận đặt phòng)
           </label>
           <textarea
@@ -628,13 +628,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             value={closingNote}
             onChange={(e) => setClosingNote(e.target.value)}
             placeholder="VD: Dạ vậy bên Home xin chốt là bên mình book 201 in 21H 23/9 out 9H 24/9 tổng là 392K ạ..."
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none font-sans"
+            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 resize-none font-sans shadow-xs"
           />
         </div>
 
         {/* Internal Receptionist Note */}
         <div>
-          <label className="block text-xs font-semibold text-slate-300 tracking-wide uppercase mb-1">
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1">
             Ghi chú nội bộ cho lễ tân (Tùy chọn)
           </label>
           <textarea
@@ -642,7 +642,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Yêu cầu thêm gối, khách cần hóa đơn, xe gửi bãi ngoài..."
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 resize-none shadow-xs"
           />
         </div>
       </div>

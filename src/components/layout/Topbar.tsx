@@ -61,23 +61,23 @@ export const Topbar: React.FC<TopbarProps> = ({ staff }) => {
   };
 
   return (
-    <header className="h-16 border-b border-slate-800/80 bg-[#0d131f]/90 backdrop-blur-md sticky top-0 z-30 px-4 md:px-6 flex items-center justify-between">
+    <header className="h-16 border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-30 px-4 md:px-6 flex items-center justify-between">
       {/* Left: Brand / Branch */}
       <div className="flex items-center gap-3">
         <Link href="/dashboard" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white font-bold text-base shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm group-hover:scale-105 transition-transform">
             EI
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold tracking-tight text-white text-base">
+              <span className="font-extrabold tracking-tight text-slate-900 text-base">
                 EVERY INN
               </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
                 Admin
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium leading-none">
+            <p className="text-[11px] text-slate-500 font-medium leading-none">
               Chi nhánh Phan Xích Long · Cầu Kiệu (Phú Nhuận)
             </p>
           </div>
@@ -85,11 +85,11 @@ export const Topbar: React.FC<TopbarProps> = ({ staff }) => {
       </div>
 
       {/* Middle: Live Clock */}
-      <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-medium text-slate-300">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span className="font-mono text-emerald-300 font-semibold">{timeStr}</span>
-        <span className="text-slate-600">|</span>
-        <span className="capitalize">{dateStr}</span>
+      <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-medium text-slate-700">
+        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span className="font-mono text-emerald-800 font-bold">{timeStr}</span>
+        <span className="text-slate-300">|</span>
+        <span className="capitalize text-slate-600">{dateStr}</span>
       </div>
 
       {/* Right: Actions & Staff Profile */}
@@ -109,10 +109,10 @@ export const Topbar: React.FC<TopbarProps> = ({ staff }) => {
         </Link>
 
         {staff && (
-          <div className="flex items-center gap-2.5 pl-2 border-l border-slate-800">
+          <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
             <div className="hidden sm:block text-right">
-              <div className="text-xs font-semibold text-slate-200">{staff.fullName}</div>
-              <div className="text-[10px] text-slate-400 capitalize">
+              <div className="text-xs font-bold text-slate-800">{staff.fullName}</div>
+              <div className="text-[10px] text-slate-500 capitalize">
                 {staff.role === "manager" ? "Quản lý" : "Lễ tân"}
               </div>
             </div>
@@ -120,7 +120,7 @@ export const Topbar: React.FC<TopbarProps> = ({ staff }) => {
               onClick={handleLogout}
               disabled={loggingOut}
               title="Đăng xuất"
-              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-500/30 flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 flex items-center justify-center transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path

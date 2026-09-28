@@ -14,45 +14,45 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
   selectedRoom,
 }) => {
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-[#121927] to-[#182337] border border-slate-700/80 p-5 shadow-xl space-y-4">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+    <div className="rounded-2xl bg-gradient-to-br from-emerald-50/60 via-slate-50 to-white border border-emerald-200/90 p-5 shadow-xs space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <div>
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
             Tóm tắt chi phí
           </span>
-          <span className="text-sm font-semibold text-slate-200">
+          <span className="text-sm font-bold text-slate-900">
             {selectedRoom ? `${selectedRoom.name} (${selectedRoom.room_class.toUpperCase()})` : "Chưa chọn phòng"}
           </span>
         </div>
-        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
+        <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold">
           {pricing.comboLabel}
         </span>
       </div>
 
       {/* Itemized lines */}
       <div className="space-y-2 text-xs">
-        <div className="flex justify-between text-slate-300">
+        <div className="flex justify-between text-slate-600">
           <span>Giá gốc ({pricing.durationLabel}):</span>
-          <span className="font-mono font-medium text-slate-100">
+          <span className="font-mono font-bold text-slate-900">
             {pricing.basePrice.toLocaleString("vi-VN")} đ
           </span>
         </div>
 
         {pricing.totalExtraFee > 0 && (
-          <div className="flex justify-between text-amber-300 font-medium">
+          <div className="flex justify-between text-amber-800 font-semibold">
             <span>
               Phụ phí giờ thêm ({pricing.extraHours}h × {pricing.extraHourFee.toLocaleString("vi-VN")}đ):
             </span>
-            <span className="font-mono">
+            <span className="font-mono font-bold text-amber-900">
               +{pricing.totalExtraFee.toLocaleString("vi-VN")} đ
             </span>
           </div>
         )}
 
         {pricing.discountAmount > 0 && (
-          <div className="flex justify-between text-rose-300 font-medium">
+          <div className="flex justify-between text-rose-700 font-semibold">
             <span>Giảm trừ:</span>
-            <span className="font-mono">
+            <span className="font-mono font-bold text-rose-800">
               -{pricing.discountAmount.toLocaleString("vi-VN")} đ
             </span>
           </div>
@@ -60,13 +60,13 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
       </div>
 
       {/* Total Section */}
-      <div className="pt-3 border-t border-slate-700/80 flex items-baseline justify-between">
+      <div className="pt-3 border-t border-slate-200 flex items-baseline justify-between">
         <div>
-          <span className="text-xs text-slate-400 font-medium block">TỔNG CỘNG</span>
-          <span className="text-[11px] text-emerald-400/80">Thu tiền trực tiếp tại quầy</span>
+          <span className="text-xs text-slate-500 font-bold block uppercase tracking-wider">TỔNG CỘNG</span>
+          <span className="text-[11px] text-emerald-700 font-medium">Thu tiền trực tiếp tại quầy</span>
         </div>
         <div className="text-right">
-          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-mono tracking-tight">
+          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 font-mono tracking-tight">
             {pricing.totalPrice.toLocaleString("vi-VN")} đ
           </div>
         </div>

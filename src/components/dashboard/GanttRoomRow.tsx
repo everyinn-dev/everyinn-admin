@@ -70,18 +70,18 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
   };
 
   return (
-    <div className="flex border-b border-slate-800/80 hover:bg-slate-900/30 transition-colors group">
+    <div className="flex border-b border-slate-200 hover:bg-slate-50/60 transition-colors group">
       {/* Sticky Room Label Header (Left Column) */}
-      <div className="w-48 sm:w-56 shrink-0 p-3 sm:px-4 flex items-center justify-between border-r border-slate-800 bg-[#0d131f] sticky left-0 z-20 shadow-[3px_0_8px_rgba(0,0,0,0.4)]">
+      <div className="w-48 sm:w-56 shrink-0 p-3 sm:px-4 flex items-center justify-between border-r border-slate-200 bg-white sticky left-0 z-20 shadow-[2px_0_6px_rgba(0,0,0,0.03)]">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-slate-800/90 border border-slate-700/80 flex items-center justify-center font-extrabold text-sm text-slate-100 font-mono shadow-inner">
+          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-extrabold text-sm text-slate-800 font-mono shadow-2xs">
             {room.roomNumber}
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-100 truncate max-w-[85px] sm:max-w-[100px]">
+            <div className="text-xs font-bold text-slate-900 truncate max-w-[85px] sm:max-w-[100px]">
               {room.name}
             </div>
-            <div className="text-[10px] text-slate-400 font-medium">Tầng {room.floor}</div>
+            <div className="text-[10px] text-slate-500 font-medium">Tầng {room.floor}</div>
           </div>
         </div>
 
@@ -90,7 +90,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
 
       {/* Timeline Track */}
       <div
-        className="relative h-14 bg-slate-950/30 select-none overflow-hidden"
+        className="relative h-14 bg-white select-none overflow-hidden"
         style={{ width: `${totalTimelineWidth}px`, minWidth: `${totalTimelineWidth}px` }}
       >
         {/* Background Grid: Days & Slots */}
@@ -100,8 +100,8 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
               key={day.dateStr}
               className={`flex shrink-0 h-full relative ${
                 day.isToday
-                  ? "bg-emerald-950/10 border-r-2 border-emerald-500/70"
-                  : "border-r-2 border-slate-600/90"
+                  ? "bg-emerald-50/40 border-r-2 border-emerald-400"
+                  : "border-r-2 border-slate-300/80"
               }`}
               style={{ width: `${dayWidth}px` }}
             >
@@ -112,8 +112,8 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
                     key={slot.id}
                     className={`h-full shrink-0 border-r ${
                       slot.isNight
-                        ? "bg-indigo-950/25 border-slate-700/80"
-                        : "border-slate-800/70 hover:bg-slate-800/10"
+                        ? "bg-indigo-50/60 border-slate-200/90"
+                        : "border-slate-200/70 hover:bg-slate-50/80"
                     }`}
                     style={{ width: `${width}px` }}
                   />
@@ -143,13 +143,13 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
             <div
               key={block.id}
               onClick={() => onBlockClick?.(block, room)}
-              className="absolute top-1.5 bottom-1.5 rounded-lg bg-[repeating-linear-gradient(45deg,rgba(180,83,9,0.4),rgba(180,83,9,0.4)_10px,rgba(245,158,11,0.22)_10px,rgba(245,158,11,0.22)_20px)] bg-amber-950/90 border-2 border-amber-400/90 text-amber-100 font-bold flex items-center justify-between overflow-hidden z-15 shadow-md shadow-amber-950/50 cursor-pointer hover:border-amber-300 hover:scale-[1.01] hover:brightness-110 transition-all select-none group/block"
+              className="absolute top-1.5 bottom-1.5 rounded-lg bg-[repeating-linear-gradient(45deg,rgba(245,158,11,0.25),rgba(245,158,11,0.25)_10px,rgba(251,191,36,0.45)_10px,rgba(251,191,36,0.45)_20px)] bg-amber-100 border-2 border-amber-500 text-amber-950 font-bold flex items-center justify-between overflow-hidden z-15 shadow-xs cursor-pointer hover:border-amber-600 hover:scale-[1.01] hover:brightness-105 transition-all select-none group/block"
               style={{ left: `${left}px`, width: `${width}px` }}
               title={`🔒 Khóa phòng: ${block.reason || "Bảo trì"}\nThời gian: ${formatDateTimeShort(block.blockedFrom)} → ${formatDateTimeShort(block.blockedTo)}${block.note ? `\nGhi chú: ${block.note}` : ""}\n(Bấm để xem chi tiết / mở khóa)`}
             >
               {/* Left indicator if continued from yesterday */}
               {startsBefore && (
-                <span className="shrink-0 pl-1 text-[10px] text-amber-300 animate-pulse font-mono font-extrabold">
+                <span className="shrink-0 pl-1 text-[10px] text-amber-700 animate-pulse font-mono font-extrabold">
                   ◀
                 </span>
               )}
@@ -159,7 +159,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
                 {width >= 140 ? (
                   <span className="truncate">
                     {fullLabel}{" "}
-                    <span className="text-[10px] font-mono text-amber-300/90 font-medium">
+                    <span className="text-[10px] font-mono text-amber-800 font-semibold">
                       ({timeLabel})
                     </span>
                   </span>
@@ -172,7 +172,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
 
               {/* Right indicator if continues to tomorrow */}
               {endsAfter && (
-                <span className="shrink-0 pr-1 text-[10px] text-amber-300 animate-pulse font-mono font-extrabold">
+                <span className="shrink-0 pr-1 text-[10px] text-amber-700 animate-pulse font-mono font-extrabold">
                   ▶
                 </span>
               )}
@@ -216,7 +216,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
           return (
             <div
               key={`clean-${booking.id}`}
-              className="absolute top-1.5 bottom-1.5 rounded-r-md border border-dashed border-amber-500/70 bg-amber-500/15 text-[10px] text-amber-300 font-medium flex items-center justify-center overflow-hidden z-5 pointer-events-none select-none transition-opacity"
+              className="absolute top-1.5 bottom-1.5 rounded-r-md border border-dashed border-amber-400 bg-amber-50/90 text-[10px] text-amber-800 font-bold flex items-center justify-center overflow-hidden z-5 pointer-events-none select-none transition-opacity"
               style={{ left: `${left}px`, width: `${width}px` }}
               title={`Dọn phòng: ${new Date(checkoutMs).toLocaleTimeString("vi-VN", {
                 hour: "2-digit",
@@ -227,7 +227,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
               })}`}
             >
               {width >= 34 ? (
-                <span className="truncate px-1 text-[9px] flex items-center gap-1 font-bold text-amber-200">
+                <span className="truncate px-1 text-[9px] flex items-center gap-1 font-bold text-amber-900">
                   🧹 Dọn
                 </span>
               ) : width >= 14 ? (

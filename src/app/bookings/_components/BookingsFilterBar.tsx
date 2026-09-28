@@ -78,7 +78,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
   );
 
   return (
-    <div className="p-4 rounded-2xl bg-[#0d131f] border border-slate-800 shadow-md space-y-3.5">
+    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3.5">
       {/* Search Input Row */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         <div className="relative flex-1">
@@ -87,7 +87,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
             placeholder="Tìm theo SĐT, tên khách, Instagram, Facebook, mã đặt (tối thiểu 3 ký tự)..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-4 py-2.5 pl-10 pr-28 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
+            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 pl-10 pr-28 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs font-medium"
           />
           <span className="absolute left-3.5 top-3 text-slate-400 text-sm">
             🔍
@@ -95,7 +95,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
 
           {/* Typing helper indicator when 1 or 2 characters are entered */}
           {localSearch.trim().length > 0 && localSearch.trim().length < 3 && (
-            <span className="absolute right-10 top-2.5 text-[10px] text-amber-400/90 font-medium px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 animate-in fade-in select-none">
+            <span className="absolute right-10 top-2.5 text-[10px] text-amber-800 font-bold px-2 py-0.5 rounded bg-amber-50 border border-amber-200 animate-in fade-in select-none">
               Nhập thêm {3 - localSearch.trim().length} ký tự
             </span>
           )}
@@ -106,7 +106,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
                 setLocalSearch("");
                 onSearchChange("");
               }}
-              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 text-xs px-1.5 py-0.5 rounded bg-slate-800"
+              className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-800 text-xs px-1.5 py-0.5 rounded bg-slate-100 font-bold cursor-pointer"
               title="Xóa tìm kiếm"
             >
               ✕
@@ -117,7 +117,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
         {hasActiveFilters && (
           <button
             onClick={onResetFilters}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-rose-300 hover:text-rose-200 border border-slate-700 text-xs font-semibold transition-all active:scale-95 shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-rose-700 hover:text-rose-800 border border-slate-300 text-xs font-bold transition-all active:scale-95 shrink-0 cursor-pointer shadow-xs"
             title="Xóa tất cả bộ lọc hiện tại"
           >
             <span>🔄</span>
@@ -130,11 +130,11 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
         {/* Dropdown: Trạng thái */}
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Trạng thái</label>
+          <label className="text-[11px] font-bold text-slate-600">Trạng thái</label>
           <select
             value={status}
             onChange={(e) => onStatusChange(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="confirmed">Đã xác nhận</option>
@@ -145,11 +145,11 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
 
         {/* Dropdown: Phòng */}
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Phòng</label>
+          <label className="text-[11px] font-bold text-slate-600">Phòng</label>
           <select
             value={roomId}
             onChange={(e) => onRoomChange(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           >
             <option value="">Tất cả phòng</option>
             {rooms.map((r) => (
@@ -162,11 +162,11 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
 
         {/* Dropdown: Loại hình */}
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Loại hình</label>
+          <label className="text-[11px] font-bold text-slate-600">Loại hình</label>
           <select
             value={bookingType}
             onChange={(e) => onBookingTypeChange(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           >
             <option value="">Tất cả loại hình</option>
             <option value="hourly">Theo Giờ (Hourly)</option>
@@ -178,11 +178,11 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
 
         {/* Dropdown: Người tạo */}
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Người tạo</label>
+          <label className="text-[11px] font-bold text-slate-600">Người tạo</label>
           <select
             value={createdBy}
             onChange={(e) => onCreatedByChange(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           >
             <option value="">Tất cả người tạo</option>
             {staffList.map((s) => (
@@ -195,23 +195,23 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
 
         {/* Date: Ngày tạo - Từ ngày */}
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Tạo từ ngày</label>
+          <label className="text-[11px] font-bold text-slate-600">Tạo từ ngày</label>
           <input
             type="date"
             value={createdFrom}
             onChange={(e) => onCreatedFromChange(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           />
         </div>
 
         {/* Date: Ngày tạo - Đến ngày */}
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Tạo đến ngày</label>
+          <label className="text-[11px] font-bold text-slate-600">Tạo đến ngày</label>
           <input
             type="date"
             value={createdTo}
             onChange={(e) => onCreatedToChange(e.target.value)}
-            className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           />
         </div>
       </div>

@@ -284,21 +284,21 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/50 text-xs text-rose-200 flex items-start gap-2 shadow-lg">
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-900 flex items-start gap-2 shadow-xs">
           <span className="text-base shrink-0">⚠️</span>
-          <div className="leading-relaxed">{errorMessage}</div>
+          <div className="leading-relaxed font-medium">{errorMessage}</div>
         </div>
       )}
 
       {/* Room Selector */}
       <div className="space-y-1.5">
-        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wide">
-          Chọn Phòng <span className="text-rose-400">*</span>
+        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+          Chọn Phòng <span className="text-rose-500">*</span>
         </label>
         <select
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
-          className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3.5 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-emerald-500 shadow-inner"
+          className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
         >
           {rooms.map((r) => (
             <option key={r.id} value={r.id}>
@@ -367,7 +367,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
 
       {/* Closing Note / Agreement with Guest */}
       <div className="space-y-1.5">
-        <label className="block text-xs font-semibold text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+        <label className="block text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
           <span>💬</span>
           <span>Câu chốt với khách</span>
         </label>
@@ -376,13 +376,13 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           value={closingNote}
           onChange={(e) => setClosingNote(e.target.value)}
           placeholder="VD: Khách chốt nhận phòng lúc 14h, trả phòng 17h, thanh toán tiền mặt tại quầy..."
-          className="w-full rounded-xl bg-[#131b28] border border-amber-500/30 px-3.5 py-2 text-xs text-amber-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+          className="w-full rounded-xl bg-amber-50/50 border border-amber-300 px-3.5 py-2 text-xs text-amber-950 placeholder-slate-400 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 shadow-xs"
         />
       </div>
 
       {/* Receptionist Notes */}
       <div className="space-y-1.5">
-        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wide">
+        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
           Ghi chú nội bộ của lễ tân
         </label>
         <textarea
@@ -390,12 +390,12 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Ghi chú nội bộ..."
-          className="w-full rounded-xl bg-[#131b28] border border-slate-700/80 px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+          className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
         />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-slate-800">
+      <div className="flex items-center gap-2 pt-3 border-t border-slate-200">
         <Button
           type="submit"
           variant="primary"

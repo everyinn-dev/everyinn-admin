@@ -17,27 +17,27 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
     const isActive = sortBy === columnKey;
     if (!isActive) {
       return (
-        <span className="text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity">
+        <span className="text-slate-400 group-hover:text-slate-700 transition-opacity">
           ↕
         </span>
       );
     }
     return (
-      <span className="text-emerald-400 font-bold">
+      <span className="text-emerald-600 font-bold">
         {sortDir === "asc" ? "▲" : "▼"}
       </span>
     );
   };
 
   return (
-    <thead className="bg-[#0b101a] border-b border-slate-800 text-[11px] text-slate-400 uppercase tracking-wider font-semibold select-none">
+    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] text-slate-500 uppercase tracking-wider font-semibold select-none">
       <tr>
         {/* 1. Mã đặt */}
         <th className="py-3 px-3 text-left whitespace-nowrap">Mã đặt</th>
 
         {/* 2. Instagram */}
         <th className="py-3 px-3 text-left whitespace-nowrap">
-          <span className="inline-flex items-center gap-1 text-pink-400/90">
+          <span className="inline-flex items-center gap-1 text-pink-600">
             <span>📸</span>
             <span>Instagram</span>
           </span>
@@ -45,7 +45,7 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
 
         {/* 3. Facebook */}
         <th className="py-3 px-3 text-left whitespace-nowrap">
-          <span className="inline-flex items-center gap-1 text-blue-400/90">
+          <span className="inline-flex items-center gap-1 text-blue-600">
             <span className="font-bold">f</span>
             <span>Facebook</span>
           </span>
@@ -63,7 +63,7 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
         {/* 7. Thời gian check-in (Sortable) */}
         <th
           onClick={() => onSort("checkin_at")}
-          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group"
           title="Bấm để sắp xếp theo thời gian check-in"
         >
           <div className="inline-flex items-center gap-1.5">
@@ -75,7 +75,7 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
         {/* 8. Thời gian check-out (Sortable) */}
         <th
           onClick={() => onSort("checkout_at")}
-          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group"
           title="Bấm để sắp xếp theo thời gian check-out"
         >
           <div className="inline-flex items-center gap-1.5">
@@ -87,7 +87,7 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
         {/* 9. Trạng thái (Sortable) */}
         <th
           onClick={() => onSort("status")}
-          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group"
           title="Bấm để sắp xếp theo trạng thái"
         >
           <div className="inline-flex items-center gap-1.5">
@@ -99,7 +99,7 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
         {/* 10. Tổng tiền (Sortable) */}
         <th
           onClick={() => onSort("total_price")}
-          className="py-3 px-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          className="py-3 px-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group"
           title="Bấm để sắp xếp theo tổng tiền"
         >
           <div className="inline-flex items-center justify-end gap-1.5 w-full">
@@ -117,7 +117,7 @@ export const BookingsTableHeader: React.FC<BookingsTableHeaderProps> = ({
         {/* 12. Lần sửa (Mod) */}
         <th
           onClick={() => onSort("mod_no")}
-          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-800/50 hover:text-slate-200 transition-colors group"
+          className="py-3 px-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group"
           title="Bấm để sắp xếp theo số lần chỉnh sửa"
         >
           <div className="inline-flex items-center gap-1.5">

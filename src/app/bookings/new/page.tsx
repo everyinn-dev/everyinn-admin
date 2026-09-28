@@ -90,18 +90,18 @@ export default function NewBookingPage() {
     <AdminShell>
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
             Tạo Đặt Phòng Mới
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Nhập thông tin khách, tự động kiểm tra Mini CDP và chốt phòng theo giờ/đêm/ngày
           </p>
         </div>
 
         {loading ? (
-          <div className="h-96 rounded-2xl bg-[#0d131f] border border-slate-800 flex flex-col items-center justify-center gap-3">
+          <div className="h-96 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col items-center justify-center gap-3">
             <Spinner size="lg" />
-            <p className="text-sm text-slate-400 font-medium">Đang tải danh sách phòng...</p>
+            <p className="text-sm text-slate-500 font-medium">Đang tải danh sách phòng...</p>
           </div>
         ) : (
           <Suspense fallback={<Spinner size="lg" />}>

@@ -63,12 +63,12 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
   const theme = {
     success: {
       container:
-        "bg-[#0d1e17]/95 border-emerald-500/50 text-emerald-100 shadow-[0_12px_32px_rgba(16,185,129,0.25)]",
-      badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-      title: "text-emerald-300",
-      progressBar: "bg-emerald-400 shadow-[0_0_8px_#34d399]",
+        "bg-white/95 border-emerald-300 text-slate-800 shadow-[0_12px_32px_rgba(0,0,0,0.12)]",
+      badge: "bg-emerald-100 text-emerald-800 border-emerald-300",
+      title: "text-emerald-700",
+      progressBar: "bg-emerald-500",
       icon: (
-        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
@@ -77,12 +77,12 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
     },
     warning: {
       container:
-        "bg-[#241707]/95 border-amber-500/60 text-amber-100 shadow-[0_12px_32px_rgba(245,158,11,0.25)]",
-      badge: "bg-amber-500/20 text-amber-300 border-amber-500/40",
-      title: "text-amber-300",
-      progressBar: "bg-amber-400 shadow-[0_0_8px_#fbbf24]",
+        "bg-white/95 border-amber-300 text-slate-800 shadow-[0_12px_32px_rgba(0,0,0,0.12)]",
+      badge: "bg-amber-100 text-amber-800 border-amber-300",
+      title: "text-amber-700",
+      progressBar: "bg-amber-500",
       icon: (
-        <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
             <path
               strokeLinecap="round"
@@ -95,12 +95,12 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
     },
     error: {
       container:
-        "bg-[#260e13]/95 border-rose-500/60 text-rose-100 shadow-[0_12px_32px_rgba(244,63,94,0.3)]",
-      badge: "bg-rose-500/20 text-rose-300 border-rose-500/40",
-      title: "text-rose-300",
-      progressBar: "bg-rose-500 shadow-[0_0_8px_#f43f5e]",
+        "bg-white/95 border-rose-300 text-slate-800 shadow-[0_12px_32px_rgba(0,0,0,0.12)]",
+      badge: "bg-rose-100 text-rose-800 border-rose-300",
+      title: "text-rose-700",
+      progressBar: "bg-rose-500",
       icon: (
-        <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -109,12 +109,12 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
     },
     info: {
       container:
-        "bg-[#0e1628]/95 border-indigo-500/50 text-indigo-100 shadow-[0_12px_32px_rgba(99,102,241,0.25)]",
-      badge: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
-      title: "text-indigo-300",
-      progressBar: "bg-indigo-400 shadow-[0_0_8px_#818cf8]",
+        "bg-white/95 border-indigo-300 text-slate-800 shadow-[0_12px_32px_rgba(0,0,0,0.12)]",
+      badge: "bg-indigo-100 text-indigo-800 border-indigo-300",
+      title: "text-indigo-700",
+      progressBar: "bg-indigo-500",
       icon: (
-        <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
             <path
               strokeLinecap="round"
@@ -145,7 +145,7 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
             </h4>
           </div>
 
-          <p className="text-xs text-slate-200 leading-relaxed break-words font-medium">
+          <p className="text-xs text-slate-600 leading-relaxed break-words font-medium">
             {toast.message}
           </p>
 
@@ -157,7 +157,7 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
                 toast.action?.onClick();
                 onClose(toast.id);
               }}
-              className="mt-2.5 px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors border border-white/20 active:scale-95"
+              className="mt-2.5 px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-800 transition-colors border border-slate-300 active:scale-95"
             >
               {toast.action.label}
             </button>
@@ -168,7 +168,7 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
         <button
           type="button"
           onClick={() => onClose(toast.id)}
-          className="w-6 h-6 rounded-lg bg-black/20 hover:bg-black/40 text-slate-400 hover:text-white flex items-center justify-center text-xs transition-colors shrink-0"
+          className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center text-xs transition-colors shrink-0"
           aria-label="Đóng thông báo"
         >
           ✕
@@ -177,7 +177,7 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
 
       {/* Auto-dismiss progress bar */}
       {toast.duration > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-black/30">
+        <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-slate-100">
           <div
             className={`h-full transition-all duration-75 ${theme.progressBar}`}
             style={{ width: `${progress}%` }}

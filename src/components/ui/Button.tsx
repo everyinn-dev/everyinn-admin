@@ -20,7 +20,7 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseStyles =
-    "inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0b0f17] disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.98]";
+    "inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.98]";
 
   const sizeStyles = {
     sm: "px-3 py-1.5 text-xs gap-1.5",
@@ -30,15 +30,15 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variantStyles = {
     primary:
-      "bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 focus:ring-emerald-500 border border-emerald-400/30",
+      "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs hover:shadow-sm focus:ring-emerald-600 border border-emerald-700/30",
     secondary:
-      "bg-[#1c2638] hover:bg-[#25334a] text-slate-200 border border-slate-700/60 focus:ring-slate-500 shadow-sm",
+      "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300/80 focus:ring-slate-400 shadow-2xs",
     outline:
-      "bg-transparent hover:bg-white/5 text-slate-300 border border-slate-700 hover:border-slate-500 focus:ring-slate-400",
+      "bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 hover:border-slate-400 focus:ring-slate-400 shadow-2xs",
     danger:
-      "bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 focus:ring-rose-500",
+      "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 focus:ring-rose-500",
     ghost:
-      "bg-transparent hover:bg-white/10 text-slate-400 hover:text-slate-200 focus:ring-slate-500",
+      "bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900 focus:ring-slate-400",
   };
 
   return (

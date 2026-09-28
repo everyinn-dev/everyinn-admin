@@ -134,15 +134,15 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0f17] flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
         <Spinner size="lg" />
-        <p className="text-sm text-slate-400 font-medium">Đang tải Every Inn Admin...</p>
+        <p className="text-sm text-slate-600 font-medium">Đang tải Every Inn Admin...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0f17]">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <Topbar staff={staff} />
       <div className="flex-1 flex overflow-hidden">
         <Sidebar />
@@ -150,11 +150,11 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 h-14 bg-[#0d131f]/95 backdrop-blur-md border-t border-slate-800 z-40 flex items-center justify-around px-2">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 flex items-center justify-around px-2 shadow-xs">
         <Link
           href="/dashboard"
           className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
-            pathname === "/dashboard" ? "text-emerald-400 font-bold" : "text-slate-400 hover:text-slate-200"
+            pathname === "/dashboard" ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,7 +170,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
         <Link
           href="/bookings/new"
           className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
-            pathname === "/bookings/new" ? "text-emerald-400 font-bold" : "text-slate-400 hover:text-slate-200"
+            pathname === "/bookings/new" ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,7 +181,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
         <Link
           href="/bookings"
           className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
-            pathname === "/bookings" ? "text-emerald-400 font-bold" : "text-slate-400 hover:text-slate-200"
+            pathname === "/bookings" ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -92,19 +92,19 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
   });
 
   return (
-    <div className="flex flex-col gap-3.5 p-3.5 sm:p-4 rounded-2xl bg-[#111724]/95 border border-slate-800 shadow-lg backdrop-blur-sm">
+    <div className="flex flex-col gap-3.5 p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
       {/* Top Bar: View Mode Switcher + Month/Day Navigators */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Left: View Mode Tabs + Time Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Tab Switcher: Tháng | Ngày */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-inner">
+          <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-1 shadow-2xs">
             <button
               onClick={() => onViewModeChange("month")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === "month"
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/40"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-white text-emerald-800 shadow-2xs border border-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               <span>📅</span>
@@ -114,8 +114,8 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
               onClick={() => onViewModeChange("day")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === "day"
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/40"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-white text-emerald-800 shadow-2xs border border-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               <span>🕒</span>
@@ -126,25 +126,25 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
           {/* Controls for MONTH View */}
           {viewMode === "month" && (
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-0.5 shadow-inner">
+              <div className="flex items-center rounded-xl bg-slate-100 border border-slate-200 p-0.5 shadow-2xs">
                 <button
                   onClick={handlePrevMonth}
                   title="Tháng trước"
-                  className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                  className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
 
-                <div className="px-3 py-1.5 text-sm font-bold text-slate-100 font-mono tracking-wide flex items-center gap-1">
+                <div className="px-3 py-1.5 text-sm font-bold text-slate-900 font-mono tracking-wide flex items-center gap-1">
                   <span>{monthDisplayStr}</span>
                 </div>
 
                 <button
                   onClick={handleNextMonth}
                   title="Tháng sau"
-                  className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                  className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
@@ -162,10 +162,10 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
               {/* Nút Hôm nay: Cuộn tới ngày hôm nay trên timeline */}
               <button
                 onClick={onScrollToToday}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
                 title="Hệ thống tự động cuộn đến ngày hôm nay để xem booking nhanh"
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>📍 Hôm nay ({vnToday.slice(8, 10)}/{vnToday.slice(5, 7)})</span>
               </button>
             </div>
@@ -174,11 +174,11 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
           {/* Controls for DAY View */}
           {viewMode === "day" && (
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-0.5 shadow-inner">
+              <div className="flex items-center rounded-xl bg-slate-100 border border-slate-200 p-0.5 shadow-2xs">
                 <button
                   onClick={handlePrevDay}
                   title="Ngày trước"
-                  className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                  className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
@@ -189,13 +189,13 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
                   type="date"
                   value={currentDate}
                   onChange={(e) => e.target.value && onDateChange(e.target.value)}
-                  className="bg-transparent text-sm font-semibold text-slate-100 px-2.5 py-1.5 focus:outline-none cursor-pointer"
+                  className="bg-transparent text-sm font-bold text-slate-900 px-2.5 py-1.5 focus:outline-none cursor-pointer"
                 />
 
                 <button
                   onClick={handleNextDay}
                   title="Ngày sau"
-                  className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                  className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
@@ -209,7 +209,7 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
                 </Button>
               )}
 
-              <span className="hidden sm:inline-block text-xs font-semibold text-slate-300 capitalize pl-1">
+              <span className="hidden sm:inline-block text-xs font-semibold text-slate-700 capitalize pl-1">
                 {formattedDate}
               </span>
             </div>
@@ -218,13 +218,13 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
 
         {/* Right: Room Filter Pills & Refresh */}
         <div className="flex items-center justify-between sm:justify-end gap-2.5">
-          <div className="flex items-center bg-slate-900/90 rounded-xl p-1 border border-slate-800 text-xs shadow-inner">
+          <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200 text-xs shadow-2xs">
             <button
               onClick={() => onFilterChange("all")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
                 roomFilter === "all"
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-white text-emerald-800 border border-slate-200 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Tất cả {roomCounts ? `(${roomCounts.all})` : ""}
@@ -233,8 +233,8 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
               onClick={() => onFilterChange("haven")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
                 roomFilter === "haven"
-                  ? "bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-white text-sky-800 border border-slate-200 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Haven {roomCounts ? `(${roomCounts.haven})` : ""}
@@ -243,8 +243,8 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
               onClick={() => onFilterChange("signature")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
                 roomFilter === "signature"
-                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-white text-purple-800 border border-slate-200 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Signature {roomCounts ? `(${roomCounts.signature})` : ""}
@@ -256,7 +256,7 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
             <button
               onClick={onOpenRoomLockModal}
               title="Khóa phòng tạm thời / Bảo trì"
-              className="px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 hover:border-amber-500/50 text-amber-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+              className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
               <span>🔒</span>
               <span className="hidden sm:inline">Khóa phòng</span>
@@ -268,10 +268,10 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
             onClick={onRefresh}
             disabled={isLoading}
             title="Tải lại dữ liệu"
-            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-100 transition-colors disabled:opacity-50 cursor-pointer shadow-inner"
+            className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
           >
             <svg
-              className={`w-4 h-4 ${isLoading ? "animate-spin text-emerald-400" : ""}`}
+              className={`w-4 h-4 ${isLoading ? "animate-spin text-emerald-600" : ""}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

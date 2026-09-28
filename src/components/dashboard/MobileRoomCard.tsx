@@ -31,27 +31,27 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
   });
 
   return (
-    <div className="rounded-xl bg-[#0d131f] border border-slate-800/80 p-3.5 space-y-3 shadow-md">
+    <div className="rounded-xl bg-white border border-slate-200 p-3.5 space-y-3 shadow-2xs">
       {/* Room Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 font-mono font-bold text-slate-100 flex items-center justify-center text-xs">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 font-mono font-bold text-slate-800 flex items-center justify-center text-xs shadow-2xs">
             {room.roomNumber}
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-200">{room.name}</div>
-            <div className="text-[10px] text-slate-400">Tầng {room.floor}</div>
+            <div className="text-xs font-bold text-slate-900">{room.name}</div>
+            <div className="text-[10px] text-slate-500">Tầng {room.floor}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
           <Badge roomClass={room.roomClass} size="sm" />
           {isOccupiedNow ? (
-            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200">
               Đang có khách
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
               Phòng trống
             </span>
           )}
@@ -60,8 +60,8 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
 
       {/* Bookings on this date */}
       {room.bookings.length === 0 ? (
-        <div className="p-2.5 rounded-lg bg-slate-900/40 border border-slate-800/50 text-center">
-          <span className="text-[11px] text-slate-400">Không có lịch đặt hôm nay</span>
+        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
+          <span className="text-[11px] text-slate-500">Không có lịch đặt hôm nay</span>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -69,19 +69,19 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
             <div
               key={booking.id}
               onClick={() => onBookingClick(booking)}
-              className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 flex items-center justify-between text-xs cursor-pointer active:scale-[0.99] transition-transform"
+              className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/70 flex items-center justify-between text-xs cursor-pointer active:scale-[0.99] transition-transform"
             >
               <div className="flex items-center gap-2 truncate">
                 <Badge type={booking.bookingType} size="sm" />
-                <span className="font-semibold text-slate-200 truncate">
+                <span className="font-bold text-slate-900 truncate">
                   {booking.guestName}
                 </span>
               </div>
               <div className="text-right shrink-0">
-                <div className="font-mono text-slate-300 text-[11px]">
+                <div className="font-mono text-slate-700 text-[11px] font-medium">
                   {formatTime(booking.checkinAt)} - {formatTime(booking.checkoutAt)}
                 </div>
-                <div className="text-emerald-400 text-[10px] font-bold">
+                <div className="text-emerald-700 text-[10px] font-extrabold">
                   {Number(booking.totalPrice).toLocaleString("vi-VN")} đ
                 </div>
               </div>
@@ -94,7 +94,7 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
       <div className="pt-1 flex justify-end">
         <Link
           href={`/bookings/new?roomId=${room.id}&date=${currentDate}`}
-          className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
+          className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1"
         >
           <span>+ Đặt phòng này</span>
         </Link>

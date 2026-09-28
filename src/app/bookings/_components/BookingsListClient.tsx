@@ -261,10 +261,10 @@ export const BookingsListClient: React.FC = () => {
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
             Danh Sách Đặt Phòng
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
             Tra cứu và quản lý lịch sử đặt phòng với bộ lọc đa chiều & phân trang tự động
           </p>
         </div>
@@ -273,10 +273,10 @@ export const BookingsListClient: React.FC = () => {
           <Button
             size="md"
             variant="outline"
-            className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 shadow-sm font-bold"
+            className="border-emerald-600/30 text-emerald-800 hover:bg-emerald-50 shadow-xs font-bold"
             onClick={() => setIsRosterOpen(true)}
             leftIcon={
-              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             }
@@ -343,23 +343,23 @@ export const BookingsListClient: React.FC = () => {
       />
 
       {/* Table & Pagination Wrapper */}
-      <div className="rounded-2xl bg-[#0d131f] border border-slate-800 shadow-xl overflow-hidden">
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-24 flex flex-col items-center justify-center gap-3">
             <Spinner size="lg" />
-            <p className="text-sm text-slate-400 font-medium">Đang tải danh sách đặt phòng...</p>
+            <p className="text-sm text-slate-500 font-semibold">Đang tải danh sách đặt phòng...</p>
           </div>
         ) : bookings.length === 0 ? (
           <div className="py-24 text-center space-y-2">
             <div className="text-3xl">🔍</div>
-            <p className="text-sm font-semibold text-slate-300">Không tìm thấy lượt đặt phòng nào</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-sm font-bold text-slate-800">Không tìm thấy lượt đặt phòng nào</p>
+            <p className="text-xs text-slate-500 font-medium">
               Hãy thử thay đổi từ khóa tìm kiếm hoặc điều chỉnh lại các tiêu chí bộ lọc.
             </p>
             {(search || roomId || bookingType || createdBy || createdFrom || createdTo) && (
               <button
                 onClick={handleResetFilters}
-                className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-emerald-400 font-medium transition-colors"
+                className="mt-2 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs text-emerald-800 font-bold transition-colors cursor-pointer shadow-xs"
               >
                 Đặt lại tất cả bộ lọc
               </button>

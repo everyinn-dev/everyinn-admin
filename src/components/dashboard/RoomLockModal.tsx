@@ -205,26 +205,26 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-[#0d131f] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-[#121927]/60">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-base shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 text-base shadow-xs">
               🔒
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">
                 Khóa Phòng Tạm Thời / Bảo Trì
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 font-medium">
                 Chặn phòng ca đêm, sửa chữa thiết bị hoặc dọn phòng muộn
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center transition-colors text-sm"
+            className="w-7 h-7 rounded-lg bg-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-300 flex items-center justify-center transition-colors text-sm font-bold cursor-pointer"
           >
             ✕
           </button>
@@ -234,16 +234,16 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs">
           {/* Error Banner */}
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in shadow-xs">
               <span className="text-base leading-none">⚠️</span>
-              <span className="leading-relaxed font-medium">{errorMsg}</span>
+              <span className="leading-relaxed font-semibold">{errorMsg}</span>
             </div>
           )}
 
           {/* 1. Chọn phòng */}
           <div>
-            <label className="block font-semibold text-slate-300 mb-1.5 uppercase tracking-wider text-[10px]">
-              1. Chọn phòng cần khóa <span className="text-rose-400">*</span>
+            <label className="block font-bold text-slate-700 mb-1.5 uppercase tracking-wider text-[10px]">
+              1. Chọn phòng cần khóa <span className="text-rose-500">*</span>
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {rooms.map((room) => {
@@ -253,14 +253,14 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                     key={room.id}
                     type="button"
                     onClick={() => setSelectedRoomId(room.id)}
-                    className={`py-2 px-1 rounded-xl text-center border font-bold transition-all cursor-pointer ${
+                    className={`py-2 px-1 rounded-xl text-center border font-bold transition-all cursor-pointer shadow-xs ${
                       isSelected
-                        ? "bg-amber-500/20 border-amber-500/60 text-amber-200 shadow-md ring-1 ring-amber-500/40"
-                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                        ? "bg-amber-100 border-amber-500 text-amber-950 shadow-xs ring-2 ring-amber-500/20"
+                        : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="text-sm font-mono">{room.roomNumber}</div>
-                    <div className="text-[9px] font-normal uppercase opacity-75 truncate">
+                    <div className="text-sm font-mono font-extrabold">{room.roomNumber}</div>
+                    <div className="text-[9px] font-semibold uppercase opacity-80 truncate">
                       {room.roomClass}
                     </div>
                   </button>
@@ -271,8 +271,8 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
 
           {/* 2. Lý do khóa phòng */}
           <div>
-            <label className="block font-semibold text-slate-300 mb-1.5 uppercase tracking-wider text-[10px]">
-              2. Lý do khóa phòng <span className="text-rose-400">*</span>
+            <label className="block font-bold text-slate-700 mb-1.5 uppercase tracking-wider text-[10px]">
+              2. Lý do khóa phòng <span className="text-rose-500">*</span>
             </label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {REASON_PRESETS.map((preset) => {
@@ -287,10 +287,10 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                         setCustomReason("");
                       }
                     }}
-                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all cursor-pointer ${
+                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${
                       isSelected
-                        ? "bg-amber-500/20 border-amber-500/50 text-amber-200 font-semibold"
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                        ? "bg-amber-100 border-amber-500 text-amber-950 font-bold ring-1 ring-amber-500/20"
+                        : "bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
                     {preset.label}
@@ -305,7 +305,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                 placeholder="Nhập lý do khóa phòng chi tiết..."
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-colors shadow-xs"
                 autoFocus
               />
             )}
@@ -314,10 +314,10 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
           {/* 3. Thời gian khóa (Tách riêng ngày và giờ, bước 30 phút, disable giờ quá khứ) */}
           <div className="space-y-2.5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-              <label className="font-semibold text-slate-300 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <label className="font-bold text-slate-700 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
                 <span>⏱️</span>
                 <span>3. Khoảng thời gian khóa phòng</span>
-                <span className="text-rose-400">*</span>
+                <span className="text-rose-500">*</span>
               </label>
 
               {/* Quick Presets */}
@@ -325,7 +325,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSetUntilTomorrow9am}
-                  className="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-300 hover:bg-amber-500/25 transition-colors font-medium cursor-pointer"
+                  className="px-2 py-0.5 rounded-lg bg-amber-100 border border-amber-300 text-[10px] text-amber-900 hover:bg-amber-200 transition-colors font-bold cursor-pointer shadow-xs"
                   title="Khóa qua đêm đến 09:00 sáng mai"
                 >
                   🌙 Đến 09h mai
@@ -333,21 +333,21 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleAddHours(2)}
-                  className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition-colors cursor-pointer"
+                  className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[10px] text-slate-700 font-semibold transition-colors cursor-pointer shadow-xs"
                 >
                   +2h
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAddHours(4)}
-                  className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition-colors cursor-pointer"
+                  className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[10px] text-slate-700 font-semibold transition-colors cursor-pointer shadow-xs"
                 >
                   +4h
                 </button>
                 <button
                   type="button"
                   onClick={handleSetUntilEndOfDay}
-                  className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition-colors cursor-pointer"
+                  className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[10px] text-slate-700 font-semibold transition-colors cursor-pointer shadow-xs"
                 >
                   Hết hôm nay
                 </button>
@@ -356,17 +356,17 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Bắt đầu khóa (Từ) */}
-              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
                     <span>🔒</span> Bắt đầu khóa (Từ)
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">Bước 30 phút</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Bước 30 phút</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <span className="block text-[10px] text-slate-400 mb-1">Ngày khóa:</span>
+                    <span className="block text-[10px] text-slate-500 mb-1 font-medium">Ngày khóa:</span>
                     <input
                       type="date"
                       min={todayStr}
@@ -375,27 +375,25 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                         const val = e.target.value;
                         if (!val) return;
                         setFromDate(val);
-                        // If toDate is before new fromDate, align toDate
                         if (toDate < val) {
                           setToDate(val);
                         }
                       }}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#121927] border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-amber-500 font-medium"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 font-semibold shadow-xs"
                       required
                     />
                   </div>
 
                   <div>
-                    <span className="block text-[10px] text-slate-400 mb-1">Giờ khóa:</span>
+                    <span className="block text-[10px] text-slate-500 mb-1 font-medium">Giờ khóa:</span>
                     <select
                       value={fromTime}
                       onChange={(e) => {
                         const newFromTime = e.target.value;
                         setFromTime(newFromTime);
-                        // If same day and toTime <= newFromTime, advance toTime
                         if (toDate === fromDate && timeStrToMinutes(toTime) <= timeStrToMinutes(newFromTime)) {
                           const currentM = timeStrToMinutes(newFromTime);
-                          const nextM = currentM + 120; // +2 hours
+                          const nextM = currentM + 120;
                           if (nextM < 24 * 60) {
                             const h = Math.floor(nextM / 60);
                             const m = nextM % 60;
@@ -406,7 +404,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                           }
                         }
                       }}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#121927] border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-amber-500 font-mono font-medium"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 font-mono font-bold shadow-xs"
                       required
                     >
                       {TIME_SLOTS_30MIN.map((slot) => {
@@ -416,7 +414,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                             key={slot}
                             value={slot}
                             disabled={isPast}
-                            className={isPast ? "text-slate-600 bg-slate-950 font-normal" : "text-slate-100 bg-[#121927] font-semibold"}
+                            className={isPast ? "text-slate-400 bg-slate-100 font-normal" : "text-slate-900 bg-white font-semibold"}
                           >
                             {slot} {isPast ? "(Đã qua)" : ""}
                           </option>
@@ -428,17 +426,17 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
               </div>
 
               {/* Mở phòng (Đến) */}
-              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                  <span className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
                     <span>🔓</span> Mở phòng (Đến)
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">Bước 30 phút</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Bước 30 phút</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <span className="block text-[10px] text-slate-400 mb-1">Ngày mở:</span>
+                    <span className="block text-[10px] text-slate-500 mb-1 font-medium">Ngày mở:</span>
                     <input
                       type="date"
                       min={fromDate || todayStr}
@@ -448,17 +446,17 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                         if (!val) return;
                         setToDate(val);
                       }}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#121927] border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-amber-500 font-medium"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 font-semibold shadow-xs"
                       required
                     />
                   </div>
 
                   <div>
-                    <span className="block text-[10px] text-slate-400 mb-1">Giờ mở:</span>
+                    <span className="block text-[10px] text-slate-500 mb-1 font-medium">Giờ mở:</span>
                     <select
                       value={toTime}
                       onChange={(e) => setToTime(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#121927] border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-amber-500 font-mono font-medium"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 font-mono font-bold shadow-xs"
                       required
                     >
                       {TIME_SLOTS_30MIN.map((slot) => {
@@ -474,8 +472,8 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                             disabled={isSlotDisabled}
                             className={
                               isSlotDisabled
-                                ? "text-slate-600 bg-slate-950 font-normal"
-                                : "text-slate-100 bg-[#121927] font-semibold"
+                                ? "text-slate-400 bg-slate-100 font-normal"
+                                : "text-slate-900 bg-white font-semibold"
                             }
                           >
                             {slot} {isPast ? "(Đã qua)" : isBeforeOrEqualFrom ? "(Trước giờ khóa)" : ""}
@@ -490,13 +488,13 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
 
             {/* Duration & validation preview */}
             <div
-              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between transition-colors ${
+              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between transition-colors shadow-xs ${
                 isRangeValid
-                  ? "bg-amber-500/10 border-amber-500/30 text-amber-200"
-                  : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                  ? "bg-amber-50 border-amber-300 text-amber-950"
+                  : "bg-rose-50 border-rose-300 text-rose-900"
               }`}
             >
-              <div className="flex items-center gap-1.5 font-medium">
+              <div className="flex items-center gap-1.5 font-bold">
                 <span>{isRangeValid ? "⏳" : "⚠️"}</span>
                 <span>
                   {isRangeValid
@@ -505,20 +503,20 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                 </span>
               </div>
               {isRangeValid && (
-                <span className="font-mono font-semibold text-[11px] text-amber-300">
+                <span className="font-mono font-bold text-[11px] text-amber-900">
                   {fromDate === toDate ? `${fromTime} → ${toTime}` : `${fromDate} ${fromTime} → ${toDate} ${toTime}`}
                 </span>
               )}
             </div>
 
-            <p className="text-[10px] text-slate-400 italic">
+            <p className="text-[10px] text-slate-500 italic">
               💡 Lưu ý: Khóa phòng sẽ ghi đè lên giờ dọn phòng (không tạo thêm giờ dọn). Ngay sau khi mở khóa, khách có thể đặt phòng bình thường.
             </p>
           </div>
 
           {/* 4. Ghi chú thêm */}
           <div>
-            <label className="block font-semibold text-slate-300 mb-1 uppercase tracking-wider text-[10px]">
+            <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
               4. Ghi chú chi tiết (Tùy chọn)
             </label>
             <textarea
@@ -526,24 +524,24 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
               placeholder="Ví dụ: Thợ điện hẹn 14:00 qua thay tụ quạt, chìa khóa gửi lễ tân ca sáng..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors resize-none"
+              className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-colors resize-none shadow-xs"
             />
           </div>
 
           {/* Action buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800/80">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors font-medium"
+              className="px-4 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors font-semibold cursor-pointer shadow-xs"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? (
                 <>

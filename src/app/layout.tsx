@@ -20,8 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className={`${jakartaSans.variable} dark h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-[#0b0f17] text-slate-100 selection:bg-emerald-500 selection:text-white">
+    <html lang="vi" className={`${jakartaSans.variable} h-full antialiased`}>
+      <head>
+        <meta name="color-scheme" content="light" />
+      </head>
+      <body className="min-h-full flex flex-col bg-white text-slate-800 selection:bg-emerald-500 selection:text-white">
         <ToastProvider>
           {children}
           <ToastContainer />
