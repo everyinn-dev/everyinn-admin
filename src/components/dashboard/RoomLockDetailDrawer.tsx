@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { GanttBlockItem, GanttRoomData } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Spinner";
+import { Badge } from "@/components/ui/Badge";
 import { notifyDataChanged } from "@/lib/syncEvents";
 
 interface RoomLockDetailDrawerProps {
@@ -98,7 +99,7 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
-                {room ? `${room.name} (Phòng ${room.roomNumber})` : `Phòng ID: ${block.roomId}`}
+                {room ? `Phòng ${room.roomNumber} • Tầng ${room.floor}` : `Phòng ID: ${block.roomId}`}
               </p>
             </div>
           </div>
@@ -117,13 +118,11 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold">Phòng</span>
               <span className="text-base font-extrabold text-slate-900">
-                {room ? room.name : block.roomId}
+                {room ? `Phòng ${room.roomNumber}` : block.roomId}
               </span>
             </div>
             {room && (
-              <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 uppercase font-mono text-[10px] font-bold shadow-xs">
-                {room.roomClass}
-              </span>
+              <Badge roomClass={room.roomClass} size="sm" />
             )}
           </div>
 

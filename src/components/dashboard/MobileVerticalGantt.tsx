@@ -256,22 +256,17 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     className="border-r border-slate-200 p-2 flex flex-col justify-between bg-white"
                     style={{ width: `${ROOM_COL_WIDTH}px`, height: "70px" }}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 font-mono font-extrabold text-slate-800 flex items-center justify-center text-xs shadow-xs">
+                        <span className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 font-mono font-extrabold text-slate-900 flex items-center justify-center text-xs shadow-xs">
                           {room.roomNumber}
                         </span>
-                        <div className="leading-tight">
-                          <span className="text-[11px] font-bold text-slate-800 block truncate max-w-[55px]">
-                            {room.name}
-                          </span>
-                          <span className="text-[9px] text-slate-500 block">
-                            Tầng {room.floor}
-                          </span>
-                        </div>
+                        <span className="text-[11px] font-medium text-slate-500">
+                          Tầng {room.floor}
+                        </span>
                       </div>
 
-                      <Badge roomClass={room.roomClass} size="sm" className="text-[10px] px-1 py-0" />
+                      <Badge roomClass={room.roomClass} size="sm" className="text-[10px] px-1.5 py-0" />
                     </div>
 
                     <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">

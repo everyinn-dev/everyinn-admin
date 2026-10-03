@@ -34,18 +34,17 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
     <div className="rounded-xl bg-white border border-slate-200 p-3.5 space-y-3 shadow-2xs">
       {/* Room Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 font-mono font-bold text-slate-800 flex items-center justify-center text-xs shadow-2xs">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 font-mono font-extrabold text-slate-900 flex items-center justify-center text-xs shadow-2xs">
             {room.roomNumber}
           </div>
-          <div>
-            <div className="text-xs font-bold text-slate-900">{room.name}</div>
-            <div className="text-[10px] text-slate-500">Tầng {room.floor}</div>
-          </div>
+          <span className="text-xs font-medium text-slate-500">
+            Tầng {room.floor}
+          </span>
+          <Badge roomClass={room.roomClass} size="sm" />
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Badge roomClass={room.roomClass} size="sm" />
           {isOccupiedNow ? (
             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200">
               Đang có khách
