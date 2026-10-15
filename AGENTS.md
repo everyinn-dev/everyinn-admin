@@ -23,45 +23,35 @@ Tài liệu này là **Single Source of Truth** và **Hệ Nơ-ron Liên Kết (
 
 - **Framework**: Next.js 16 (App Router) + React 19 + TypeScript 5 + Tailwind CSS v4.
 - **Runtime & Deployment**: Cloudflare Workers qua `@opennextjs/cloudflare` + `wrangler`.
-- **Database**: Cloudflare D1 (SQLite at the Edge) — DB ID: `2518bd3e-5479-4b03-afb1-3ab28d7e3e7e`.
-- **Session Auth**: 1-Day Stateless JWT Cookie (`everyinn_admin_session`) ký bằng Web Crypto API (`crypto.subtle` HS256) — luồng chính 0 query D1/request; session UUID legacy vẫn fallback qua `staff_sessions`.
+  - Production Worker: `everyinn-admin` (branch `main`)
+  - UAT Worker: `everyinn-admin-dev` (branch `dev`)
+  - CD Deployment: Cloudflare Workers Builds (tự động build/deploy khi push/merge vào `dev` hoặc `main`).
+- **Database**: Cloudflare D1 (Staff & Audit only trong kiến trúc Core Service Bindings).
+  - Dev: `admin-db-dev` (`be3b4c8a-117f-401b-8e11-ed1c7786d459`), migrations: `db/admin-db`
+  - Prod: `admin-db-prod` (staff & audit only)
+- **Service Bindings**:
+  - `BOOKING_CORE`: `everyinn-booking-core-dev` (UAT) / `everyinn-booking-core` (Prod)
+  - `CDP_CORE`: `everyinn-cdp-core-dev` (UAT) / `everyinn-cdp-core` (Prod)
+- **Session Auth**: 1-Day Stateless JWT Cookie (`everyinn_admin_session`) ký bằng Web Crypto API (`crypto.subtle` HS256) qua `JWT_SECRET` (fail-closed nếu thiếu secret).
 
-### Danh mục lệnh di trú Database (Local & Remote D1):
+### Danh mục lệnh chuẩn hóa:
 ```bash
-# Khởi động môi trường phát triển
-npm run dev                    # Chạy dev server Next.js với local D1 context
-npx tsc --noEmit               # Kiểm tra lỗi type toàn dự án (BẮT BUỘC 0 ERROR)
+# Khởi động môi trường phát triển & kiểm tra
+npm run dev                    # Chạy dev server Next.js với local context
+npm run lint                   # Kiểm tra ESLint
+npm test                       # Chạy unit tests (JWT fail-closed & signing)
 npm run cf-typegen             # Đồng bộ Cloudflare binding types vào env.d.ts khi đổi wrangler bindings
 npm run preview                # Build OpenNext worker và chạy preview local theo runtime Cloudflare
-npm run deploy                 # Build OpenNext worker và deploy lên Cloudflare
 
-# Di trú D1 SQLite Local (Dành cho dev / test)
-npm run db:migrate:local       # 001: Core tables
-npm run db:seed:local          # 002: Seed master data
-npm run db:migrate:003:local   # 003: Refactor 6 rooms (Haven/Signature)
-npm run db:migrate:004:local   # 004: Hourly checkin slots
-npm run db:migrate:005:local   # 005: Import historical bookings
-npm run db:migrate:006:local   # 006: Social info & closing note
-npm run db:migrate:007:local   # 007: Room blocks note & indexes
-npm run db:migrate:008:local   # 008: Control fields (mod_no, updated_by)
-npm run db:migrate:009:local   # 009: Import October bookings
-npm run db:migrate:010:local   # 010: No-show & refund management
-npm run db:migrate:011:local   # 011: Promotions & categories
-npm run db:migrate:012:local   # 012: Deposit management & reminders
+# Di trú D1 Migrations (dùng wrangler d1 migrations apply)
+npm run db:migrate:local       # Di trú D1 SQLite Local
+npm run db:migrate:dev         # Di trú D1 Remote môi trường Dev (admin-db-dev)
+npm run db:migrate:prod        # Di trú D1 Remote môi trường Production
 
-# Di trú D1 SQLite Remote (Production Cloudflare D1)
-npm run db:migrate:remote      # 001: Core tables
-npm run db:seed:remote         # 002: Seed master data
-npm run db:migrate:003:remote  # 003: Refactor rooms & pricing
-npm run db:migrate:004:remote  # 004: Hourly checkin slots
-npm run db:migrate:005:remote  # 005: Import historical bookings
-npm run db:migrate:006:remote  # 006: Social info & closing note
-npm run db:migrate:007:remote  # 007: Room blocks note & indexes
-npm run db:migrate:008:remote  # 008: Control fields
-npm run db:migrate:009:remote  # 009: Import October bookings
-npm run db:migrate:010:remote  # 010: No-show & refund management
-npm run db:migrate:011:remote  # 011: Promotions & categories
-npm run db:migrate:012:remote  # 012: Deposit management & reminders
+# Cloudflare Workers Builds
+npm run cf:build               # Gate: lint && tsc && opennextjs-cloudflare build
+npm run cf:deploy              # Deploy Production Worker (chạy bởi Cloudflare Workers Builds trên branch main)
+npm run cf:deploy:dev          # Deploy UAT Worker (chạy bởi Cloudflare Workers Builds trên branch dev)
 ```
 
 ---
