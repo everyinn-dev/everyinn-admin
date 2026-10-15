@@ -5,7 +5,19 @@
  * one go, the BFF keeps the JSON shapes the UI already consumes and translates the Core contracts here.
  * Core timestamps are UTC ISO strings (same as legacy rows), so they pass through unchanged.
  */
-import type { BookingRulesConfig, GanttBlockItem, GanttBookingItem, GanttRoomData, PricingRule, Room, RoomClass } from "@/types";
+import type {
+  Booking,
+  BookingRulesConfig,
+  BookingStatus,
+  BookingType,
+  DepositStatus,
+  GanttBlockItem,
+  GanttBookingItem,
+  GanttRoomData,
+  PricingRule,
+  Room,
+  RoomClass,
+} from "@/types";
 
 // ───────────────────────── Booking Core DTOs (subset the BFF reads) ─────────────────────────
 
@@ -303,3 +315,174 @@ export function daysInMonthOf(month: string): number {
   return new Date(y, m, 0).getDate();
 }
 
+// ───────────────────────── Booking list/detail (A-W1a) ─────────────────────────
+
+/** `{ id, name }` reference the Core returns for any staff-attributed action. */
+export interface CoreStaffRef {
+  id: number;
+  name: string | null;
+}
+
+/**
+ * Full booking DTO from Booking Core (`bookingDto`). Staff names are denormalised inside
+ * `booking-db`, so the BFF never has to join Admin's `staff` table to render a list.
+ */
+export interface CoreBookingDto {
+  id: string;
+  propertyId: string;
+  roomId: string;
+  roomName: string | null;
+  roomNumber: string | null;
+  roomClass: RoomClass;
+  customerId: string | null;
+  guest: {
+    phone: string | null;
+    phoneDisplay: string;
+    contactRaw: string;
+    name: string;
+    instagram: string | null;
+    facebook: string | null;
+  };
+  numGuests: number;
+  bookingType: BookingType;
+  ratePlanCode: string;
+  checkinAt: string;
+  checkoutAt: string;
+  occupiedUntil: string;
+  lateCheckoutHours: number;
+  status: BookingStatus;
+  source: string;
+  note: string | null;
+  closingNote: string | null;
+  pricing: {
+    basePrice: number;
+    extraFee: number;
+    promotionDiscount: number;
+    loyaltyDiscount: number;
+    discountAmount: number;
+    totalPrice: number;
+    originalPrice: number | null;
+    isFinal: boolean;
+  };
+  promotion: { id: string; code: string | null; name: string; version: number; discountAmount: number } | null;
+  loyalty: {
+    syncStatus: "not_applicable" | "pending" | "synced";
+    step: number | null;
+    tier: string | null;
+    syncedAt: string | null;
+  };
+  financial: {
+    isDeposit: boolean;
+    depositAmount: number;
+    paidAmount: number;
+    refundAmount: number;
+    remainingAmount: number;
+    depositStatus: DepositStatus;
+    depositDueDate: string | null;
+    depositPaidAt: string | null;
+    depositReminderSentAt: string | null;
+    depositReminderSentBy: CoreStaffRef | null;
+    remainingPaidAt: string | null;
+    remainingPaidBy: CoreStaffRef | null;
+  };
+  lifecycle: {
+    confirmedAt: string | null;
+    cancelledAt: string | null;
+    cancelledBy: CoreStaffRef | null;
+    cancelReason: string | null;
+    noShowAt: string | null;
+    noShowBy: CoreStaffRef | null;
+    noShowReason: string | null;
+  };
+  control: {
+    version: number;
+    createdAt: string;
+    createdBy: CoreStaffRef | null;
+    updatedAt: string;
+    updatedBy: CoreStaffRef | null;
+  };
+}
+
+export interface CoreBookingListResponse {
+  bookings: CoreBookingDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+/** Legacy rows were raw snake_case D1 columns; `undefined` (not `null`) is what the UI expects for "absent". */
+const u = <T>(v: T | null | undefined): T | undefined => (v === null || v === undefined ? undefined : v);
+
+/**
+ * Flatten a Core booking DTO back into the legacy snake_case row the bookings table renders.
+ *
+ * Intentional semantic notes (approved, EI-PHASE1-STATUS A-W1a):
+ * - `mod_no` maps to `control.version`. Core bumps version on every write whereas legacy `mod_no`
+ *   counted modifications, so the "edited by" badge can appear slightly sooner. Cosmetic only.
+ * - `member_phone` uses `guest.phoneDisplay` (national format) to match legacy rendering; bookings
+ *   with no parsable phone fall back to the raw contact string.
+ */
+export function toLegacyBookingRow(d: CoreBookingDto): Booking {
+  const { guest: g, pricing: p, financial: f, lifecycle: l, control: c } = d;
+  return {
+    id: d.id,
+    property_id: d.propertyId,
+    room_id: d.roomId,
+    room_name: u(d.roomName),
+    room_class: d.roomClass,
+    member_phone: g.phoneDisplay || g.contactRaw,
+    member_name: g.name,
+    num_guests: d.numGuests,
+    booking_type: d.bookingType,
+    checkin_at: d.checkinAt,
+    checkout_at: d.checkoutAt,
+    late_checkout_hours: d.lateCheckoutHours,
+    instagram: u(g.instagram),
+    facebook: u(g.facebook),
+    closing_note: u(d.closingNote),
+    note: u(d.note),
+    status: d.status,
+
+    base_price: p.basePrice,
+    extra_fee: p.extraFee,
+    discount_amount: p.discountAmount,
+    total_price: p.totalPrice,
+    original_price: u(p.originalPrice),
+
+    promotion_id: u(d.promotion?.id),
+    promotion_code: u(d.promotion?.code),
+
+    cancelled_at: u(l.cancelledAt),
+    cancel_reason: u(l.cancelReason),
+    cancelled_by: u(l.cancelledBy?.id),
+    no_show_at: u(l.noShowAt),
+    no_show_by: u(l.noShowBy?.id),
+    no_show_by_staff_name: l.noShowBy?.name ?? null,
+    no_show_reason: u(l.noShowReason),
+    refund_amount: f.refundAmount,
+
+    is_deposit: f.isDeposit ? 1 : 0,
+    deposit_amount: f.depositAmount,
+    paid_amount: f.paidAmount,
+    remaining_amount: f.remainingAmount,
+    deposit_due_date: u(f.depositDueDate),
+    deposit_status: f.depositStatus,
+    deposit_paid_at: u(f.depositPaidAt),
+    deposit_reminder_sent_at: u(f.depositReminderSentAt),
+    deposit_reminder_sent_by: u(f.depositReminderSentBy?.id),
+    deposit_reminder_sent_by_staff_name: f.depositReminderSentBy?.name ?? null,
+    remaining_paid_at: u(f.remainingPaidAt),
+    remaining_paid_by: u(f.remainingPaidBy?.id),
+    remaining_paid_by_staff_name: f.remainingPaidBy?.name ?? null,
+
+    // ControlFields
+    created_at: c.createdAt,
+    created_by_staff_id: c.createdBy?.id ?? null,
+    created_by_staff_name: c.createdBy?.name ?? null,
+    updated_at: c.updatedAt,
+    updated_by_staff_id: c.updatedBy?.id ?? null,
+    updated_by_staff_name: c.updatedBy?.name ?? null,
+    mod_no: c.version,
+  };
+}
