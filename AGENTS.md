@@ -1,6 +1,6 @@
 # Every Inn Admin Panel — System Context & Agent Knowledge Base (Neural Architecture Map)
 
-> 🚦 **READ FIRST — cross-agent source of truth**: [`../EI_PHASE1_STATUS.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/EI_PHASE1_STATUS.md)
+> 🚦 **READ FIRST — cross-agent source of truth**: [`../everyinn-platform-docs/EI_PHASE1_STATUS.md`](../everyinn-platform-docs/EI_PHASE1_STATUS.md) (sibling repo `everyinn-platform-docs`)
 > Deploy state, Cloudflare resource IDs, the Admin route migration map (CORE vs LEGACY SQL), the task board and open owner decisions live **only** there.
 > Do not duplicate that information here. Update it before ending any session that changes anything.
 
