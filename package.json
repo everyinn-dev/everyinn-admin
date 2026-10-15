@@ -33,7 +33,10 @@
     "db:migrate:009:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/009_import_october_bookings.sql",
     "db:migrate:010:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/010_add_no_show_and_refund.sql",
     "db:migrate:011:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/011_promotions_and_categories.sql",
-    "db:migrate:012:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/012_add_deposit_management.sql"
+    "db:migrate:012:remote": "wrangler d1 execute everyinn-admin --remote -y --file=./db/migrations/012_add_deposit_management.sql",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:deploy": "wrangler deploy --env=\"\"",
+    "cf:deploy:dev": "wrangler deploy --env dev"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.14.0",
