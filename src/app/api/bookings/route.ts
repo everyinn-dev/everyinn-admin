@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
-import { bookingCore, coreErrorResponse } from "@/lib/cores";
-import { toLegacyBookingRow, type CoreBookingListResponse } from "@/lib/coreMappers";
-import { generateBookingId } from "@/lib/bookingId";
-import { calculatePrice } from "@/lib/pricing";
-import { upsertMemberOnBooking, lookupMember } from "@/lib/cdp";
-import { evaluatePromotion } from "@/lib/promotions";
-import { logEvent } from "@/lib/audit";
-import { BookingType } from "@/types";
-import { getCachedRooms, getCachedPricingRules } from "@/lib/masterData";
-import { invalidatePrefix } from "@/lib/cache";
-import { checkBookingOverlapWithBuffer } from "@/lib/validators";
+import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
+import {
+  toLegacyBookingRow,
+  type CoreBookingEnvelope,
+  type CoreBookingListResponse,
+  type CoreQuoteResponse,
+} from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,6 +17,12 @@ const NO_CACHE_HEADERS = {
   "Pragma": "no-cache",
   "Expires": "0",
 };
+
+/** Core accepts 8–128 chars of [A-Za-z0-9._:-]. */
+const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+
+/** Legacy form has no payment-method selector yet (A-W6); every manual collection is recorded as cash. */
+const DEFAULT_PAYMENT_METHOD = "cash";
 
 export async function GET(req: NextRequest) {
   try {
@@ -75,6 +77,19 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
+
+/**
+ * Create a manual booking via Booking Core (A-W1b).
+ *
+ * Booking Core is the single authority for room availability + 1h turnover buffer, pricing, promotion
+ * eligibility/redemption, financial ledger and loyalty accrual (outbox → CDP). The BFF only validates the
+ * request shape, translates legacy field names to the Core contract, and maps the result back to the UI shape.
+ *
+ * Legacy semantics preserved:
+ *  - A non-deposit booking is collected in full at creation → recorded as a `payment` for the quoted total.
+ *  - A deposit booking records `deposit` (+ due date); the remainder is settled later (A-W2).
+ */
 export async function POST(req: NextRequest) {
   try {
     const db = await getDb();
@@ -83,351 +98,127 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await req.json()) as any;
-    const {
-      roomId,
-      phone,
-      name,
-      instagram = "",
-      facebook = "",
-      closingNote = "",
-      closing_note = "",
-      numGuests = 2,
-      bookingType,
-      checkinAt,
-      checkoutAt,
-      lateCheckoutHours = 0,
-      customPrice = 0,
-      discountAmount = 0,
-      discount_amount = 0,
-      promotionId = "",
-      promotion_id = "",
-      promotionCode = "",
-      promotion_code = "",
-      note = "",
-      status = "confirmed",
-      isDeposit = false,
-      is_deposit = false,
-      depositAmount = 0,
-      deposit_amount = 0,
-      depositDueDate = "",
-      deposit_due_date = "",
-    } = body;
+    const body = (await req.json()) as Record<string, unknown>;
+    const roomId = String(body.roomId ?? "").trim();
+    const phone = String(body.phone ?? "").trim();
+    const name = String(body.name ?? "").trim();
+    const bookingType = String(body.bookingType ?? "").trim();
+    const instagram = String(body.instagram ?? "").trim();
+    const facebook = String(body.facebook ?? "").trim();
 
-    // Basic validation
-    if (!roomId || !phone || !name || !bookingType || !checkinAt || !checkoutAt) {
-      return NextResponse.json(
-        { error: "Vui lòng điền đầy đủ các thông tin bắt buộc." },
-        { status: 400 }
-      );
+    if (!roomId || !phone || !name || !bookingType || !body.checkinAt || !body.checkoutAt) {
+      return bad("Vui lòng điền đầy đủ các thông tin bắt buộc.");
+    }
+    if (!instagram && !facebook) {
+      return bad("Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2).");
     }
 
-    const cleanPhone = phone.trim();
-    const cleanName = name.trim();
-    const cleanInstagram = (instagram || "").trim();
-    const cleanFacebook = (facebook || "").trim();
-    const cleanClosingNote = (closingNote || closing_note || "").trim();
-
-    // Mandatory: At least 1 of Instagram or Facebook
-    if (!cleanInstagram && !cleanFacebook) {
-      return NextResponse.json(
-        { error: "Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2)." },
-        { status: 400 }
-      );
+    const checkin = new Date(body.checkinAt as string);
+    const checkout = new Date(body.checkoutAt as string);
+    if (Number.isNaN(checkin.getTime()) || Number.isNaN(checkout.getTime())) {
+      return bad("Thời gian check-in hoặc check-out không hợp lệ.");
+    }
+    if (checkout <= checkin) {
+      return bad("Thời gian check-out phải sau thời gian check-in.");
     }
 
-    // Custom booking type price validation
+    let customPrice: number | undefined;
     if (bookingType === "custom") {
-      const priceNum = Number(customPrice);
-      if (isNaN(priceNum) || priceNum < 0) {
-        return NextResponse.json(
-          { error: "Vui lòng nhập số tiền hợp lệ cho đơn đặt phòng tuỳ chỉnh." },
-          { status: 400 }
-        );
-      }
+      const n = Number(body.customPrice);
+      if (!Number.isFinite(n) || n < 0) return bad("Vui lòng nhập số tiền hợp lệ cho đơn đặt phòng tuỳ chỉnh.");
+      customPrice = Math.round(n);
     }
 
-    const checkinDate = new Date(checkinAt);
-    const checkoutDate = new Date(checkoutAt);
+    const promotionId = String(body.promotionId ?? body.promotion_id ?? "").trim() || undefined;
+    const promotionCode = String(body.promotionCode ?? body.promotion_code ?? "").trim().toUpperCase() || undefined;
+    const closingNote = String(body.closingNote ?? body.closing_note ?? "").trim() || undefined;
+    const note = String(body.note ?? "").trim() || undefined;
+    const status = body.status === "pending" ? "pending" : "confirmed";
+    const lateCheckoutHours = Math.max(0, Math.round(Number(body.lateCheckoutHours) || 0));
+    const numGuests = Math.max(1, Math.round(Number(body.numGuests) || 2));
 
-    if (isNaN(checkinDate.getTime()) || isNaN(checkoutDate.getTime())) {
-      return NextResponse.json(
-        { error: "Thời gian check-in hoặc check-out không hợp lệ." },
-        { status: 400 }
-      );
+    const stay = {
+      roomId,
+      bookingType,
+      checkinAt: checkin.toISOString(),
+      checkoutAt: checkout.toISOString(),
+      lateCheckoutHours,
+      numGuests,
+      customPrice,
+    };
+
+    const isDeposit = Boolean(body.isDeposit ?? body.is_deposit);
+    const depositAmount = Math.round(Number(body.depositAmount ?? body.deposit_amount) || 0);
+    const depositDueDate = String(body.depositDueDate ?? body.deposit_due_date ?? "").trim() || undefined;
+    if (isDeposit && depositAmount <= 0) {
+      return bad("Vui lòng nhập số tiền cọc hợp lệ.");
     }
 
-    if (checkoutDate <= checkinDate) {
-      return NextResponse.json(
-        { error: "Thời gian check-out phải sau thời gian check-in." },
-        { status: 400 }
-      );
+    // One user intent == one key. A client that retries (double submit, flaky network) sends the same
+    // header and Core replays the original result instead of creating a second booking.
+    const headerKey = req.headers.get("idempotency-key")?.trim();
+    const idempotencyKey = headerKey && IDEMPOTENCY_KEY_RE.test(headerKey) ? headerKey : newIdempotencyKey("booking-create");
+
+    // Non-deposit bookings are paid in full → we need Core's authoritative total (promotion applied).
+    let payment: { amount: number; method: string } | undefined;
+    if (!isDeposit) {
+      const quote = await bookingCore.post<CoreQuoteResponse>("/internal/v1/quotes", {
+        staff,
+        body: { ...stay, phone, promotionId, promotionCode },
+      });
+      const total = quote.data!.quote.totalBeforeLoyalty;
+      if (total > 0) payment = { amount: total, method: DEFAULT_PAYMENT_METHOD };
     }
 
-    // 1. Fetch Room details from cached master data
-    const rooms = await getCachedRooms(db);
-    const room = rooms.find((r) => r.id === roomId && r.is_active === 1);
-
-    if (!room) {
-      return NextResponse.json({ error: "Phòng không tồn tại hoặc đã ngừng hoạt động." }, { status: 404 });
-    }
-
-    // 2. Overlap & 1h turnover cleaning buffer collision check
-    const checkinIso = checkinDate.toISOString();
-    const checkoutIso = checkoutDate.toISOString();
-
-    const overlapResult = await checkBookingOverlapWithBuffer(
-      db,
-      {
-        roomId,
-        checkinAt: checkinIso,
-        checkoutAt: checkoutIso,
-      },
-      room.name
-    );
-
-    if (overlapResult.hasOverlap) {
-      return NextResponse.json(
-        { error: overlapResult.errorMessage || "Khung giờ phòng đã bị trùng lặp hoặc chưa đủ 1 giờ dọn phòng." },
-        { status: 409 }
-      );
-    }
-
-    // 3. Fetch Pricing Rules from cached master data
-    const pricingRules = await getCachedPricingRules(db);
-
-    // 4. Calculate locked price snapshot & validate promotion
-    const basePricing = calculatePrice({
-      bookingType: bookingType as BookingType,
-      roomClass: room.room_class,
-      checkinAt: checkinDate,
-      checkoutAt: checkoutDate,
-      lateCheckoutHours: Number(lateCheckoutHours) || 0,
-      pricingRules,
-      customPrice: Number(customPrice) || 0,
-      discountAmount: 0,
-    });
-
-    let appliedDiscountAmount = Number(discountAmount || discount_amount) || 0;
-    let appliedPromoId: string | null = null;
-    let appliedPromoCode: string | null = null;
-
-    const requestedPromo = (promotionId || promotion_id || promotionCode || promotion_code || "").trim();
-    if (requestedPromo) {
-      const promoRow = await db
-        .prepare(
-          `SELECT p.*, c.name as category_name
-           FROM promotions p
-           LEFT JOIN promotion_categories c ON p.category_id = c.id
-           WHERE p.id = ? OR p.code = ?
-           LIMIT 1`
-        )
-        .bind(requestedPromo, requestedPromo.toUpperCase())
-        .first<any>();
-
-      if (promoRow) {
-        const member = await lookupMember(db, cleanPhone);
-        const parsedPromo = {
-          ...promoRow,
-          applicable_room_classes:
-            typeof promoRow.applicable_room_classes === "string"
-              ? JSON.parse(promoRow.applicable_room_classes)
-              : promoRow.applicable_room_classes || [],
-          applicable_booking_types:
-            typeof promoRow.applicable_booking_types === "string"
-              ? JSON.parse(promoRow.applicable_booking_types)
-              : promoRow.applicable_booking_types || [],
-          applicable_loyalty_tiers:
-            typeof promoRow.applicable_loyalty_tiers === "string"
-              ? JSON.parse(promoRow.applicable_loyalty_tiers)
-              : promoRow.applicable_loyalty_tiers || [],
-          applicable_days_of_week:
-            typeof promoRow.applicable_days_of_week === "string"
-              ? JSON.parse(promoRow.applicable_days_of_week)
-              : promoRow.applicable_days_of_week || [0, 1, 2, 3, 4, 5, 6],
-        };
-
-        const promoEval = evaluatePromotion(parsedPromo, {
-          roomClass: room.room_class,
-          bookingType: bookingType as BookingType,
-          checkinAt: checkinDate,
-          rawSubtotal: basePricing.basePrice + basePricing.totalExtraFee,
-          memberTier: member?.loyalty_tier || "new",
-        });
-
-        if (promoEval.eligible) {
-          appliedDiscountAmount = promoEval.discountAmount;
-          appliedPromoId = parsedPromo.id;
-          appliedPromoCode = parsedPromo.code || null;
-
-          // Increment used_count for promotion
-          await db
-            .prepare("UPDATE promotions SET used_count = used_count + 1 WHERE id = ?")
-            .bind(parsedPromo.id)
-            .run();
-        }
-      }
-    }
-
-    const pricing = calculatePrice({
-      bookingType: bookingType as BookingType,
-      roomClass: room.room_class,
-      checkinAt: checkinDate,
-      checkoutAt: checkoutDate,
-      lateCheckoutHours: Number(lateCheckoutHours) || 0,
-      pricingRules,
-      customPrice: Number(customPrice) || 0,
-      discountAmount: appliedDiscountAmount,
-    });
-
-    const bookingId = generateBookingId();
-    const nowIso = new Date().toISOString();
-
-    const isDepositVal = Boolean(isDeposit || is_deposit) ? 1 : 0;
-    let depositAmt = 0;
-    let paidAmt = pricing.totalPrice;
-    let remainingAmt = 0;
-    let depositStat = "none";
-    let depositDue: string | null = null;
-    let depositPaidDate: string | null = null;
-
-    if (isDepositVal === 1) {
-      const rawDeposit = Math.round(Number(depositAmount || deposit_amount) || 0);
-      depositAmt = Math.max(0, Math.min(rawDeposit, pricing.totalPrice));
-      paidAmt = depositAmt;
-      remainingAmt = Math.max(0, pricing.totalPrice - paidAmt);
-      depositStat = remainingAmt === 0 ? "fully_paid" : "deposit_paid";
-      depositDue = (depositDueDate || deposit_due_date || "").trim() || checkinIso.slice(0, 10);
-      depositPaidDate = nowIso;
-    }
-
-    // 5. Insert Booking with Control Fields, Promotion & Deposit (mod_no=0, created_by, updated_by)
-    await db
-      .prepare(
-        `INSERT INTO bookings (
-          id, property_id, room_id, member_phone, member_name, instagram, facebook, num_guests,
-          booking_type, checkin_at, checkout_at, late_checkout_hours, closing_note, note,
-          created_by_staff_id, updated_by_staff_id, mod_no, status, base_price, extra_fee, discount_amount, total_price,
-          promotion_id, promotion_code, is_deposit, deposit_amount, paid_amount, remaining_amount,
-          deposit_due_date, deposit_status, deposit_paid_at, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?
-        )`
-      )
-      .bind(
-        bookingId,
-        room.property_id,
-        room.id,
-        cleanPhone,
-        cleanName,
-        cleanInstagram || null,
-        cleanFacebook || null,
-        Number(numGuests) || 2,
-        bookingType,
-        checkinIso,
-        checkoutIso,
-        Number(lateCheckoutHours) || 0,
-        cleanClosingNote || null,
+    const res = await bookingCore.post<CoreBookingEnvelope>("/internal/v1/bookings", {
+      staff,
+      idempotencyKey,
+      body: {
+        ...stay,
+        guest: { name, phone, instagram: instagram || undefined, facebook: facebook || undefined },
         note,
-        staff.id,
-        staff.id,
-        0,
+        closingNote,
         status,
-        pricing.basePrice,
-        pricing.totalExtraFee,
-        pricing.discountAmount,
-        pricing.totalPrice,
-        appliedPromoId,
-        appliedPromoCode,
-        isDepositVal,
-        depositAmt,
-        paidAmt,
-        remainingAmt,
-        depositDue,
-        depositStat,
-        depositPaidDate,
-        nowIso,
-        nowIso
-      )
-      .run();
-
-    // 6. CDP: Upsert member and recalculate loyalty tier (updates instagram/facebook by phone)
-    // For deposit bookings, only credit actual cash received (paidAmt) to total_spent; remainder is credited when completed
-    const cdpResult = await upsertMemberOnBooking(db, {
-      phone: cleanPhone,
-      name: cleanName,
-      instagram: cleanInstagram,
-      facebook: cleanFacebook,
-      totalPrice: isDepositVal === 1 ? paidAmt : pricing.totalPrice,
-      bookingType: bookingType as BookingType,
-      roomClass: room.room_class,
-      staffId: staff.id,
+        promotionId,
+        promotionCode,
+        deposit: isDeposit ? { amount: depositAmount, method: DEFAULT_PAYMENT_METHOD, dueDate: depositDueDate } : undefined,
+        payment,
+      },
     });
 
-    // 7. Audit Log
-    await logEvent(
-      db,
-      "BOOKING_CREATED",
-      "booking",
-      bookingId,
-      {
-        bookingId,
-        roomId: room.id,
-        roomName: room.name,
-        phone: cleanPhone,
-        name: cleanName,
-        instagram: cleanInstagram,
-        facebook: cleanFacebook,
-        totalPrice: pricing.totalPrice,
-        bookingType,
-        isDeposit: isDepositVal,
-        depositAmount: depositAmt,
-        paidAmount: paidAmt,
-        remainingAmount: remainingAmt,
-        depositDueDate: depositDue,
-        depositStatus: depositStat,
-      },
-      staff.id
-    );
-
-    // Invalidate dashboard gantt cache
-    invalidatePrefix("dashboard:gantt:");
-
+    const row = toLegacyBookingRow(res.data!.booking);
+    const loyalty = res.data!.booking.loyalty;
     return NextResponse.json({
       success: true,
+      replayed: res.data!.replayed ?? false,
       booking: {
-        id: bookingId,
-        roomId: room.id,
-        roomName: room.name,
-        roomClass: room.room_class,
-        phone: cleanPhone,
-        name: cleanName,
-        instagram: cleanInstagram,
-        facebook: cleanFacebook,
-        closingNote: cleanClosingNote,
-        bookingType,
-        checkinAt: checkinIso,
-        checkoutAt: checkoutIso,
-        totalPrice: pricing.totalPrice,
-        status,
-        isDeposit: isDepositVal,
-        depositAmount: depositAmt,
-        paidAmount: paidAmt,
-        remainingAmount: remainingAmt,
-        depositDueDate: depositDue,
-        depositStatus: depositStat,
+        id: row.id,
+        roomId: row.room_id,
+        roomName: row.room_name,
+        roomClass: row.room_class,
+        phone: row.member_phone,
+        name: row.member_name,
+        instagram: row.instagram ?? "",
+        facebook: row.facebook ?? "",
+        closingNote: row.closing_note ?? "",
+        bookingType: row.booking_type,
+        checkinAt: row.checkin_at,
+        checkoutAt: row.checkout_at,
+        totalPrice: row.total_price,
+        status: row.status,
+        isDeposit: row.is_deposit,
+        depositAmount: row.deposit_amount,
+        paidAmount: row.paid_amount,
+        remainingAmount: row.remaining_amount,
+        depositDueDate: row.deposit_due_date,
+        depositStatus: row.deposit_status,
+        version: row.mod_no,
       },
-      cdp: cdpResult,
+      // CDP accrual is asynchronous now (outbox → CDP Core); the UI can badge this in A-W8.
+      loyalty: { syncStatus: loyalty.syncStatus, tier: loyalty.tier },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("POST booking error:", error);
-    return NextResponse.json(
-      { error: error?.message || "Đã xảy ra lỗi khi tạo đặt phòng." },
-      { status: 500 }
-    );
+    return coreErrorResponse(error);
   }
 }

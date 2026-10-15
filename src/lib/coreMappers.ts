@@ -436,6 +436,24 @@ export interface CoreBookingListResponse {
   totalPages: number;
 }
 
+/** `POST /internal/v1/bookings` (and lifecycle commands) response. `replayed` = idempotent replay of an earlier call. */
+export interface CoreBookingEnvelope {
+  booking: CoreBookingDto;
+  replayed?: boolean;
+}
+
+/** `POST /internal/v1/quotes` — only the fields the BFF consumes. */
+export interface CoreQuoteResponse {
+  quote: {
+    subtotal: number;
+    /** Authoritative total (promotion applied) the guest owes before any loyalty reward. */
+    totalBeforeLoyalty: number;
+    estimatedTotal: number;
+    promotion: { id: string | null; code: string | null; eligible: boolean; reason: string | null; discount: number } | null;
+  };
+  availability: { available: boolean; conflicts: Array<{ conflictType: string; message: string }> };
+}
+
 /** Legacy rows were raw snake_case D1 columns; `undefined` (not `null`) is what the UI expects for "absent". */
 const u = <T>(v: T | null | undefined): T | undefined => (v === null || v === undefined ? undefined : v);
 
