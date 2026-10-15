@@ -1,196 +1,287 @@
-# Every Inn Admin Panel — System Context & Agent Knowledge
+# Every Inn Admin Panel — System Context & Agent Knowledge Base (Neural Architecture Map)
 
-> **Project Origin**: Paired session in Conversation ID: `b233f8ba-37b9-44b5-81ac-8ab7da3127dc`  
-> **Documentation**: See [`docs/implementation_plan.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/docs/implementation_plan.md) for full architectural specs, wireframes, and roadmap.
+> 🚦 **READ FIRST — cross-agent source of truth**: [`../EI_PHASE1_STATUS.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/EI_PHASE1_STATUS.md)
+> Deploy state, Cloudflare resource IDs, the Admin route migration map (CORE vs LEGACY SQL), the task board and open owner decisions live **only** there.
+> Do not duplicate that information here. Update it before ending any session that changes anything.
 
----
-
-## 🏨 1. Project Overview & Business Purpose
-This repository is the **Internal Admin Panel** for **Every Inn Phan Xích Long** (Phan Xích Long, Phường Cầu Kiệu (Phú Nhuận cũ), TP. Hồ Chí Minh).
-It is designed exclusively for hotel **receptionists and managers** to:
-1. View real-time room availability via a 24-hour visual Gantt timeline chart (`/dashboard`).
-2. Rapidly book rooms for walk-in or phone-in guests on a single streamlined form (`/bookings/new`).
-3. Leverage an integrated **Mini CDP (Customer Data Platform)**:
-   - Entering a phone number auto-detects returning guests, displays their loyalty tier and total spend/bookings, and auto-fills their name.
-   - Creating any booking automatically upserts the member's profile and recalculates their loyalty tier.
+> **Project Origin**: Every Inn Phan Xch Long (Ph Nhuận, TP. Hồ Ch Minh)  
+> **Master Roadmap & Backlog**: [`docs/project_status_and_backlog.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/docs/project_status_and_backlog.md)  
+> **Original Specs**: [`docs/implementation_plan.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/docs/implementation_plan.md)  
+> **Infrastructure Rules**: [`.agents/rules/cloudflare-free-tier.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/rules/cloudflare-free-tier.md)  
+> **Agent / MCP Index**: [`.agents/README.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/README.md)
 
 ---
 
-## 🛠️ 2. Technology Stack & Deployment
-- **Framework**: Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
-- **Runtime & Deployment**: Cloudflare Workers via `@opennextjs/cloudflare` + `wrangler`
-- **Database**: Cloudflare D1 (SQLite) with local & remote migrations
-- **Session Auth**: Password hashing with `bcryptjs`, 1-Day Stateless JWT sessions signed via native Web Crypto API (`crypto.subtle` HS256) stored in HttpOnly cookies (`everyinn_admin_session`) — eliminating redundant D1 queries on every request with zero overhead.
-- **Build / Deploy Commands**:
-  - `npm run dev` — Run local Next.js dev server with local D1 context
-  - `npm run db:migrate:local` — Execute tables migration on local D1 SQLite
-  - `npm run db:seed:local` — Seed master data into local D1 SQLite
-  - `npm run db:migrate:008:local` — Execute Control Fields migration on local D1 SQLite
-  - `npm run db:migrate:010:local` — Execute No-Show and Refund migration on local D1 SQLite
-  - `npm run db:migrate:remote` — Execute tables migration on Cloudflare D1 (Production)
-  - `npm run db:seed:remote` — Seed master data into Cloudflare D1 (Production)
-  - `npm run db:migrate:008:remote` — Execute Control Fields migration on Cloudflare D1 (Production)
-  - `npm run db:migrate:010:remote` — Execute No-Show and Refund migration on Cloudflare D1 (Production)
-  - `npm run deploy` — Build OpenNext worker and deploy to Cloudflare
+## 🧠 SỨ MỆNH TÀI LIỆU (NEURAL ARCHITECTURE PHILOSOPHY)
+Tài liệu này là **Single Source of Truth** và **Hệ Nơ-ron Liên Kết (Neural Graph)** dành cho các AI Models (Claude, GPT, Gemini, DeepSeek, Cursor) và Lập trình viên.
+- **Tiết kiệm Token & Thời gian**: KHÔNG quét mù toàn bộ cây thư mục (`find`, `grep` bừa bãi). Hãy tra cứu các mắc xích trong tài liệu này để định vị chính xác File, Function, Bảng SQL và State liên quan.
+- **Tính Nhất Quán Tuyệt Đối (Codebase Convention)**: Mọi model tiếp quản dự án đều tuân thủ cùng một quy chuẩn kiến trúc, quy tắc Cloudflare Free Tier và logic nghiệp vụ khách sạn.
 
 ---
 
-## 🗄️ 3. Database Schema Overview (D1 SQLite)
-Migrations are located in `db/migrations/`:
-- `001_tables.sql`: Core schema (properties, rooms, pricing_rules, configs, staff, members, bookings, room_blocks, event_logs).
-- `002_seed.sql`: Seed data for property, default rooms, pricing rules, configs, and default staff.
-- `003_refactor_rooms_pricing.sql`: 6 rooms total (3 Haven: 101, 201, 301 | 3 Signature: 102, 202, 302) and standard pricing.
-- `004_add_config_hourly_slots.sql`: Adds `hourly_checkin_slots` config (`[21, 22, 23, 24]`) to `configs` table.
-- `005_import_sheet_bookings.sql`: Historical bookings imported from operational Google Sheet.
-- `006_add_social_and_closing_note.sql`: Adds `instagram`, `facebook` to `members` & `bookings`, and `closing_note` to `bookings`.
-- `007_room_blocks_indexes_and_note.sql`: Adds `note` column to `room_blocks` and date range indexes (`idx_room_blocks_room_date`, `idx_room_blocks_date`, `idx_bookings_date`).
-- `008_add_control_fields.sql`: Adds Control Fields (`mod_no`, `updated_by_staff_id`, etc.) across `bookings`, `members`, and `room_blocks`.
-- `009_import_october_bookings.sql`: Forward October bookings imported from operational Google Sheet.
-- `010_add_no_show_and_refund.sql`: Adds `no_show_at`, `no_show_by`, `no_show_reason`, `refund_amount`, `original_price` to `bookings`; adds `no_show_count` to `members`; index `idx_bookings_status_checkin`.
+## 🛠️ 1. CÔNG NGHỆ & LỆNH THAO TÁC CƠ SỞ (STACK & RUNTIME)
+
+- **Framework**: Next.js 16 (App Router) + React 19 + TypeScript 5 + Tailwind CSS v4.
+- **Runtime & Deployment**: Cloudflare Workers qua `@opennextjs/cloudflare` + `wrangler`.
+- **Database**: Cloudflare D1 (SQLite at the Edge) — DB ID: `2518bd3e-5479-4b03-afb1-3ab28d7e3e7e`.
+- **Session Auth**: 1-Day Stateless JWT Cookie (`everyinn_admin_session`) ký bằng Web Crypto API (`crypto.subtle` HS256) — luồng chính 0 query D1/request; session UUID legacy vẫn fallback qua `staff_sessions`.
+
+### Danh mục lệnh di trú Database (Local & Remote D1):
+```bash
+# Khởi động môi trường phát triển
+npm run dev                    # Chạy dev server Next.js với local D1 context
+npx tsc --noEmit               # Kiểm tra lỗi type toàn dự án (BẮT BUỘC 0 ERROR)
+npm run cf-typegen             # Đồng bộ Cloudflare binding types vào env.d.ts khi đổi wrangler bindings
+npm run preview                # Build OpenNext worker và chạy preview local theo runtime Cloudflare
+npm run deploy                 # Build OpenNext worker và deploy lên Cloudflare
+
+# Di trú D1 SQLite Local (Dành cho dev / test)
+npm run db:migrate:local       # 001: Core tables
+npm run db:seed:local          # 002: Seed master data
+npm run db:migrate:003:local   # 003: Refactor 6 rooms (Haven/Signature)
+npm run db:migrate:004:local   # 004: Hourly checkin slots
+npm run db:migrate:005:local   # 005: Import historical bookings
+npm run db:migrate:006:local   # 006: Social info & closing note
+npm run db:migrate:007:local   # 007: Room blocks note & indexes
+npm run db:migrate:008:local   # 008: Control fields (mod_no, updated_by)
+npm run db:migrate:009:local   # 009: Import October bookings
+npm run db:migrate:010:local   # 010: No-show & refund management
+npm run db:migrate:011:local   # 011: Promotions & categories
+npm run db:migrate:012:local   # 012: Deposit management & reminders
+
+# Di trú D1 SQLite Remote (Production Cloudflare D1)
+npm run db:migrate:remote      # 001: Core tables
+npm run db:seed:remote         # 002: Seed master data
+npm run db:migrate:003:remote  # 003: Refactor rooms & pricing
+npm run db:migrate:004:remote  # 004: Hourly checkin slots
+npm run db:migrate:005:remote  # 005: Import historical bookings
+npm run db:migrate:006:remote  # 006: Social info & closing note
+npm run db:migrate:007:remote  # 007: Room blocks note & indexes
+npm run db:migrate:008:remote  # 008: Control fields
+npm run db:migrate:009:remote  # 009: Import October bookings
+npm run db:migrate:010:remote  # 010: No-show & refund management
+npm run db:migrate:011:remote  # 011: Promotions & categories
+npm run db:migrate:012:remote  # 012: Deposit management & reminders
+```
 
 ---
 
-## ⚡ 3.1. Master Data In-Process Caching (`src/lib/cache.ts` & `src/lib/masterData.ts`)
-To optimize Cloudflare D1 query quota and accelerate latency:
-- Master data is cached in-memory at module scope (`Map` with TTL = 60 minutes):
-  - `master:rooms`: Active rooms list (`getCachedRooms`)
-  - `master:pricing_rules`: Active pricing table (`getCachedPricingRules`)
-  - `master:booking_rules`: Check-in hours, late checkout limits, extra fees (`getCachedBookingRules`)
-  - `master:cdp_tiers`: Spend & booking thresholds for Bronze/Silver/Gold (`getCachedCdpTiers`)
-  - `master:hourly_slots`: Allowed overnight check-in hours (`getCachedHourlySlots`)
-- **Cache Invalidation**:
-  - Automatically resets whenever a new Worker instance spins up or code deploys via GitHub.
-  - Automatically expires after 60-minute TTL.
-  - Manual invalidation via `POST /api/admin/cache/clear` (Manager role only).
-- **Transactional Data & Realtime Sync**:
-  - `bookings`, `members`, `room_blocks`, `dashboard:gantt`, and `staff_sessions` are ALWAYS read fresh from D1 (ZERO in-memory caching to eliminate isolate stale state).
-  - **ETag 304 Version-Checking**: APIs (`/api/dashboard/gantt` & `/api/bookings`) check `SELECT COALESCE(MAX(id), 0) FROM event_logs` (consuming exactly 1 D1 row read via B-Tree index). When no new event occurred, the server immediately returns `HTTP 304 Not Modified` (0 bytes payload, 0 DB scan, 0 client re-render), reducing D1 rows read quota consumption by 98%+.
-  - **Realtime Sync Matrix**:
-    - Cross-tab: Web API `BroadcastChannel("everyinn_sync_channel")` (0ms latency, 0 network requests).
-    - Mobile/Tab focus: `visibilitychange` & `window.focus` triggers immediate revalidation.
-    - Multi-admin: 20-second gentle background polling protected by ETag 304.
-  - **Cancel vs No-Show Semantics**:
-    - **Cancel (Hủy đặt phòng)**: Hard delete (`DELETE FROM bookings WHERE id = ?`). Booking is completely purged from Gantt and Bookings list; member CDP statistics (`total_bookings`, `total_spent`, `total_nights`, `loyalty_tier`) are atomically rolled back, while member profile remains intact.
-    - **No-Show (Khách không đến / Hủy vi phạm)**: Soft status (`status = 'no_show'`). Disappears from Gantt and turnover buffer validator (room is immediately released for new bookings); remains in `/bookings` list with purple `🚫 No-Show` badge; records refund amount, reason, and retained revenue; preserves member profile and increments `no_show_count + 1`.
+## 🗄️ 2. MẮC XÍCH DATABASE D1 (SCHEMA, INDEXES & RELATIONS)
+
+### 2.1. Bản Đồ Các Bảng (Database Tables)
+1. `properties`: Thông tin khách sạn (Phan Xích Long), hotline, địa chỉ, tài khoản ngân hàng VietQR.
+2. `rooms`: 6 phòng vật lý (3 Haven: 101, 201, 301 | 3 Signature: 102, 202, 302).
+3. `pricing_rules`: Bảng giá cấu hình (Combo 3h, 6h, Qua đêm, Theo ngày cho từng hạng phòng).
+4. `configs`: Cấu hình hệ thống JSON (`booking_rules`, `cdp_tiers`, `hourly_checkin_slots`).
+5. `staff`: Tài khoản nhân sự (`role`: `manager` | `receptionist`), mật khẩu bcryptjs salt <= 10; fallback session UUID legacy vẫn đọc/xóa qua bảng `staff_sessions` trong `src/lib/auth.ts`.
+6. `members`: Mini CDP khách hàng (SĐT, Họ tên, `total_spent`, `total_bookings`, `loyalty_tier`, `no_show_count`, Instagram, Facebook).
+7. `bookings`: Giao dịch đặt phòng. Lưu trữ toàn diện thời gian, giá, tiền cọc, ưu đãi, mã cửa, trạng thái.
+8. `room_blocks`: Khóa phòng bảo trì / sửa chữa tạm thời theo phòng và khung giờ.
+9. `event_logs`: Nhật ký kiểm toán (Audit Trail) và **Con trỏ ETag 304** toàn hệ thống.
+10. `promotion_categories`: Danh mục khuyến mãi (`seasonal`, `loyalty`, `special`).
+11. `promotions`: Chương trình ưu đãi giảm % hoặc VND kèm điều kiện ràng buộc động.
+
+### 2.2. Ma Trận Chỉ Mục B-Tree Bắt Buộc (Index Matrix — Zero Table Scans)
+Mọi câu truy vấn có `WHERE` hoặc `ORDER BY` BẮT BUỘC dùng Index để bảo vệ Quota 5M rows read/ngày:
+| Tên Bảng | Tên Index | Các Cột Chỉ Mục | Mục Đích Truy Vấn |
+|---|---|---|---|
+| `bookings` | `idx_bookings_room_dates` | `(room_id, checkin_at, checkout_at)` | Quét xung đột phòng & vẽ Gantt theo phòng |
+| `bookings` | `idx_bookings_member_phone` | `(member_phone)` | Tra cứu lịch sử khách hàng Mini CDP |
+| `bookings` | `idx_bookings_date` | `(checkin_at, checkout_at)` | Lấy dữ liệu Gantt đa phòng theo ngày |
+| `bookings` | `idx_bookings_created_at` | `(created_at DESC)` | Phân trang danh sách đặt phòng `/bookings` |
+| `bookings` | `idx_bookings_status_checkin`| `(status, checkin_at)` | Lọc danh sách No-show & Checkin trong ngày |
+| `bookings` | `idx_bookings_deposit_due` | `(is_deposit, deposit_status, deposit_due_date)` | Popup & Polling nhắc cọc đến hạn |
+| `bookings` | `idx_bookings_deposit_status`| `(deposit_status)` | Lọc trạng thái cọc (`pending`, `partial`, `paid`) |
+| `members` | `idx_members_phone` | `(phone)` (UNIQUE) | Tra cứu nhanh 1 dòng khách quen theo SĐT |
+| `room_blocks`| `idx_room_blocks_room_date` | `(room_id, start_at, end_at)` | Lấy khối bảo trì trên Gantt & kiểm tra xung đột |
+| `event_logs` | `idx_event_logs_created` | `(created_at DESC)` | Kiểm toán & lấy `MAX(id)` cho ETag 304 |
+| `promotions` | `idx_promotions_code` | `(code)` | Tra cứu mã khuyến mãi |
 
 ---
 
-## 📐 4. Business & Pricing Formulas (`src/lib/pricing.ts`)
-- **Phụ phí giờ thêm**: 60.000đ / giờ (thêm tối đa 2 giờ).
-- **1. Theo Giờ (Hourly)**:
-  - Khung giờ nhận: **09:00 đến 21:00** (sau 21:00 tính là Qua Đêm).
-  - Khối đặt tối thiểu: **Combo 3 Giờ** (Haven: 320k, Signature: 360k).
-  - Khối 6 Giờ: **Combo 6 Giờ** (Haven: 600k, Signature: 640k).
-  - Phụ trội: 60k / giờ (thêm tối đa 2 giờ).
-- **2. Qua Đêm (Overnight)**:
-  - Khung giờ nhận: **21:00 đến 24:00 (00:00)**.
-  - Tiêu chuẩn: **21:00 - 09:00 hôm sau** (12 tiếng).
-  - Giá gốc: Haven 490k, Signature 620k.
-  - Trả phòng trễ (Late checkout): Tối đa 2 tiếng (+60k/h).
-- **3. Theo Ngày (Day Use)**:
-  - Nhận phòng tiêu chuẩn: **15:00** — Trả phòng: **12:00** hôm sau.
-  - Giá gốc: Haven 590k/đêm, Signature 750k/đêm.
-  - Trả phòng trễ: Tối đa 2 tiếng (+60k/h).
-- **4. Tuỳ Chỉnh (Custom)**:
-  - Dành cho đơn thỏa thuận đặc biệt (chụp ảnh, quay phim, thuê dài ngày, đơn đối tác).
-  - Tự chọn ngày giờ check-in & check-out bất kỳ.
-  - Tự nhập số tiền thanh toán (customPrice).
+## ⚡ 3. MẮC XÍCH THƯ VIỆN NGHIỆP VỤ (`src/lib/` NEURAL FUNCTIONS)
+
+Mọi logic nghiệp vụ cốt lõi đều được đóng gói độc lập trong `src/lib/`. AI Models chỉ cần import đúng hàm:
+
+```
+src/lib/
+├── db.ts             ──> Khởi tạo D1 binding (getDb) & batch operations
+├── jwt.ts            ──> Ký & kiểm tra Stateless JWT HS256 (Web Crypto API)
+├── auth.ts           ──> Lấy phiên đăng nhập hiện tại từ cookie (getCurrentStaff)
+├── cache.ts          ──> In-memory Map cache cho Master data (TTL 60 phút), invalidate key/prefix
+├── masterData.ts     ──> Nạp & cache Rooms, Pricing, Booking Rules, CDP Tiers, Hourly Slots, Promotions
+├── pricing.ts        ──> Tính giá tự động: Combo 3h/6h, Đêm, Ngày, Custom, Giờ thêm
+├── promotions.ts     ──> Đánh giá hợp lệ & tính chiết khấu khuyến mãi động
+├── validators.ts     ──> Kiểm tra xung đột lịch & Buffer 1h dọn phòng bắt buộc
+├── timelineUtils.ts  ──> 48 slot 30 phút, roundToNearest30Min, khóa giờ quá khứ
+├── cdp.ts            ──> Upsert khách hàng, tính lại hạng thẻ theo tiền thực thu
+├── bookingId.ts      ──> Sinh mã đơn đặt phòng (EI + timestamp + random)
+├── audit.ts          ──> Ghi log kiểm toán (logEvent, getLogEventStatement)
+└── syncEvents.ts     ──> Đồng bộ đa tab tức thì qua Web BroadcastChannel API
+```
+
+### Chi tiết các hàm trọng yếu:
+- **`src/lib/pricing.ts`**:
+  - `calculatePrice(params)`: Trả về `PricingBreakdown` chi tiết (giá gốc, combo, phụ trội, giảm giá, tổng cộng).
+  - `resolveHourlyCombo(hours)`: Quyết định Combo 3 Giờ hay Combo 6 Giờ và số giờ phụ trội.
+- **`src/lib/promotions.ts`**:
+  - `validatePromotionEligibility(promotion, context)`: Kiểm tra 8 điều kiện (Active, Lượt dùng, Thời hạn, Thứ trong tuần, Hạng phòng, Loại đặt, Hạng thành viên, Đơn tối thiểu).
+  - `computePromotionDiscount(promotion, rawSubtotal)`: Tính tiền giảm (% hoặc cố định VND, chặn trần `max_discount_amount`).
+- **`src/lib/validators.ts`**:
+  - `checkBookingOverlapWithBuffer(db, slot, roomName)`: Kiểm tra va chạm trực tiếp và cưỡng chế **60 phút đệm dọn phòng** sau checkout và trước checkin kế tiếp.
+- **`src/lib/timelineUtils.ts`**:
+  - `TIME_SLOTS_30MIN`: 48 mốc thời gian tiêu chuẩn (`00:00` đến `23:30`).
+  - `roundToNearest30Min(timeInput)`: Làm tròn về mốc `:00` hoặc `:30` gần nhất.
+  - `roundUpToNext30Min(date)`: Làm tròn tiến lên mốc tiếp theo (mặc định cho form tạo đơn).
+  - `isPastTimeSlot(dateStr, timeStr)`: Trả về `true` nếu mốc thời gian đã qua trong ngày (UTC+7).
+- **`src/lib/cache.ts`**:
+  - `getOrSet(key, ttlSeconds, fetcher)`: Cache in-memory theo key cho các API master data.
+  - `invalidatePrefix(prefix)`: Xóa cache theo namespace như `master:` hoặc `dashboard:gantt:`.
+- **`src/lib/masterData.ts`**:
+  - `getCachedRooms`, `getCachedPricingRules`, `getCachedBookingRules`, `getCachedCdpTiers`, `getCachedHourlySlots`: Chuẩn đọc master data qua cache TTL 3600s.
+  - `getCachedPromotionCategories`, `getCachedActivePromotions`: Cache dữ liệu ưu đãi đang hoạt động cho form và màn quản trị.
+  - `invalidatePromotionsCache()` / `invalidateAllMasterCache()`: Điểm chuẩn để xóa cache `master:*` sau mutation.
+- **`src/lib/cdp.ts`**:
+  - `calculateLoyaltyTier(spent, bookings, tiers)`: Tính hạng `gold`, `silver`, `bronze`, `new`.
+  - `upsertMemberOnBooking(...)`: Tạo mới hoặc cập nhật khách, tích lũy tiền thực thu và số đêm.
+  - `recalculateMemberStats(db, phone)`: Quét lại toàn bộ đơn hợp lệ để tính chuẩn lại số liệu khi có Hủy phòng/No-Show.
+- **`src/lib/bookingId.ts`**:
+  - `generateBookingId(date?)`: Sinh mã dạng `EI-YYYYMMDD-XXXX`, loại bỏ ký tự dễ nhầm `I`, `O`, `1`, `0`.
+- **`src/lib/syncEvents.ts`**:
+  - `notifyDataChanged("BOOKINGS_CHANGED")`: Bắn tín hiệu sang các tab khác qua `BroadcastChannel`.
+  - `subscribeToSyncEvents(callback)`: Lắng nghe sự kiện để revalidate UI không cần reload.
 
 ---
 
-## 👤 5. Mini CDP & Loyalty Tiers (`src/lib/cdp.ts`)
-- `gold`: Tổng đặt ≥ 10 lần HOẶC Tổng chi tiêu ≥ 8.000.000đ
-- `silver`: Tổng đặt ≥ 5 lần HOẶC Tổng chi tiêu ≥ 3.000.000đ
-- `bronze`: Tổng đặt ≥ 1 lần HOẶC Tổng chi tiêu ≥ 500.000đ
-- `new`: Khách hàng mới
+## 🌐 4. MẮC XÍCH API ROUTES (`src/app/api/`)
+
+| Đường Dẫn (Endpoint) | Method | File Xử Lý | Bảng D1 Tương Tác | Ghi Chú & ETag / Cache |
+|---|---|---|---|---|
+| `/api/auth/login` | `POST` | `src/app/api/auth/login/route.ts` | `staff` | Trả Cookie JWT `everyinn_admin_session` |
+| `/api/auth/logout` | `POST` | `src/app/api/auth/logout/route.ts` | - | Xóa cookie phiên |
+| `/api/auth/me` | `GET` | `src/app/api/auth/me/route.ts` | `staff` | Trả thông tin nhân viên hiện tại |
+| `/api/rooms` | `GET` | `src/app/api/rooms/route.ts` | `rooms` | Danh sách phòng active, cache public `max-age=300`, đọc qua `getCachedRooms` |
+| `/api/pricing-rules` | `GET` | `src/app/api/pricing-rules/route.ts` | `pricing_rules` | Danh sách biểu phí active, cache public `max-age=300`, đọc qua `getCachedPricingRules` |
+| `/api/configs` | `GET` | `src/app/api/configs/route.ts` | `configs` | Trả gộp `bookingRules`, `hourlySlots`, `cdpTiers` từ master cache |
+| `/api/staff` | `GET` | `src/app/api/staff/route.ts` | `staff` | Danh sách nhân sự active cho filter/dropdown, yêu cầu đăng nhập, `Cache-Control: private, no-store` |
+| `/api/dashboard/gantt` | `GET` | `src/app/api/dashboard/gantt/route.ts` | `bookings`, `room_blocks`, `rooms` | **ETag 304** dựa trên `MAX(event_logs.id)` |
+| `/api/bookings` | `GET` | `src/app/api/bookings/route.ts` | `bookings`, `rooms` | Danh sách lịch sử, phân trang, lọc đa chiều, **ETag 304** |
+| `/api/bookings` | `POST` | `src/app/api/bookings/route.ts` | `bookings`, `members`, `event_logs`, `promotions` | Tạo đơn mới, snapshot giá/cọc/ưu đãi, cập nhật Mini CDP, tăng `used_count` promo, invalidate `dashboard:gantt:` cache |
+| `/api/bookings/[id]` | `GET` | `src/app/api/bookings/[id]/route.ts` | `bookings` | Xem chi tiết 1 đơn |
+| `/api/bookings/[id]` | `PATCH` | `src/app/api/bookings/[id]/route.ts` | `bookings`, `members`, `event_logs` | Sửa giờ, +1h trả trễ, thu nốt cọc, đánh dấu no-show |
+| `/api/bookings/[id]` | `DELETE` | `src/app/api/bookings/[id]/route.ts` | `bookings`, `members`, `event_logs` | Hủy đặt phòng (Hard delete), rollback CDP |
+| `/api/bookings/deposit-reminders` | `GET` | `.../deposit-reminders/route.ts` | `bookings` | Lấy danh sách đơn đến hạn nhắc cọc, **ETag 304** |
+| `/api/bookings/daily-roster` | `GET` | `.../daily-roster/route.ts` | `bookings`, `rooms` | Thống kê lượt khách In/Out/Stayover trong ngày |
+| `/api/members/[phone]` | `GET` | `src/app/api/members/[phone]/route.ts`| `members` | Phone auto-lookup Mini CDP |
+| `/api/room-blocks` | `GET/POST`| `src/app/api/room-blocks/route.ts` | `room_blocks`, `event_logs` | Lấy & tạo khối khóa phòng bảo trì |
+| `/api/room-blocks/[id]` | `DELETE` | `src/app/api/room-blocks/[id]/route.ts`| `room_blocks`, `event_logs` | Mở khóa phòng bảo trì 1-click |
+| `/api/promotions` | `GET/POST`| `src/app/api/promotions/route.ts` | `promotions`, `promotion_categories` | Danh sách & tạo khuyến mãi mới |
+| `/api/promotions/[id]` | `PATCH/DEL`| `.../promotions/[id]/route.ts` | `promotions` | Sửa & xóa/tắt khuyến mãi |
+| `/api/promotions/categories` | `GET/POST`| `.../categories/route.ts` | `promotion_categories` | Quản lý danh mục ưu đãi |
+| `/api/promotions/validate` | `POST` | `.../validate/route.ts` | `promotions` | Đánh giá tính hợp lệ của mã ưu đãi |
+| `/api/admin/cache/clear` | `POST` | `src/app/api/admin/cache/clear/route.ts`| In-memory Cache | Xóa sạch in-memory master data cache |
 
 ---
 
-## 🔑 6. Default Login Credentials
-- **Quản lý (Manager)**: SĐT: `0901234567` — Mật khẩu: `everyinn2024`
-- **Lễ tân (Receptionist)**: SĐT: `0909998888` — Mật khẩu: `everyinn2024`
+## 🖥️ 5. MẮC XÍCH GIAO DIỆN & CÂY COMPONENT (UI HIERARCHY)
+
+```
+src/app/
+├── layout.tsx                ──> Root HTML, ToastProvider, Font Inter
+├── page.tsx                  ──> Chuyển hướng về /dashboard hoặc /login
+├── login/page.tsx            ──> Form đăng nhập SĐT & Password
+├── dashboard/page.tsx        ──> [MÀN HÌNH CHÍNH] Bảng phòng 24h Gantt
+│   ├── DateNavBar            ──> Thanh điều hướng ngày (Hôm nay, +/- 1 ngày, Chọn ngày)
+│   ├── GanttChart            ──> Lưới Gantt Desktop (19 slots/ngày)
+│   │   ├── GanttRoomRow      ──> Dòng của từng phòng (101..302)
+│   │   ├── GanttBar          ──> Thanh đặt phòng gradient, huy hiệu Cọc/Đủ
+│   │   └── TurnoverBufferBar ──> Vạch đệm dọn phòng 1h cam viền đứt
+│   ├── MobileVerticalGantt   ──> Giao diện Gantt dọc chuyên biệt cho điện thoại
+│   ├── BookingDetailDrawer   ──> Drawer chi tiết: Xem, Sửa, +1h, Thu cọc nốt, No-show, Hủy
+│   ├── RoomLockModal         ──> Modal khóa phòng bảo trì (48 slot 30p)
+│   ├── RoomLockDetailDrawer  ──> Drawer thông tin khóa phòng & nút Mở khóa
+│   ├── DailyRosterModal      ──> Modal tổng kết danh sách khách trong ca/ngày
+│   └── DepositReminderModal  ──> Popup tự động nhắc cọc đến hạn/quá hạn
+├── bookings/
+│   ├── page.tsx              ──> [DANH SÁCH ĐẶT PHÒNG] Tra cứu lịch sử
+│   │   └── BookingsListClient──> State, Debounce Search, Filter Bar, Pagination Table
+│   └── new/page.tsx          ──> [FORM TẠO ĐƠN NHANH] Đặt phòng 1 trang
+│       └── BookingForm       ──> State trung tâm, tính giá live
+│           ├── PhoneLookupField  ──> Tra cứu SĐT, tự điền tên, hiện hạng thẻ CDP
+│           ├── BookingTypeTabs   ──> Chọn loại: Giờ | Đêm | Ngày | Tuỳ Chỉnh
+│           ├── HourlyFields / OvernightFields / DayUseFields / CustomFields
+│           ├── DepositSection    ──> Chọn cọc (50%/tùy ý), hẹn ngày trả đủ
+│           ├── PromotionSelector ──> Áp dụng mã ưu đãi phù hợp điều kiện
+│           └── PriceSummaryCard  ──> Tóm tắt chi phí, cọc, giảm giá, nút Submit
+└── promotions/page.tsx       ──> [QUẢN TRỊ ƯU ĐÃI] Quản lý Danh mục & Chương trình
+    ├── CategoriesList & CategoryModal   ──> CRUD danh mục ưu đãi
+    └── PromotionsList & PromotionModal ──> CRUD khuyến mãi & ràng buộc điều kiện
+```
 
 ---
 
-## 🗺️ 7. Current Project State & Roadmap
-- **Phase 1 (Completed ✅)**:
-  - D1 database migrations & local seed
-  - Staff authentication & session handling
-  - Visual 24h room timeline dashboard (`/dashboard`)
-  - Create booking form (`/bookings/new`) with Mini CDP phone auto-lookup & live price breakdown
-  - Bookings history list (`/bookings`)
-  - Centralized booking overlap & 1h turnover cleaning buffer validator (`src/lib/validators.ts`)
-  - Gantt chart visual turnover buffer bars (1h after checkout, amber dashed) on desktop & mobile
-  - Inline booking editing & +1h checkout in `BookingDetailDrawer`
-  - Floating Toast Notification System (`src/components/ui/Toast`) with slide-in-from-right animation, auto-dismiss timer bar, pause-on-hover, and contextual themes (Success, Warning/Validation, System Error, Info)
-  - Verified OpenNext Cloudflare bundle build
-- **Phase 2 (Upcoming)**:
-  - 5-minute temporary room hold timer
-  - QR Code payment generation & manual confirmation toggle
-  - Telegram bot notifications (TG-01 through TG-05)
-  - 6-digit door code generation
+## 📐 6. QUY CHUẨN CODE & THIẾT KẾ BẮT BUỘC (CODING CONVENTIONS)
+
+Mọi code sinh ra hoặc chỉnh sửa **BẮT BUỘC** tuân thủ các quy tắc sau:
+
+### 1. Chuẩn Hóa Thời Gian 30 Phút (30-Minute Standard)
+- Không dùng phút lẻ (`14:15`, `14:27`) hay `<input type="time">` tự do.
+- Luôn dùng `TIME_SLOTS_30MIN` từ `src/lib/timelineUtils.ts` cho các dropdown chọn giờ.
+- Các slot trong quá khứ so với giờ hiện tại (UTC+7) trên cùng ngày phải bị `disabled`.
+
+### 2. Chuẩn Quản Lý Tiền Cọc & Thu Phần Còn Lại
+- `is_deposit = 1`: Đơn có đặt cọc.
+- `deposit_amount`: Số tiền cọc quy định ban đầu.
+- `paid_amount`: Số tiền **thực tế khách đã thanh toán** đến thời điểm hiện tại.
+- `remaining_amount = total_price - paid_amount`: Số tiền còn thiếu.
+- `deposit_status`:
+  - `'pending'`: Chưa đóng đồng nào.
+  - `'partial'`: Đã đóng 1 phần (cọc).
+  - `'paid'`: Đã thanh toán đủ 100%.
+- **Mini CDP**: Chỉ cộng tích lũy chi tiêu `total_spent` dựa trên **tiền thực thu (`paid_amount`)**, không cộng trên tổng giá đơn chưa thu đủ.
+
+### 3. Chuẩn Phân Định Hủy Phòng (Cancel) vs No-Show
+- **Hủy Đơn (Cancel)**:
+  - Hành vi: Hard delete (`DELETE FROM bookings WHERE id = ?`).
+  - D1 Action: Xóa đơn, gọi `recalculateMemberStats` để hoàn tác số liệu CDP, ghi event `BOOKING_CANCELLED`.
+- **No-Show (Khách không đến / Vi phạm)**:
+  - Hành vi: Soft status (`status = 'no_show'`).
+  - D1 Action: Giữ nguyên đơn, giải phóng phòng trên Gantt, cập nhật `refund_amount`, `original_price`, `no_show_reason`, cộng `no_show_count + 1` của Member.
+
+### 4. Chuẩn Giao Diện (Tailwind CSS v4 & Notification)
+- Theme màu chủ đạo: Tối sang trọng (`bg-slate-950`, `bg-slate-900`, `border-slate-800`, `text-slate-100`).
+- Màu nhấn nghiệp vụ:
+  - **Amber (`amber-400`, `amber-500`)**: Thương hiệu, vạch dọn phòng, sọc bảo trì.
+  - **Emerald (`emerald-500`)**: Đã thanh toán đủ, hoàn thành, nút submit.
+  - **Purple (`purple-500`, `purple-400`)**: Trạng thái No-Show, ưu đãi VIP.
+  - **Sky / Blue (`blue-500`)**: Khách quen Mini CDP, loại đặt Theo Ngày.
+- Thông báo: **CẤM** dùng `window.alert()` hay `window.confirm()`. Luôn dùng hook `useToast()` (`toast.success()`, `toast.error()`, `toast.warning()`).
+
+### 5. Chuẩn Bảo Vệ Quota Cloudflare D1
+- Mọi mutation ghi nhiều bảng BẮT BUỘC dùng `await db.batch([stmt1, stmt2, stmt3])`.
+- Sau khi ghi dữ liệu thành công, luôn gọi `notifyDataChanged("BOOKINGS_CHANGED")` và ghi `logEvent()` vào `event_logs` để ETag 304 kích hoạt.
+- Master data read APIs (`/api/rooms`, `/api/pricing-rules`, `/api/configs`) dùng cache `getOrSet()` với key prefix `master:`; khi mutation vào promotions hoặc master data, xóa cache bằng `invalidatePromotionsCache()`, `invalidatePrefix("master:")` hoặc `POST /api/admin/cache/clear`.
 
 ---
 
-## 🛡️ 8. Cloudflare Free Tier Infrastructure Constraints & Algorithmic Guardrails
-> **Target Platform**: Cloudflare Workers + Cloudflare D1 (SQLite at the Edge)  
-> **Source Reference**: [Cloudflare Developer Documentation](https://developers.cloudflare.com/) (Workers Limits, D1 Platform Limits)  
-> **Detailed Rule File**: See [`.agents/rules/cloudflare-free-tier.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/rules/cloudflare-free-tier.md)
+## ⚡ 7. BẢNG TRA CỨU MẮC XÍCH NHANH (FAST NEURAL LOOKUP)
 
-Khi viết code và thiết kế thuật toán cho hệ thống, TẤT CẢ các agent và lập trình viên **BẮT BUỘC** phải tuân thủ các quy tắc sau nhằm đảm bảo hệ thống chạy mượt mà trên giới hạn gói Free:
+Khi được yêu cầu làm một tác vụ, **TRA CỨU NGAY BẢNG NÀY** để mở đúng file mà không cần scan:
 
-### 1. Giới hạn Cơ sở dữ liệu D1 (D1 Quota Protection)
-- **5.000.000 Rows Read / ngày**:
-  - D1 tính quota theo **số dòng bị quét (Rows Read)**, KHÔNG phải số câu lệnh.
-  - **Zero-Unindexed Scans**: CẤM quét toàn bảng (`table scan`). Mọi câu lệnh SQL có `WHERE`, `ORDER BY`, `JOIN` trên bảng `bookings`, `members`, `room_blocks`, `staff_sessions` BẮT BUỘC phải dùng `INDEX`.
-  - **Selective Projection**: CẤM dùng `SELECT *` trong các API thông thường; chỉ `SELECT` các cột cần thiết để giảm tải I/O và bộ nhớ.
-  - **Phân trang bắt buộc**: Mọi API danh sách phải có `LIMIT` (mặc định $\le 50$) và phân trang, tránh kéo hàng ngàn bản ghi một lúc.
-- **100.000 Rows Written / ngày**:
-  - Tránh `UPDATE` thừa thãi khi dữ liệu không thay đổi.
-  - **Gom thao tác qua `db.batch()`**: Khi 1 nghiệp vụ cần ghi nhiều bảng (Tạo booking + Cập nhật tổng chi tiêu/hạng thẻ Member + Ghi Event Log), BẮT BUỘC dùng `await db.batch([stmt1, stmt2, stmt3])` để gói gọn trong 1 transaction và 1 round-trip duy nhất.
-
-### 2. Giới hạn Cloudflare Workers (Worker CPU & Memory Guard)
-- **10 ms CPU Time / request**:
-  - 10ms là thời gian tính toán thực tế của CPU, không tính thời gian chờ mạng.
-  - **Cảnh báo Bcrypt**: Thư viện `bcryptjs` ngốn rất nhiều CPU. Salt rounds $\ge 12$ sẽ làm sập Worker ngay lập tức (`Error 1101: CPU limit exceeded`). CHỈ dùng tối đa `bcrypt.genSalt(10)` hoặc Web Crypto API (`crypto.subtle`).
-  - **Giải thuật Tuyến Tính**: Mọi hàm biến đổi dữ liệu trên Worker phải là $O(N)$ hoặc $O(N \log N)$. CẤM vòng lặp lồng $O(N^2)$ hoặc $O(N^3)$.
-- **128 MB Memory / Isolate**:
-  - Không đọc toàn bộ dataset lớn vào bộ nhớ. Tránh rò rỉ bộ nhớ trong các biến toàn cục module.
-- **Worker Phi Trạng Thái (Stateless & Ephemeral)**:
-  - Isolate có thể bị hủy và tái tạo bất kỳ lúc nào trên 300+ data centers.
-  - `src/lib/cache.ts` CHỈ dùng để cache Master Data (Rooms, Pricing Rules, CDP Tiers) để giảm D1 rows read.
-  - CẤM dùng biến trong bộ nhớ module để làm "Khóa giữ phòng" (Hold Lock) hoặc biến đồng bộ trạng thái giao dịch. Trạng thái giữ phòng phải lưu vào cột `hold_expires_at` của bảng `bookings` trong D1.
-  - CẤM dùng `setTimeout` chạy ngầm sau khi trả Response (Worker sẽ bị đóng băng ngay lập tức).
-- **100.000 Requests / ngày**:
-  - Frontend polling / refresh phải có khoảng nghỉ tối thiểu $\ge 30$ giây. Không polling 1s - 5s.
-  - Tìm kiếm SĐT phải có Debounce (300ms - 500ms) trên client.
-- **50 Subrequests / request**:
-  - Giới hạn số lần gọi API ngoài (Telegram, VietQR, Zalo) tối đa 1-3 lần/request, có try/catch và timeout $\le 5000$ms.
-
----
-
-## ⏱️ 9. Quy Chuẩn Thiết Kế Thời Gian & Khóa Phòng (30-Minute Time Step Standard & Room Lock Design)
-> **Quy định bất biến toàn dự án** cho mọi tác vụ liên quan đến nhập liệu thời gian, tạo/sửa booking, khóa phòng tạm thời và hiển thị biểu đồ Gantt:
-
-### 1. Chuẩn hóa Bước Thời Gian 30 Phút (30-Minute Time Step)
-- **Zero Odd Minutes**: Tuyệt đối **KHÔNG** sử dụng từng phút lẻ (`14:15`, `14:27`, v.v.) hoặc cho phép nhập tự do qua `<input type="time">` hay `<input type="datetime-local">`.
-- **48 Slot Tiêu Chuẩn**: Mọi input/chọn thời gian trong hệ thống bắt buộc sử dụng bước thời gian là giờ tròn (`:00`) hoặc nửa giờ (`:30`), được định nghĩa trong danh sách `TIME_SLOTS_30MIN` (`src/lib/timelineUtils.ts`):
-  `["00:00", "00:30", "01:00", "01:30", ..., "23:00", "23:30"]`.
-- **Làm Tròn Thông Minh**: Khi nạp dữ liệu cũ hoặc thời điểm hiện tại, bắt buộc sử dụng helper `roundToNearest30Min()` hoặc `roundUpToNext30Min()` để đưa về mốc 30 phút gần nhất tiếp theo.
-
-### 2. Nghiệp Vụ Khóa Phòng (Room Lock / Maintenance Modal)
-- **Tách Biệt Ngày & Giờ**: Luôn cho phép người dùng chọn riêng Ngày (`<input type="date">`), sau đó mới chọn Giờ qua dropdown `<select>` 48 slot 30 phút.
-- **Vô Hiệu Hóa Quá Khứ (Past Time Disabling)**:
-  - Ngày trước ngày hôm nay: Không thể chọn (`min={todayStr}`).
-  - Trong ngày hôm nay: Tất cả các slot thời gian đã qua trong quá khứ so với giờ hiện tại (UTC+7) BẮT BUỘC phải bị `disabled` và có style mờ/gạch ngang (`text-slate-600 bg-slate-950`).
-  - Khi khóa và mở trong cùng một ngày: Giờ mở phòng bắt buộc phải sau giờ bắt đầu khóa (`toTime > fromTime`); các slot trước hoặc bằng giờ khóa phải bị `disabled`.
-
-### 3. Hiển Thị Thanh Khóa Phòng Trên Biểu Đồ Gantt (Desktop & Mobile)
-- **Họa Tiết Cảnh Báo Nổi Bật (Hazard Stripes)**: Khác với thanh đặt phòng thông thường (màu trơn gradient) và thanh dọn phòng (màu cam nhạt viền đứt), thanh Khóa Phòng sử dụng họa tiết sọc chéo hổ phách/vàng bảo trì:
-  `bg-[repeating-linear-gradient(45deg,rgba(180,83,9,0.4),rgba(180,83,9,0.4)_10px,rgba(245,158,11,0.22)_10px,rgba(245,158,11,0.22)_20px)] bg-amber-950/90 border-2 border-amber-400`.
-- **Kéo Dài Chính Xác & Thông Tin Rõ Ràng**:
-  - Thanh phải kéo dài chính xác theo thời lượng khóa phòng trên trục tọa độ Gantt.
-  - Hiển thị biểu tượng `🔒`, lý do khóa phòng (`block.reason`), và khung giờ `(HH:mm - HH:mm)`.
-  - Có chỉ báo mũi tên liên ngày nếu khóa phòng vắt qua đêm hoặc nhiều ngày (`◀ Tiếp từ hôm trước` hoặc `▶ Kéo dài sang hôm sau`).
-- **Ghi Đè Giờ Dọn Phòng**: Nếu một khối Khóa Phòng bắt đầu ngay sau giờ checkout hoặc nằm trong khung 1 giờ dọn phòng, hệ thống tự động ẩn (suppress) khối đệm dọn phòng để tránh chồng chéo gây nhầm lẫn.
-
+| Yêu Cầu Cần Thực Hiện | File Cần Mở / Sửa | Hàm / Component Chính | Bảng D1 / API Liên Quan |
+|---|---|---|---|
+| **Sửa công thức tính giá / Combo / Giờ thêm** | `src/lib/pricing.ts` | `calculatePrice`, `resolveHourlyCombo` | `pricing_rules`, `/api/pricing-rules` |
+| **Sửa đệm 1h dọn phòng hoặc kiểm tra va chạm**| `src/lib/validators.ts` | `checkBookingOverlapWithBuffer` | `bookings`, `room_blocks` |
+| **Sửa giao diện Gantt timeline / Vạch phòng** | `src/components/dashboard/GanttChart.tsx`, `GanttBar.tsx` | `GanttBar`, `TurnoverBufferBar` | `/api/dashboard/gantt` |
+| **Sửa Drawer chi tiết đơn / Nút +1h / Thu cọc** | `src/components/dashboard/BookingDetailDrawer.tsx` | `BookingDetailDrawer` | `/api/bookings/[id]` |
+| **Sửa Popup nhắc cọc / Logic Snooze** | `src/components/bookings/DepositReminderModal.tsx` | `DepositReminderModal` | `/api/bookings/deposit-reminders` |
+| **Sửa Form tạo đặt phòng / Nhập cọc** | `src/components/bookings/BookingForm.tsx`, `DepositSection.tsx`| `BookingForm`, `DepositSection` | `POST /api/bookings` |
+| **Sửa Tra cứu SĐT / Hạng thẻ Mini CDP** | `src/lib/cdp.ts`, `PhoneLookupField.tsx` | `lookupMember`, `upsertMemberOnBooking` | `members`, `/api/members/[phone]` |
+| **Sửa Khóa phòng bảo trì (Room Lock)** | `src/components/dashboard/RoomLockModal.tsx` | `RoomLockModal` | `room_blocks`, `/api/room-blocks` |
+| **Sửa Khuyến mãi / Đánh giá ưu đãi** | `src/lib/promotions.ts`, `PromotionSelector.tsx` | `validatePromotionEligibility`, `computePromotionDiscount` | `promotions`, `/api/promotions` |
+| **Sửa master data phòng / giá / cấu hình** | `src/lib/masterData.ts`, `src/app/api/{rooms,pricing-rules,configs}/route.ts` | `getCachedRooms`, `getCachedPricingRules`, `getCachedBookingRules`, `getCachedCdpTiers`, `getCachedHourlySlots` | `rooms`, `pricing_rules`, `configs` |
+| **Sửa cache hệ thống / xóa cache master** | `src/lib/cache.ts`, `src/app/api/admin/cache/clear/route.ts` | `getOrSet`, `invalidatePrefix`, `invalidateAllMasterCache` | `master:*`, `/api/admin/cache/clear` |
+| **Sửa Bộ lọc & Phân trang danh sách đặt phòng** | `src/app/bookings/_components/BookingsListClient.tsx` | `BookingsListClient`, `BookingsFilterBar` | `GET /api/bookings` |
+| **Sửa dropdown/filter nhân sự active** | `src/app/api/staff/route.ts` | `GET /api/staff` | `staff` |
+| **Sửa Lịch trực hàng ngày (Daily Roster)** | `src/components/bookings/DailyRosterModal.tsx` | `DailyRosterModal` | `/api/bookings/daily-roster` |
+| **Triển khai Backlog tiếp theo (Hold/QR/Bot)** | `docs/project_status_and_backlog.md` | Xem mã Task (TASK-01 đến TASK-12) | Xem chi tiết trong Backlog |

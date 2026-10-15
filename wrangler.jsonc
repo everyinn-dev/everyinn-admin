@@ -21,5 +21,28 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	// Phase 1.3 (branch dev-ver2): Admin talks to the Cores only via Service Bindings.
+	// Production bindings are added at cutover (Phase 1.5) once *-core prod Workers exist.
+	"env": {
+		"dev": {
+			"name": "everyinn-admin-dev",
+			"main": ".open-next/worker.js",
+			"assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
+			// Staff-only DB (auth + Admin audit). No booking/member data here.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "admin-db-dev",
+					"database_id": "be3b4c8a-117f-401b-8e11-ed1c7786d459",
+					"migrations_dir": "db/admin-db"
+				}
+			],
+			"services": [
+				{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core-dev" },
+				{ "binding": "CDP_CORE", "service": "everyinn-cdp-core-dev" }
+			],
+			"observability": { "enabled": true }
+		}
+	}
 }

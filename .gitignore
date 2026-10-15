@@ -43,3 +43,12 @@ next-env.d.ts
 # cloudflare
 .open-next/
 .wrangler/
+
+# MCP configurations (local secrets only)
+.mcp.json
+.agents/mcp_config.json
+
+# Vendored third-party agent skills (installed via `npx skills add`)
+.agents/skills/
+
+.backfill/

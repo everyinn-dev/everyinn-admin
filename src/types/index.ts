@@ -260,10 +260,16 @@ export interface GanttBookingItem {
   depositPaidAt?: string;
   depositReminderSentAt?: string;
   remainingPaidAt?: string;
+  // Booking Core fields (optimistic concurrency, turnover rendering, loyalty sync badge)
+  version?: number;
+  ratePlanCode?: string;
+  occupiedUntil?: string;
+  loyaltySyncStatus?: 'not_applicable' | 'pending' | 'synced';
 }
 
 export interface GanttBlockItem {
-  id: number;
+  id: number | string;
+  version?: number;
   roomId: string;
   blockedFrom: string;
   blockedTo: string;

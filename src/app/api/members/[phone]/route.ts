@@ -1,95 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { lookupMember, updateMemberSocial } from "@/lib/cdp";
 import { getCurrentStaff } from "@/lib/auth";
+import { cdpCore, coreErrorResponse } from "@/lib/cores";
+import { toLegacyMemberResponse, type CoreCustomer } from "@/lib/coreMappers";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ phone: string }> }
-) {
+/** Member = CDP customer. Lookup by phone; profile edits use optimistic `expectedVersion`. */
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ phone: string }> }) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
-    if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const staff = await getCurrentStaff(await getDb());
+    if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { phone } = await params;
-    if (!phone) {
-      return NextResponse.json({ error: "Missing phone parameter" }, { status: 400 });
-    }
+    if (!phone) return NextResponse.json({ error: "Missing phone parameter" }, { status: 400 });
 
-    const member = await lookupMember(db, phone);
-    if (!member) {
-      return NextResponse.json({ found: false, member: null });
-    }
-
-    return NextResponse.json({
-      found: true,
-      member: {
-        phone: member.phone,
-        fullName: member.full_name,
-        instagram: member.instagram,
-        facebook: member.facebook,
-        totalBookings: member.total_bookings,
-        totalSpent: member.total_spent,
-        totalNights: member.total_nights,
-        loyaltyTier: member.loyalty_tier,
-        preferredRoomClass: member.preferred_room_class,
-        lastBookedAt: member.last_booked_at,
-        isBlocked: member.is_blocked,
-        noShowCount: member.no_show_count || 0,
-        internalNotes: member.internal_notes,
-      },
+    const res = await cdpCore.post<{ found: boolean; customer: CoreCustomer | null }>("/internal/v1/customers/lookup", {
+      staff,
+      body: { phone },
     });
+    if (!res.data?.found || !res.data.customer) return NextResponse.json({ found: false, member: null });
+    return NextResponse.json({ found: true, member: toLegacyMemberResponse(res.data.customer) });
   } catch (error) {
-    console.error("CDP Member lookup error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("CDP member lookup error:", error);
+    return coreErrorResponse(error);
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ phone: string }> }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ phone: string }> }) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
-    if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const staff = await getCurrentStaff(await getDb());
+    if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { phone } = await params;
-    if (!phone) {
-      return NextResponse.json({ error: "Missing phone parameter" }, { status: 400 });
+    if (!phone) return NextResponse.json({ error: "Missing phone parameter" }, { status: 400 });
+
+    const body = (await req.json()) as { instagram?: string; facebook?: string; fullName?: string; internalNotes?: string };
+
+    const lookup = await cdpCore.post<{ found: boolean; customer: CoreCustomer | null }>("/internal/v1/customers/lookup", { staff, body: { phone } });
+    const current = lookup.data?.customer;
+    if (!lookup.data?.found || !current) return NextResponse.json({ error: "Không tìm thấy thành viên" }, { status: 404 });
+
+    const patch: Record<string, unknown> = { expectedVersion: current.version };
+    for (const k of ["instagram", "facebook", "fullName", "internalNotes"] as const) {
+      if (typeof body[k] === "string") patch[k] = body[k];
     }
-
-    const body = (await req.json()) as {
-      instagram?: string;
-      facebook?: string;
-      fullName?: string;
-    };
-
-    const result = await updateMemberSocial(db, {
-      phone,
-      instagram: body.instagram,
-      facebook: body.facebook,
-      fullName: body.fullName,
-      staffId: staff.id,
-    });
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
+    const res = await cdpCore.patch<{ customer: CoreCustomer }>(`/internal/v1/customers/${encodeURIComponent(current.customerId)}`, { staff, body: patch });
 
     return NextResponse.json({
       success: true,
       message: "Cập nhật tài khoản mạng xã hội thành công",
-      member: result.member,
+      member: toLegacyMemberResponse(res.data!.customer),
     });
-  } catch (error: any) {
-    console.error("Update member social error:", error);
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+  } catch (error) {
+    console.error("Update member error:", error);
+    return coreErrorResponse(error);
   }
 }
 
