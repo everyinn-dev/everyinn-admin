@@ -43,10 +43,13 @@ export interface CoreBlock {
   blockedTo: string;
   reason: string | null;
   note: string | null;
-  status: string;
-  createdBy: number | string | null;
+  status: "active" | "released";
+  /** Core returns a `{ id, name }` staff reference, not a bare id. */
+  createdBy: { id: number; name: string | null } | null;
   createdAt: string;
   releasedAt: string | null;
+  releasedBy: { id: number; name: string | null } | null;
+  releaseReason: string | null;
   version: number;
 }
 
@@ -248,8 +251,30 @@ export function toGanttBlock(b: CoreBlock): GanttBlockItem & { version: number }
     blockedTo: b.blockedTo,
     reason: nz(b.reason),
     note: nz(b.note),
-    createdByStaffId: typeof b.createdBy === "number" ? b.createdBy : b.createdBy ? Number(b.createdBy) || undefined : undefined,
+    createdByStaffId: b.createdBy?.id,
     createdAt: b.createdAt,
+    version: b.version,
+  };
+}
+
+/** Legacy `GET /api/room-blocks` row shape (snake_case, joined room + staff name). */
+export function toLegacyRoomBlock(b: CoreBlock) {
+  return {
+    id: b.id,
+    room_id: b.roomId,
+    room_name: b.roomName,
+    room_class: b.roomClass,
+    blocked_from: b.blockedFrom,
+    blocked_to: b.blockedTo,
+    reason: b.reason,
+    note: b.note,
+    status: b.status,
+    created_by: b.createdBy?.id ?? null,
+    created_by_staff_name: b.createdBy?.name ?? null,
+    created_at: b.createdAt,
+    released_at: b.releasedAt,
+    release_reason: b.releaseReason,
+    // Needed by the UI to release the block (optimistic concurrency).
     version: b.version,
   };
 }
