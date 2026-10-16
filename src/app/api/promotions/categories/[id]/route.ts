@@ -1,142 +1,141 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
-import { invalidatePromotionsCache } from "@/lib/masterData";
+import { bookingCore, newIdempotencyKey } from "@/lib/cores";
+import { toHttpError } from "@/lib/apiError";
+import {
+  toLegacyCategory,
+  type CoreCategoryDto,
+  type CoreCategoryEnvelope,
+} from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /**
  * PUT /api/promotions/categories/[id]
- * Update a promotion category
+ * Update a promotion category via Booking Core
  */
 export async function PUT(
-  req: NextRequest,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = (await req.json()) as any;
-    const { name, code, description, icon, badge_color, sort_order, is_active } = body;
+    let expectedVersion = body.version ?? body.expectedVersion;
 
-    if (!name?.trim() || !code?.trim()) {
-      return NextResponse.json(
-        { error: "Vui lòng nhập tên loại ưu đãi và mã code phân loại." },
-        { status: 400 }
+    if (expectedVersion === undefined) {
+      const all = await bookingCore.get<{ categories: CoreCategoryDto[] }>(
+        "/internal/v1/promotion-categories",
+        { staff }
       );
+      const match = (all.data?.categories || []).find((c) => c.id === id);
+      if (!match) {
+        return Response.json(
+          { error: "Không tìm thấy danh mục loại ưu đãi để cập nhật." },
+          { status: 404 }
+        );
+      }
+      expectedVersion = match.version;
     }
 
-    const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    const coreBody: Record<string, unknown> = {
+      expectedVersion: Number(expectedVersion),
+    };
 
-    // Check if code is used by another category
-    const duplicate = await db
-      .prepare("SELECT id FROM promotion_categories WHERE code = ? AND id != ? LIMIT 1")
-      .bind(cleanCode, id)
-      .first();
-
-    if (duplicate) {
-      return NextResponse.json(
-        { error: `Mã loại ưu đãi '${cleanCode}' đã được danh mục khác sử dụng.` },
-        { status: 409 }
-      );
+    if (body.name !== undefined) coreBody.name = body.name?.trim();
+    if (body.description !== undefined) {
+      coreBody.description = body.description ? String(body.description).trim() : null;
+    }
+    if (body.icon !== undefined) coreBody.icon = body.icon ? String(body.icon).trim() : "🎁";
+    if (body.badge_color !== undefined || body.badgeColor !== undefined) {
+      coreBody.badgeColor = body.badge_color || body.badgeColor || "purple";
+    }
+    if (body.sort_order !== undefined || body.sortOrder !== undefined) {
+      coreBody.sortOrder = Number(body.sort_order ?? body.sortOrder ?? 0);
+    }
+    if (body.is_active !== undefined || body.isActive !== undefined) {
+      coreBody.isActive = body.is_active !== undefined ? Boolean(body.is_active) : Boolean(body.isActive);
     }
 
-    const now = new Date().toISOString();
-
-    const res = await db
-      .prepare(
-        `UPDATE promotion_categories
-         SET name = ?, code = ?, description = ?, icon = ?, badge_color = ?, sort_order = ?, is_active = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .bind(
-        name.trim(),
-        cleanCode,
-        description?.trim() || null,
-        icon?.trim() || "🎁",
-        badge_color || "purple",
-        Number(sort_order) || 0,
-        is_active ? 1 : 0,
-        now,
-        id
-      )
-      .run();
-
-    if (res.meta.changes === 0) {
-      return NextResponse.json(
-        { error: "Không tìm thấy danh mục loại ưu đãi để cập nhật." },
-        { status: 404 }
-      );
-    }
-
-    invalidatePromotionsCache();
-
-    return NextResponse.json({ success: true, message: "Cập nhật loại ưu đãi thành công." });
-  } catch (error) {
-    console.error("PUT /api/promotions/categories/[id] error:", error);
-    return NextResponse.json(
-      { error: "Không thể cập nhật loại ưu đãi." },
-      { status: 500 }
+    const coreRes = await bookingCore.patch<CoreCategoryEnvelope>(
+      `/internal/v1/promotion-categories/${id}`,
+      {
+        staff,
+        idempotencyKey: newIdempotencyKey("promo-cat-update"),
+        body: coreBody,
+      }
     );
+
+    if (!coreRes.data?.category) {
+      throw new Error("Không nhận được dữ liệu danh mục từ Booking Core.");
+    }
+
+    return Response.json({
+      success: true,
+      message: "Cập nhật loại ưu đãi thành công.",
+      category: toLegacyCategory(coreRes.data.category),
+    });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }
 
 /**
  * DELETE /api/promotions/categories/[id]
- * Delete a category if not in use
+ * Deactivates category if not in use by any promotion
  */
 export async function DELETE(
-  req: NextRequest,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if there are promotions assigned to this category
-    const countRow = await db
-      .prepare("SELECT COUNT(*) as cnt FROM promotions WHERE category_id = ?")
-      .bind(id)
-      .first<{ cnt: number }>();
-
-    if (countRow && countRow.cnt > 0) {
-      return NextResponse.json(
-        {
-          error: `Không thể xóa loại ưu đãi này vì đang có ${countRow.cnt} chương trình ưu đãi thuộc danh mục. Vui lòng chuyển hoặc xóa các ưu đãi trước.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const res = await db
-      .prepare("DELETE FROM promotion_categories WHERE id = ?")
-      .bind(id)
-      .run();
-
-    if (res.meta.changes === 0) {
-      return NextResponse.json(
+    const all = await bookingCore.get<{ categories: CoreCategoryDto[] }>(
+      "/internal/v1/promotion-categories",
+      { staff }
+    );
+    const match = (all.data?.categories || []).find((c) => c.id === id);
+    if (!match) {
+      return Response.json(
         { error: "Không tìm thấy danh mục loại ưu đãi để xóa." },
         { status: 404 }
       );
     }
 
-    invalidatePromotionsCache();
+    const promoCount = match.promoCount ?? 0;
+    if (promoCount > 0) {
+      return Response.json(
+        {
+          error: `Không thể xóa loại ưu đãi này vì đang có ${promoCount} chương trình ưu đãi thuộc danh mục. Vui lòng chuyển hoặc xóa các ưu đãi trước.`,
+        },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json({ success: true, message: "Xóa loại ưu đãi thành công." });
-  } catch (error) {
-    console.error("DELETE /api/promotions/categories/[id] error:", error);
-    return NextResponse.json(
-      { error: "Không thể xóa loại ưu đãi." },
-      { status: 500 }
+    await bookingCore.patch<CoreCategoryEnvelope>(
+      `/internal/v1/promotion-categories/${id}`,
+      {
+        staff,
+        idempotencyKey: newIdempotencyKey("promo-cat-delete"),
+        body: {
+          expectedVersion: match.version,
+          isActive: false,
+        },
+      }
     );
+
+    return Response.json({ success: true, message: "Xóa loại ưu đãi thành công." });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }

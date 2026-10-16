@@ -1,71 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
-import { logEvent } from "@/lib/audit";
-import { invalidatePrefix } from "@/lib/cache";
-import { getCachedRooms } from "@/lib/masterData";
-import { checkRoomBlockOverlap } from "@/lib/validators";
+import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
+import { toLegacyRoomBlock, type CoreBlock } from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-  "Pragma": "no-cache",
-  "Expires": "0",
+  Pragma: "no-cache",
+  Expires: "0",
 };
 
+/**
+ * Room blocks are owned by Booking Core: a block claims the same 30-minute occupancy lane as a
+ * booking, so overlap detection and the Gantt stay consistent. Admin no longer touches D1 here.
+ */
 export async function GET(req: NextRequest) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
-    if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const staff = await getCurrentStaff();
+    if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const roomId = searchParams.get("roomId");
-    const from = searchParams.get("from");
-    const to = searchParams.get("to");
-
-    let query = `
-      SELECT rb.*, r.name as room_name, r.room_class, s.full_name as created_by_staff_name
-      FROM room_blocks rb
-      LEFT JOIN rooms r ON rb.room_id = r.id
-      LEFT JOIN staff s ON rb.created_by = s.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-
-    if (roomId) {
-      query += ` AND rb.room_id = ?`;
-      params.push(roomId);
-    }
-    if (from && to) {
-      query += ` AND rb.blocked_from <= ? AND rb.blocked_to >= ?`;
-      params.push(to, from);
+    const query: Record<string, string> = {};
+    for (const key of ["roomId", "from", "to", "status"] as const) {
+      const v = searchParams.get(key)?.trim();
+      if (v) query[key] = v;
     }
 
-    query += ` ORDER BY rb.blocked_from DESC LIMIT 50`;
-
-    const stmt = db.prepare(query);
-    const bound = params.length > 0 ? stmt.bind(...params) : stmt;
-    const { results } = await bound.all();
-
-    return NextResponse.json({ blocks: results }, { headers: NO_CACHE_HEADERS });
-  } catch (error: any) {
+    const res = await bookingCore.get<{ blocks: CoreBlock[] }>("/internal/v1/room-blocks", { staff, query });
+    return NextResponse.json({ blocks: (res.data?.blocks ?? []).map(toLegacyRoomBlock) }, { headers: NO_CACHE_HEADERS });
+  } catch (error) {
     console.error("GET room blocks error:", error);
-    return NextResponse.json({ error: "Failed to fetch room blocks" }, { status: 500 });
+    return coreErrorResponse(error);
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
-    if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const staff = await getCurrentStaff();
+    if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = (await req.json()) as {
       roomId?: string;
@@ -75,107 +49,42 @@ export async function POST(req: NextRequest) {
       note?: string;
     };
 
-    const { roomId, blockedFrom, blockedTo, reason, note } = body;
-
-    if (!roomId || !blockedFrom || !blockedTo) {
+    if (!body.roomId || !body.blockedFrom || !body.blockedTo) {
       return NextResponse.json(
         { error: "Vui lòng chọn phòng và khoảng thời gian bắt đầu, kết thúc khóa phòng." },
         { status: 400 }
       );
     }
 
-    const rooms = await getCachedRooms(db);
-    const targetRoom = rooms.find((r) => r.id === roomId);
-    if (!targetRoom) {
-      return NextResponse.json({ error: "Phòng được chọn không tồn tại." }, { status: 404 });
+    const from = new Date(body.blockedFrom);
+    const to = new Date(body.blockedTo);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return NextResponse.json({ error: "Thời gian khóa phòng không hợp lệ." }, { status: 400 });
     }
 
-    const fromDate = new Date(blockedFrom);
-    const toDate = new Date(blockedTo);
-
-    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()) || toDate <= fromDate) {
-      return NextResponse.json(
-        { error: "Thời gian bắt đầu và kết thúc khóa phòng không hợp lệ (giờ kết thúc phải sau giờ bắt đầu)." },
-        { status: 400 }
-      );
-    }
-
-    // Validate collision with bookings and other room blocks
-    const overlapResult = await checkRoomBlockOverlap(
-      db,
-      {
-        roomId,
-        blockedFrom: fromDate.toISOString(),
-        blockedTo: toDate.toISOString(),
-      },
-      targetRoom.name
-    );
-
-    if (overlapResult.hasOverlap) {
-      return NextResponse.json(
-        {
-          error:
-            overlapResult.errorMessage ||
-            `Không thể khóa phòng ${targetRoom.name} vì bị trùng lịch đặt phòng hoặc lịch khóa khác.`,
-        },
-        { status: 409 }
-      );
-    }
-
-    const now = new Date().toISOString();
-    const cleanReason = (reason || "Bảo trì / Khóa phòng").trim();
-    const cleanNote = note ? note.trim() : null;
-
-    const result = await db
-      .prepare(
-        `INSERT INTO room_blocks (room_id, blocked_from, blocked_to, reason, note, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .bind(roomId, fromDate.toISOString(), toDate.toISOString(), cleanReason, cleanNote, staff.id, now)
-      .run();
-
-    const newBlockId = result.meta.last_row_id;
-
-    await logEvent(
-      db,
-      "ROOM_BLOCK_CREATED",
-      "room_block",
-      String(newBlockId),
-      {
-        roomId,
-        roomName: targetRoom.name,
-        blockedFrom: fromDate.toISOString(),
-        blockedTo: toDate.toISOString(),
-        reason: cleanReason,
-        note: cleanNote,
-        staffId: staff.id,
-      },
-      staff.id
-    );
-
-    // Invalidate Gantt chart caches
-    invalidatePrefix("dashboard:gantt:");
-
-    return NextResponse.json({
-      success: true,
-      message: `Đã khóa phòng ${targetRoom.name} thành công.`,
-      block: {
-        id: newBlockId,
-        roomId,
-        roomName: targetRoom.name,
-        blockedFrom: fromDate.toISOString(),
-        blockedTo: toDate.toISOString(),
-        reason: cleanReason,
-        note: cleanNote,
-        createdBy: staff.id,
-        createdAt: now,
+    // Core validates range, 30-minute alignment, room existence and overlap atomically and
+    // returns a localised 409/422 that `coreErrorResponse` passes straight through to the UI.
+    const res = await bookingCore.post<{ block: CoreBlock }>("/internal/v1/room-blocks", {
+      staff,
+      idempotencyKey: newIdempotencyKey("room-block-create"),
+      body: {
+        roomId: body.roomId,
+        blockedFrom: from.toISOString(),
+        blockedTo: to.toISOString(),
+        reason: body.reason?.trim() || undefined,
+        note: body.note?.trim() || undefined,
       },
     });
-  } catch (error: any) {
+
+    const block = res.data!.block;
+    return NextResponse.json({
+      success: true,
+      message: `Đã khóa phòng ${block.roomName ?? block.roomId} thành công.`,
+      block: toLegacyRoomBlock(block),
+    });
+  } catch (error) {
     console.error("POST room block error:", error);
-    return NextResponse.json(
-      { error: error?.message || "Đã xảy ra lỗi khi tạo khóa phòng." },
-      { status: 500 }
-    );
+    return coreErrorResponse(error);
   }
 }
+

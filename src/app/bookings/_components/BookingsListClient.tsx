@@ -106,6 +106,51 @@ export const BookingsListClient: React.FC = () => {
   const lastEtagRef = useRef<string | null>(null);
   const lastFilterKeyRef = useRef<string>("");
 
+  // Declared before `fetchBookings` because the auto-open path calls it. Stable identity
+  // (only setState inside), so it can safely be a dependency of the fetch callback.
+  const handleSelectBooking = useCallback((b: Booking) => {
+    setSelectedBooking({
+      id: b.id,
+      roomId: b.room_id,
+      guestName: b.member_name,
+      phone: b.member_phone,
+      bookingType: b.booking_type,
+      checkinAt: b.checkin_at,
+      checkoutAt: b.checkout_at,
+      totalPrice: b.total_price,
+      status: b.status,
+      instagram: b.instagram,
+      facebook: b.facebook,
+      closingNote: b.closing_note,
+      note: b.note,
+      // Control fields
+      createdAt: b.created_at,
+      createdByStaffId: b.created_by_staff_id,
+      createdByStaffName: b.created_by_staff_name,
+      updatedAt: b.updated_at,
+      updatedByStaffId: b.updated_by_staff_id,
+      updatedByStaffName: b.updated_by_staff_name,
+      modNo: b.mod_no,
+      // No-Show and Refund tracking
+      noShowAt: b.no_show_at,
+      noShowBy: b.no_show_by,
+      noShowByStaffName: b.no_show_by_staff_name,
+      noShowReason: b.no_show_reason,
+      refundAmount: b.refund_amount,
+      originalPrice: b.original_price,
+      // Deposit tracking
+      isDeposit: b.is_deposit,
+      depositAmount: b.deposit_amount,
+      paidAmount: b.paid_amount,
+      remainingAmount: b.remaining_amount,
+      depositDueDate: b.deposit_due_date,
+      depositStatus: b.deposit_status,
+      depositPaidAt: b.deposit_paid_at,
+      depositReminderSentAt: b.deposit_reminder_sent_at,
+      remainingPaidAt: b.remaining_paid_at,
+    });
+  }, []);
+
   // 2. Fetch bookings with server-side pagination, search & filters
   const fetchBookings = useCallback(async () => {
     try {
@@ -175,7 +220,7 @@ export const BookingsListClient: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortBy, sortDir, search, status, depositStatus, roomId, bookingType, createdBy, createdFrom, createdTo, autoOpen]);
+  }, [page, pageSize, sortBy, sortDir, search, status, depositStatus, roomId, bookingType, createdBy, createdFrom, createdTo, autoOpen, handleSelectBooking]);
 
   useEffect(() => {
     fetchBookings();
@@ -238,48 +283,7 @@ export const BookingsListClient: React.FC = () => {
   };
 
   // Handle row selection -> open BookingDetailDrawer
-  const handleSelectBooking = (b: Booking) => {
-    setSelectedBooking({
-      id: b.id,
-      roomId: b.room_id,
-      guestName: b.member_name,
-      phone: b.member_phone,
-      bookingType: b.booking_type,
-      checkinAt: b.checkin_at,
-      checkoutAt: b.checkout_at,
-      totalPrice: b.total_price,
-      status: b.status,
-      instagram: b.instagram,
-      facebook: b.facebook,
-      closingNote: b.closing_note,
-      note: b.note,
-      // Control fields
-      createdAt: b.created_at,
-      createdByStaffId: b.created_by_staff_id,
-      createdByStaffName: b.created_by_staff_name,
-      updatedAt: b.updated_at,
-      updatedByStaffId: b.updated_by_staff_id,
-      updatedByStaffName: b.updated_by_staff_name,
-      modNo: b.mod_no,
-      // No-Show and Refund tracking
-      noShowAt: b.no_show_at,
-      noShowBy: b.no_show_by,
-      noShowByStaffName: b.no_show_by_staff_name,
-      noShowReason: b.no_show_reason,
-      refundAmount: b.refund_amount,
-      originalPrice: b.original_price,
-      // Deposit tracking
-      isDeposit: b.is_deposit,
-      depositAmount: b.deposit_amount,
-      paidAmount: b.paid_amount,
-      remainingAmount: b.remaining_amount,
-      depositDueDate: b.deposit_due_date,
-      depositStatus: b.deposit_status,
-      depositPaidAt: b.deposit_paid_at,
-      depositReminderSentAt: b.deposit_reminder_sent_at,
-      remainingPaidAt: b.remaining_paid_at,
-    });
-  };
+  // (implementation is hoisted above `fetchBookings`, which needs it for the auto-open path)
 
   return (
     <div className="space-y-6">

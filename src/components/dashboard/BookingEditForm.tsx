@@ -64,81 +64,72 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [errorMessage, setErrorMessage] = useState("");
 
   // Fetch initial booking details, rooms, and pricing rules
-  useEffect(() => {
-    let isMounted = true;
+  const loadData = React.useCallback(async () => {
+    try {
+      setLoadingInitial(true);
+      const [bookingRes, roomsRes, pricingRes] = await Promise.all([
+        fetch(`/api/bookings/${bookingId}`),
+        fetch("/api/rooms"),
+        fetch("/api/pricing-rules"),
+      ]);
 
-    async function loadData() {
-      try {
-        setLoadingInitial(true);
-        const [bookingRes, roomsRes, pricingRes] = await Promise.all([
-          fetch(`/api/bookings/${bookingId}`),
-          fetch("/api/rooms"),
-          fetch("/api/pricing-rules"),
-        ]);
+      if (!bookingRes.ok) throw new Error("Không thể tải thông tin đặt phòng.");
+      const bookingData = (await bookingRes.json()) as any;
+      const roomsData = roomsRes.ok ? (((await roomsRes.json()) as any)) : { rooms: [] };
+      const pricingData = pricingRes.ok ? (((await pricingRes.json()) as any)) : { pricingRules: [] };
 
-        if (!bookingRes.ok) throw new Error("Không thể tải thông tin đặt phòng.");
-        const bookingData = (await bookingRes.json()) as any;
-        const roomsData = roomsRes.ok ? (((await roomsRes.json()) as any)) : { rooms: [] };
-        const pricingData = pricingRes.ok ? (((await pricingRes.json()) as any)) : { pricingRules: [] };
+      const b: Booking = bookingData.booking;
+      setBooking(b);
+      setRooms(roomsData.rooms || []);
+      setPricingRules(pricingData.pricingRules || []);
 
-        if (!isMounted) return;
+      setRoomId(b.room_id);
+      const type = (b.booking_type as BookingType) || "hourly";
+      setBookingType(type);
+      setNote(b.note || "");
+      setClosingNote(b.closing_note || "");
 
-        const b: Booking = bookingData.booking;
-        setBooking(b);
-        setRooms(roomsData.rooms || []);
-        setPricingRules(pricingData.pricingRules || []);
+      const inDate = new Date(b.checkin_at);
+      const outDate = new Date(b.checkout_at);
+      const inDateStr = b.checkin_at.slice(0, 10);
+      const outDateStr = b.checkout_at.slice(0, 10);
 
-        setRoomId(b.room_id);
-        const type = (b.booking_type as BookingType) || "hourly";
-        setBookingType(type);
-        setNote(b.note || "");
-        setClosingNote(b.closing_note || "");
+      const inTimeStr = roundToNearest30Min(inDate);
+      const outTimeStr = roundToNearest30Min(outDate);
 
-        const inDate = new Date(b.checkin_at);
-        const outDate = new Date(b.checkout_at);
-        const inDateStr = b.checkin_at.slice(0, 10);
-        const outDateStr = b.checkout_at.slice(0, 10);
+      // Initialize Hourly
+      setHourlyDate(inDateStr);
+      setHourlyCheckinHour(inDate.getHours());
+      const durationH = Math.max(3, Math.round((outDate.getTime() - inDate.getTime()) / (3600 * 1000)));
+      setHourlyDuration(durationH);
 
-        const inTimeStr = roundToNearest30Min(inDate);
-        const outTimeStr = roundToNearest30Min(outDate);
+      // Initialize Overnight
+      setOvernightDate(inDateStr);
+      setOvernightStartHour(inDate.getHours());
+      setOvernightLateHours(b.late_checkout_hours || 0);
 
-        // Initialize Hourly
-        setHourlyDate(inDateStr);
-        setHourlyCheckinHour(inDate.getHours());
-        const durationH = Math.max(3, Math.round((outDate.getTime() - inDate.getTime()) / (3600 * 1000)));
-        setHourlyDuration(durationH);
+      // Initialize DayUse
+      setDayuseDate(inDateStr);
+      const nights = Math.max(1, Math.round((outDate.getTime() - inDate.getTime()) / (24 * 3600 * 1000)));
+      setDayuseNights(nights);
+      setDayuseLateHours(b.late_checkout_hours || 0);
 
-        // Initialize Overnight
-        setOvernightDate(inDateStr);
-        setOvernightStartHour(inDate.getHours());
-        setOvernightLateHours(b.late_checkout_hours || 0);
-
-        // Initialize DayUse
-        setDayuseDate(inDateStr);
-        const nights = Math.max(1, Math.round((outDate.getTime() - inDate.getTime()) / (24 * 3600 * 1000)));
-        setDayuseNights(nights);
-        setDayuseLateHours(b.late_checkout_hours || 0);
-
-        // Initialize Custom (snapped to 30-minute steps)
-        setCustomCheckinDate(inDateStr);
-        setCustomCheckinTime(inTimeStr);
-        setCustomCheckoutDate(outDateStr);
-        setCustomCheckoutTime(outTimeStr);
-        setCustomPrice(b.total_price || 0);
-      } catch (err: any) {
-        if (isMounted) {
-          setErrorMessage(err.message || "Lỗi tải dữ liệu đặt phòng.");
-        }
-      } finally {
-        if (isMounted) setLoadingInitial(false);
-      }
+      // Initialize Custom (snapped to 30-minute steps)
+      setCustomCheckinDate(inDateStr);
+      setCustomCheckinTime(inTimeStr);
+      setCustomCheckoutDate(outDateStr);
+      setCustomCheckoutTime(outTimeStr);
+      setCustomPrice(b.total_price || 0);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Lỗi tải dữ liệu đặt phòng.");
+    } finally {
+      setLoadingInitial(false);
     }
-
-    loadData();
-    return () => {
-      isMounted = false;
-    };
   }, [bookingId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Selected room
   const selectedRoom = useMemo(() => {
@@ -242,6 +233,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "update",
+          expectedVersion: booking?.mod_no ?? (booking as any)?.version,
           roomId,
           bookingType,
           checkinAt: calculatedCheckinAt.toISOString(),
@@ -257,10 +249,11 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       if (!res.ok) {
         const errorText = data.error || "Không thể cập nhật đặt phòng.";
         if (res.status === 409) {
-          toast.warning(errorText, "Xung đột lịch & Giờ dọn phòng");
-        } else {
-          toast.error(errorText, "Lỗi cập nhật đặt phòng");
+          toast.warning("Dữ liệu hoặc lịch phòng đã bị thay đổi bởi người khác. Đang tải lại dữ liệu mới nhất...", "Xung đột lịch & Giờ dọn phòng (409)");
+          await loadData();
+          return;
         }
+        toast.error(errorText, "Lỗi cập nhật đặt phòng");
         throw new Error(errorText);
       }
 

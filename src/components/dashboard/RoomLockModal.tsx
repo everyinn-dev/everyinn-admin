@@ -83,7 +83,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
   }, [isOpen, initialRoomId, rooms]);
 
   // Compute duration in hours and validate
-  const { durationHours, isRangeValid, durationText } = useMemo(() => {
+  const { isRangeValid, durationText } = useMemo(() => {
     if (!fromDate || !fromTime || !toDate || !toTime) {
       return { durationHours: 0, isRangeValid: false, durationText: "" };
     }

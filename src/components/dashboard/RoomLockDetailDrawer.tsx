@@ -57,11 +57,22 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
       setIsDeleting(true);
       const res = await fetch(`/api/room-blocks/${block.id}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedVersion: block.version,
+        }),
       });
 
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
 
       if (!res.ok) {
+        if (res.status === 409) {
+          toast.warning("Khóa phòng đã được cập nhật hoặc mở bởi phiên làm việc khác. Đang tải lại dữ liệu...", "Xung đột dữ liệu (409)");
+          onBlockDeleted();
+          notifyDataChanged("ROOM_BLOCKS_CHANGED");
+          onClose();
+          return;
+        }
         toast.error(data.error || "Không thể mở khóa phòng.");
         return;
       }

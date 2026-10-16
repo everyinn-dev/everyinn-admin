@@ -16,6 +16,7 @@ export interface PromotionCategory {
   created_at: string;
   updated_at: string;
   promo_count?: number;
+  version?: number;
 }
 
 export interface Promotion {
@@ -55,6 +56,7 @@ export interface Promotion {
   updated_by_staff_id?: number | null;
   created_at: string;
   updated_at: string;
+  version?: number;
 }
 
 export interface PromotionEligibilityContext {

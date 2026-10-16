@@ -15,13 +15,14 @@ export interface StaffJwtPayload {
 // 1 Day expiration standard (24 hours = 86400 seconds)
 export const JWT_EXPIRATION_SECONDS = 24 * 60 * 60;
 
-const DEFAULT_SECRET = "everyinn_jwt_secret_vanhanh_2026_d1_edge_super_key";
-
-function getSecretKey(): string {
-  if (typeof process !== "undefined" && process.env?.JWT_SECRET) {
-    return process.env.JWT_SECRET;
+export function getSecretKey(): string {
+  const secret = typeof process !== "undefined" ? process.env?.JWT_SECRET : undefined;
+  if (!secret) {
+    throw new Error(
+      "JWT_SECRET environment variable is missing. Set it via wrangler secret put JWT_SECRET or in .env.local."
+    );
   }
-  return DEFAULT_SECRET;
+  return secret;
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {

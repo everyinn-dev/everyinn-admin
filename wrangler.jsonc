@@ -1,5 +1,16 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
+
+	// ──────────────────────────────────────────────────────────────────────────────
+	// This repo builds exactly TWO Workers. No preview/version URLs are used.
+	//
+	//   branch `main` → `everyinn-admin`      (production)  `npm run cf:deploy`
+	//   branch `dev`  → `everyinn-admin-dev`  (UAT)         `npm run cf:deploy:dev`
+	//
+	// Top level below = PRODUCTION. `env.dev` = UAT. Bindings are NOT inherited between
+	// them, so each block lists its own D1 and Service Bindings in full.
+	// ──────────────────────────────────────────────────────────────────────────────
+
 	"name": "everyinn-admin",
 	"main": ".open-next/worker.js",
 	"compatibility_date": "2025-10-08",
@@ -7,6 +18,9 @@
 		"nodejs_compat",
 		"global_fetch_strictly_public"
 	],
+	// Version preview URLs are disabled: a preview version would inherit this Worker's
+	// production bindings. UAT is a separate Worker instead (see env.dev).
+	"preview_urls": false,
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".open-next/assets"
@@ -21,5 +35,32 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	// Production Service Bindings to the Cores (Phase 1.5, P-3 / S6).
+	"services": [
+		{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core" },
+		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" }
+	],
+	"env": {
+		"dev": {
+			"name": "everyinn-admin-dev",
+			"main": ".open-next/worker.js",
+			"preview_urls": false,
+			"assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
+			// Staff-only DB (auth + Admin audit). No booking/member data here.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "admin-db-dev",
+					"database_id": "be3b4c8a-117f-401b-8e11-ed1c7786d459",
+					"migrations_dir": "db/admin-db"
+				}
+			],
+			"services": [
+				{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core-dev" },
+				{ "binding": "CDP_CORE", "service": "everyinn-cdp-core-dev" }
+			],
+			"observability": { "enabled": true }
+		}
+	}
 }

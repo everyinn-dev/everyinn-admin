@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { PromotionCategory, PromotionBadgeColor } from "@/types/promotions";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
@@ -41,7 +41,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [isActive, setIsActive] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  const [prevCategoryKey, setPrevCategoryKey] = useState<string | null>(null);
+  const currentCategoryKey = isOpen ? (category ? category.id : "new") : null;
+
+  if (currentCategoryKey !== prevCategoryKey) {
+    setPrevCategoryKey(currentCategoryKey);
     if (category) {
       setName(category.name || "");
       setCode(category.code || "");
@@ -59,7 +63,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       setSortOrder(0);
       setIsActive(true);
     }
-  }, [category, isOpen]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +78,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
     try {
       setSubmitting(true);
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: name.trim(),
         code: code.trim().toLowerCase(),
         description: description.trim() || null,
@@ -82,6 +86,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         badge_color: badgeColor,
         sort_order: Number(sortOrder) || 0,
         is_active: isActive ? 1 : 0,
+        expectedVersion: category?.version,
       };
 
       const url = category
@@ -97,6 +102,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
       const data = (await res.json()) as any;
       if (!res.ok) {
+        if (res.status === 409) {
+          toast.warning("Danh mục ưu đãi đã được sửa đổi bởi người khác. Đang tải lại...", "Xung đột dữ liệu (409)");
+          onSaved();
+          onClose();
+          return;
+        }
         throw new Error(data.error || "Không thể lưu loại ưu đãi.");
       }
 

@@ -1,0 +1,18 @@
+# Every Inn Admin Panel — Cursor IDE Rules
+
+You are working on the Every Inn Admin Panel (Next.js 16 + Cloudflare Workers + D1 SQLite + Tailwind CSS v4).
+
+## 🧠 Sơ Đồ Mắc Xích & Single Source of Truth
+Trước khi viết code hay tìm kiếm file, BẮT BUỘC tham khảo:
+1. `AGENTS.md` — Bảng tra cứu hệ nơ-ron toàn bộ Database, Lib, API, và UI Components.
+2. `docs/project_status_and_backlog.md` — Master Backlog chi tiết 6 Epics / 12 Tasks sẵn sàng triển khai.
+3. `.agents/rules/cloudflare-free-tier.md` — Giới hạn hạ tầng Cloudflare Workers & D1.
+4. `.agents/README.md` — Chỉ mục local cho MCP templates, token scopes, skills, và conventions của dự án.
+
+## 🛡️ Quy Chuẩn Bất Biến (Rules)
+- **Time Slot**: Dùng 48 slot tiêu chuẩn `TIME_SLOTS_30MIN` (`src/lib/timelineUtils.ts`). Không dùng phút lẻ. Khóa giờ quá khứ.
+- **Cloudflare Worker**: 10ms CPU (bcrypt <= 10, no nested loops). Stateless (Không dùng `setTimeout` chạy ngầm, không lưu lock trong biến module).
+- **D1 Quota**: Mọi câu lệnh `WHERE`/`ORDER BY` trên `bookings`, `members`, `room_blocks` bắt buộc có INDEX. Ghi nhiều bảng phải dùng `await db.batch()`.
+- **Deposit & CDP**: Tiền tích lũy của khách chỉ cộng theo tiền thực thu (`paid_amount`), không cộng tiền chưa thu đủ.
+- **UI & Toast**: Dùng dark theme Slate (`bg-slate-900`, `border-slate-800`). Luôn dùng `useToast()`, cấm dùng `window.alert()`.
+- **TypeScript**: Luôn chạy `npx tsc --noEmit` và đảm bảo 0 lỗi type.
