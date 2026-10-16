@@ -64,6 +64,10 @@ export class FakeCore {
           headers.set("x-request-id", "mock-req-id");
         }
 
+        if (status === 204 || status === 205 || status === 304) {
+          return new Response(null, { status, headers });
+        }
+
         const bodyStr =
           typeof result.body === "string"
             ? result.body

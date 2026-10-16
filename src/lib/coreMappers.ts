@@ -10,6 +10,8 @@ import type {
   BookingRulesConfig,
   BookingStatus,
   BookingType,
+  DailyRosterItem,
+  DailyRosterResponse,
   DepositStatus,
   GanttBlockItem,
   GanttBookingItem,
@@ -529,3 +531,115 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     mod_no: c.version,
   };
 }
+
+// ───────────────────────── Daily Roster & Deposit Reminders (A-W3) ─────────────────────────
+
+export interface CoreRosterItem {
+  id: string;
+  roomId: string;
+  roomName: string | null;
+  roomNumber: string | null;
+  roomClass: RoomClass;
+  guestName: string;
+  phone: string;
+  instagram: string | null;
+  facebook: string | null;
+  bookingType: BookingType;
+  ratePlanCode: string;
+  checkinAt: string;
+  checkoutAt: string;
+  turnoverStartAt: string;
+  turnoverEndAt: string;
+  lateCheckoutHours: number;
+  totalPrice: number;
+  remainingAmount: number;
+  status: BookingStatus;
+  loyaltySyncStatus: "not_applicable" | "pending" | "synced";
+  loyaltyTier: string | null;
+  loyaltyStep: number | null;
+  closingNote: string | null;
+  note: string | null;
+  createdAt: string;
+  createdBy: CoreStaffRef | null;
+  updatedAt: string;
+  version: number;
+}
+
+export interface CoreDailyRosterResponse {
+  date: string;
+  summary: {
+    totalCheckins: number;
+    totalCheckouts: number;
+    hourlyCount: number;
+    overnightCount: number;
+    dayuseCount: number;
+    customCount: number;
+    loyaltyPendingCount?: number;
+  };
+  checkins: CoreRosterItem[];
+  checkouts: CoreRosterItem[];
+}
+
+export interface CoreDepositRemindersResponse {
+  reminders: CoreBookingDto[];
+  count: number;
+  today: string;
+}
+
+export function toDailyRosterItem(item: CoreRosterItem): DailyRosterItem {
+  const floor = item.roomNumber ? parseInt(item.roomNumber[0], 10) || 1 : 1;
+  return {
+    id: item.id,
+    roomId: item.roomId,
+    roomName: item.roomName || item.roomId,
+    roomNumber: item.roomNumber || "",
+    roomClass: item.roomClass,
+    floor,
+    guestName: item.guestName,
+    phone: item.phone,
+    instagram: u(item.instagram),
+    facebook: u(item.facebook),
+    bookingType: item.bookingType,
+    checkinAt: item.checkinAt,
+    checkoutAt: item.checkoutAt,
+    turnoverStartAt: item.turnoverStartAt,
+    turnoverEndAt: item.turnoverEndAt,
+    totalPrice: item.totalPrice,
+    status: item.status,
+    closingNote: u(item.closingNote),
+    note: u(item.note),
+    loyaltyTier:
+      item.loyaltyTier === "bronze" || item.loyaltyTier === "silver" || item.loyaltyTier === "gold"
+        ? item.loyaltyTier
+        : "new",
+    totalBookings: 0,
+    lateCheckoutHours: item.lateCheckoutHours ?? 0,
+    createdAt: item.createdAt,
+    createdByStaffId: item.createdBy?.id ?? null,
+    createdByStaffName: item.createdBy?.name ?? null,
+    updatedAt: item.updatedAt,
+    updatedByStaffId: null,
+    updatedByStaffName: null,
+    modNo: item.version,
+  };
+}
+
+export function toDailyRosterResponse(core: CoreDailyRosterResponse): DailyRosterResponse {
+  const checkins = (core.checkins || []).map(toDailyRosterItem);
+  const checkouts = (core.checkouts || []).map(toDailyRosterItem);
+  return {
+    date: core.date,
+    summary: {
+      totalCheckins: core.summary?.totalCheckins ?? checkins.length,
+      totalCheckouts: core.summary?.totalCheckouts ?? checkouts.length,
+      hourlyCount: core.summary?.hourlyCount ?? 0,
+      overnightCount: core.summary?.overnightCount ?? 0,
+      dayuseCount: core.summary?.dayuseCount ?? 0,
+      customCount: core.summary?.customCount ?? 0,
+      doorCodeMissingCount: checkins.filter((c) => !c.doorCode).length,
+    },
+    checkins,
+    checkouts,
+  };
+}
+
