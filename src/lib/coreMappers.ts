@@ -16,10 +16,12 @@ import type {
   GanttBlockItem,
   GanttBookingItem,
   GanttRoomData,
+  LoyaltyTier,
   PricingRule,
   Room,
   RoomClass,
 } from "@/types";
+import type { Promotion, PromotionCategory, PromotionBadgeColor } from "@/types/promotions";
 
 // ───────────────────────── Booking Core DTOs (subset the BFF reads) ─────────────────────────
 
@@ -642,4 +644,107 @@ export function toDailyRosterResponse(core: CoreDailyRosterResponse): DailyRoste
     checkouts,
   };
 }
+
+// ───────────────────────── Promotions Suite (A-W5) ─────────────────────────
+
+export interface CorePromotionDto {
+  id: string;
+  categoryId: string;
+  categoryName: string | null;
+  categoryCode: string | null;
+  categoryIcon: string | null;
+  categoryColor: string | null;
+  name: string;
+  code: string | null;
+  description: string | null;
+  discountType: "percentage" | "fixed_amount";
+  discountValue: number;
+  maxDiscountAmount: number | null;
+  minOrderAmount: number;
+  applicableRoomClasses: RoomClass[];
+  applicableBookingTypes: BookingType[];
+  applicableRatePlanCodes: string[];
+  applicableLoyaltyTiers: string[];
+  applicableDaysOfWeek: number[];
+  startDate: string | null;
+  endDate: string | null;
+  usageLimit: number | null;
+  usedCount: number;
+  isActive: boolean;
+  archivedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoreCategoryDto {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  icon: string;
+  badgeColor: string;
+  sortOrder: number;
+  isActive: boolean;
+  version: number;
+  promoCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CorePromotionEnvelope {
+  promotion: CorePromotionDto;
+}
+
+export interface CoreCategoryEnvelope {
+  category: CoreCategoryDto;
+}
+
+export function toLegacyPromotion(p: CorePromotionDto): Promotion & { version: number } {
+  return {
+    id: p.id,
+    category_id: p.categoryId,
+    category_name: p.categoryName ?? undefined,
+    category_code: p.categoryCode ?? undefined,
+    category_icon: p.categoryIcon ?? undefined,
+    category_color: (p.categoryColor as PromotionBadgeColor) ?? undefined,
+    name: p.name,
+    code: p.code ?? undefined,
+    description: p.description ?? undefined,
+    discount_type: p.discountType,
+    discount_value: p.discountValue,
+    max_discount_amount: p.maxDiscountAmount ?? undefined,
+    min_order_amount: p.minOrderAmount,
+    applicable_room_classes: p.applicableRoomClasses,
+    applicable_booking_types: p.applicableBookingTypes,
+    applicable_loyalty_tiers: (p.applicableLoyaltyTiers || []).map((t) => (t === "not_member" ? "new" : t)) as LoyaltyTier[],
+    applicable_days_of_week: p.applicableDaysOfWeek,
+    start_date: p.startDate ?? undefined,
+    end_date: p.endDate ?? undefined,
+    usage_limit: p.usageLimit ?? undefined,
+    used_count: p.usedCount,
+    is_active: p.isActive ? 1 : 0,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+    version: p.version,
+  };
+}
+
+export function toLegacyCategory(c: CoreCategoryDto): PromotionCategory & { version: number } {
+  return {
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    description: c.description ?? undefined,
+    icon: c.icon,
+    badge_color: c.badgeColor as PromotionBadgeColor,
+    sort_order: c.sortOrder,
+    is_active: c.isActive ? 1 : 0,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+    promo_count: c.promoCount,
+    version: c.version,
+  };
+}
+
 

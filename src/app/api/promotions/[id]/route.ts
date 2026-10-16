@@ -1,15 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
-import { invalidatePromotionsCache } from "@/lib/masterData";
+import { bookingCore, newIdempotencyKey } from "@/lib/cores";
+import { toHttpError } from "@/lib/apiError";
+import {
+  toLegacyPromotion,
+  type CorePromotionDto,
+  type CorePromotionEnvelope,
+} from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function requirePromo(envelope: CorePromotionEnvelope | null): CorePromotionDto {
+  if (!envelope?.promotion) {
+    throw new Error("Không nhận được dữ liệu ưu đãi từ Booking Core.");
+  }
+  return envelope.promotion;
+}
 
 /**
  * GET /api/promotions/[id]
  */
 export async function GET(
-  req: NextRequest,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -17,60 +30,27 @@ export async function GET(
     const db = await getDb();
     const staff = await getCurrentStaff(db);
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const row = await db
-      .prepare(
-        `SELECT 
-          p.*, 
-          c.name as category_name, 
-          c.code as category_code, 
-          c.icon as category_icon, 
-          c.badge_color as category_color
-        FROM promotions p
-        LEFT JOIN promotion_categories c ON p.category_id = c.id
-        WHERE p.id = ? LIMIT 1`
-      )
-      .bind(id)
-      .first<any>();
+    const coreRes = await bookingCore.get<CorePromotionEnvelope>(
+      `/internal/v1/promotions/${id}`,
+      { staff }
+    );
 
-    if (!row) {
-      return NextResponse.json({ error: "Không tìm thấy chương trình ưu đãi." }, { status: 404 });
-    }
-
-    const promotion = {
-      ...row,
-      applicable_room_classes:
-        typeof row.applicable_room_classes === "string"
-          ? JSON.parse(row.applicable_room_classes)
-          : row.applicable_room_classes || [],
-      applicable_booking_types:
-        typeof row.applicable_booking_types === "string"
-          ? JSON.parse(row.applicable_booking_types)
-          : row.applicable_booking_types || [],
-      applicable_loyalty_tiers:
-        typeof row.applicable_loyalty_tiers === "string"
-          ? JSON.parse(row.applicable_loyalty_tiers)
-          : row.applicable_loyalty_tiers || [],
-      applicable_days_of_week:
-        typeof row.applicable_days_of_week === "string"
-          ? JSON.parse(row.applicable_days_of_week)
-          : row.applicable_days_of_week || [0, 1, 2, 3, 4, 5, 6],
-    };
-
-    return NextResponse.json({ promotion });
-  } catch (error) {
-    console.error("GET /api/promotions/[id] error:", error);
-    return NextResponse.json({ error: "Lỗi tải thông tin ưu đãi." }, { status: 500 });
+    const promo = requirePromo(coreRes.data);
+    return Response.json({ promotion: toLegacyPromotion(promo) });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }
 
 /**
  * PUT /api/promotions/[id]
+ * Full update of promotion fields via Booking Core
  */
 export async function PUT(
-  req: NextRequest,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -78,112 +58,102 @@ export async function PUT(
     const db = await getDb();
     const staff = await getCurrentStaff(db);
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = (await req.json()) as any;
-    const {
-      name,
-      code,
-      category_id,
-      description,
-      discount_type = "percentage",
-      discount_value,
-      max_discount_amount,
-      min_order_amount = 0,
-      applicable_room_classes = ["haven", "signature"],
-      applicable_booking_types = ["hourly", "overnight", "dayuse", "custom"],
-      applicable_loyalty_tiers = ["new", "bronze", "silver", "gold"],
-      applicable_days_of_week = [0, 1, 2, 3, 4, 5, 6],
-      start_date,
-      end_date,
-      usage_limit,
-      is_active = 1,
-    } = body;
+    let expectedVersion = body.version ?? body.expectedVersion;
 
-    if (!name?.trim()) {
-      return NextResponse.json({ error: "Vui lòng nhập tên chương trình ưu đãi." }, { status: 400 });
+    if (expectedVersion === undefined) {
+      const current = await bookingCore.get<CorePromotionEnvelope>(
+        `/internal/v1/promotions/${id}`,
+        { staff }
+      );
+      expectedVersion = requirePromo(current.data).version;
     }
 
-    const val = Number(discount_value);
-    if (isNaN(val) || val <= 0) {
-      return NextResponse.json({ error: "Giá trị giảm giá phải lớn hơn 0." }, { status: 400 });
+    const coreBody: Record<string, unknown> = {
+      expectedVersion: Number(expectedVersion),
+    };
+
+    if (body.name !== undefined) coreBody.name = body.name?.trim();
+    if (body.category_id !== undefined || body.categoryId !== undefined) {
+      coreBody.categoryId = (body.category_id || body.categoryId)?.trim();
+    }
+    if (body.code !== undefined) {
+      coreBody.code = body.code ? String(body.code).trim().toUpperCase() : "";
+    }
+    if (body.description !== undefined) {
+      coreBody.description = body.description ? String(body.description).trim() : "";
+    }
+    if (body.discount_type !== undefined || body.discountType !== undefined) {
+      coreBody.discountType = body.discount_type || body.discountType;
+    }
+    if (body.discount_value !== undefined || body.discountValue !== undefined) {
+      coreBody.discountValue = Number(body.discount_value ?? body.discountValue);
+    }
+    if (body.max_discount_amount !== undefined || body.maxDiscountAmount !== undefined) {
+      const v = body.max_discount_amount ?? body.maxDiscountAmount;
+      coreBody.maxDiscountAmount = v !== null && v !== "" ? Number(v) : null;
+    }
+    if (body.min_order_amount !== undefined || body.minOrderAmount !== undefined) {
+      coreBody.minOrderAmount = Number(body.min_order_amount ?? body.minOrderAmount ?? 0);
+    }
+    if (body.applicable_room_classes || body.applicableRoomClasses) {
+      coreBody.applicableRoomClasses = body.applicable_room_classes || body.applicableRoomClasses;
+    }
+    if (body.applicable_booking_types || body.applicableBookingTypes) {
+      coreBody.applicableBookingTypes = body.applicable_booking_types || body.applicableBookingTypes;
+    }
+    if (body.applicable_rate_plan_codes || body.applicableRatePlanCodes) {
+      coreBody.applicableRatePlanCodes = body.applicable_rate_plan_codes || body.applicableRatePlanCodes;
+    }
+    if (body.applicable_loyalty_tiers || body.applicableLoyaltyTiers) {
+      coreBody.applicableLoyaltyTiers = body.applicable_loyalty_tiers || body.applicableLoyaltyTiers;
+    }
+    if (body.applicable_days_of_week || body.applicableDaysOfWeek) {
+      coreBody.applicableDaysOfWeek = body.applicable_days_of_week || body.applicableDaysOfWeek;
+    }
+    if (body.start_date !== undefined || body.startDate !== undefined) {
+      coreBody.startDate = body.start_date || body.startDate || null;
+    }
+    if (body.end_date !== undefined || body.endDate !== undefined) {
+      coreBody.endDate = body.end_date || body.endDate || null;
+    }
+    if (body.usage_limit !== undefined || body.usageLimit !== undefined) {
+      const u = body.usage_limit ?? body.usageLimit;
+      coreBody.usageLimit = u !== null && u !== "" ? Number(u) : null;
+    }
+    if (body.is_active !== undefined || body.isActive !== undefined) {
+      coreBody.isActive = body.is_active !== undefined ? Boolean(body.is_active) : Boolean(body.isActive);
     }
 
-    if (discount_type === "percentage" && val > 100) {
-      return NextResponse.json({ error: "Tỷ lệ giảm theo % không được vượt quá 100%." }, { status: 400 });
-    }
-
-    // Check duplicate code if provided
-    let cleanCode: string | null = null;
-    if (code?.trim()) {
-      cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-      const duplicate = await db
-        .prepare("SELECT id FROM promotions WHERE code = ? AND id != ? LIMIT 1")
-        .bind(cleanCode, id)
-        .first();
-
-      if (duplicate) {
-        return NextResponse.json(
-          { error: `Mã ưu đãi '${cleanCode}' đã được chương trình khác sử dụng.` },
-          { status: 409 }
-        );
+    const coreRes = await bookingCore.patch<CorePromotionEnvelope>(
+      `/internal/v1/promotions/${id}`,
+      {
+        staff,
+        idempotencyKey: newIdempotencyKey("promo-update"),
+        body: coreBody,
       }
-    }
+    );
 
-    const now = new Date().toISOString();
-
-    const res = await db
-      .prepare(
-        `UPDATE promotions
-         SET name = ?, code = ?, category_id = ?, description = ?, discount_type = ?, discount_value = ?,
-             max_discount_amount = ?, min_order_amount = ?, applicable_room_classes = ?, applicable_booking_types = ?,
-             applicable_loyalty_tiers = ?, applicable_days_of_week = ?, start_date = ?, end_date = ?,
-             usage_limit = ?, is_active = ?, updated_by_staff_id = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .bind(
-        name.trim(),
-        cleanCode,
-        category_id,
-        description?.trim() || null,
-        discount_type,
-        val,
-        max_discount_amount ? Number(max_discount_amount) : null,
-        Number(min_order_amount) || 0,
-        JSON.stringify(applicable_room_classes),
-        JSON.stringify(applicable_booking_types),
-        JSON.stringify(applicable_loyalty_tiers),
-        JSON.stringify(applicable_days_of_week),
-        start_date?.trim() || null,
-        end_date?.trim() || null,
-        usage_limit ? Number(usage_limit) : null,
-        is_active ? 1 : 0,
-        staff.id || null,
-        now,
-        id
-      )
-      .run();
-
-    if (res.meta.changes === 0) {
-      return NextResponse.json({ error: "Không tìm thấy chương trình ưu đãi để cập nhật." }, { status: 404 });
-    }
-
-    invalidatePromotionsCache();
-
-    return NextResponse.json({ success: true, message: "Cập nhật ưu đãi thành công." });
-  } catch (error) {
-    console.error("PUT /api/promotions/[id] error:", error);
-    return NextResponse.json({ error: "Không thể cập nhật chương trình ưu đãi." }, { status: 500 });
+    const updated = requirePromo(coreRes.data);
+    return Response.json({
+      success: true,
+      message: "Cập nhật ưu đãi thành công.",
+      promotion: toLegacyPromotion(updated),
+    });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }
 
 /**
  * PATCH /api/promotions/[id]
- * Toggle is_active status
+ * Toggle is_active status via Booking Core
  */
 export async function PATCH(
-  req: NextRequest,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -191,46 +161,53 @@ export async function PATCH(
     const db = await getDb();
     const staff = await getCurrentStaff(db);
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = (await req.json()) as any;
-    const { is_active } = body;
+    let expectedVersion = body.version ?? body.expectedVersion;
 
-    const newActive = is_active ? 1 : 0;
-    const now = new Date().toISOString();
-
-    const res = await db
-      .prepare(
-        `UPDATE promotions
-         SET is_active = ?, updated_by_staff_id = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .bind(newActive, staff.id || null, now, id)
-      .run();
-
-    if (res.meta.changes === 0) {
-      return NextResponse.json({ error: "Không tìm thấy chương trình ưu đãi." }, { status: 404 });
+    if (expectedVersion === undefined) {
+      const current = await bookingCore.get<CorePromotionEnvelope>(
+        `/internal/v1/promotions/${id}`,
+        { staff }
+      );
+      expectedVersion = requirePromo(current.data).version;
     }
 
-    invalidatePromotionsCache();
+    const newActive = body.is_active !== undefined ? Boolean(body.is_active) : Boolean(body.isActive);
 
-    return NextResponse.json({
+    const coreRes = await bookingCore.patch<CorePromotionEnvelope>(
+      `/internal/v1/promotions/${id}`,
+      {
+        staff,
+        idempotencyKey: newIdempotencyKey("promo-toggle"),
+        body: {
+          expectedVersion: Number(expectedVersion),
+          isActive: newActive,
+        },
+      }
+    );
+
+    const updated = requirePromo(coreRes.data);
+    const updatedActive = updated.isActive ? 1 : 0;
+    return Response.json({
       success: true,
-      is_active: newActive,
-      message: newActive ? "Đã kích hoạt ưu đãi." : "Đã tạm dừng ưu đãi.",
+      is_active: updatedActive,
+      message: updatedActive ? "Đã kích hoạt ưu đãi." : "Đã tạm dừng ưu đãi.",
+      promotion: toLegacyPromotion(updated),
     });
-  } catch (error) {
-    console.error("PATCH /api/promotions/[id] error:", error);
-    return NextResponse.json({ error: "Không thể thay đổi trạng thái ưu đãi." }, { status: 500 });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }
 
 /**
  * DELETE /api/promotions/[id]
+ * Archive promotion in Booking Core
  */
 export async function DELETE(
-  req: NextRequest,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -238,20 +215,26 @@ export async function DELETE(
     const db = await getDb();
     const staff = await getCurrentStaff(db);
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const res = await db.prepare("DELETE FROM promotions WHERE id = ?").bind(id).run();
+    const current = await bookingCore.get<CorePromotionEnvelope>(
+      `/internal/v1/promotions/${id}`,
+      { staff }
+    );
+    const currentPromo = requirePromo(current.data);
 
-    if (res.meta.changes === 0) {
-      return NextResponse.json({ error: "Không tìm thấy chương trình ưu đãi để xóa." }, { status: 404 });
-    }
+    await bookingCore.post<CorePromotionEnvelope>(
+      `/internal/v1/promotions/${id}/archive`,
+      {
+        staff,
+        idempotencyKey: newIdempotencyKey("promo-archive"),
+        body: { expectedVersion: currentPromo.version },
+      }
+    );
 
-    invalidatePromotionsCache();
-
-    return NextResponse.json({ success: true, message: "Xóa chương trình ưu đãi thành công." });
-  } catch (error) {
-    console.error("DELETE /api/promotions/[id] error:", error);
-    return NextResponse.json({ error: "Không thể xóa chương trình ưu đãi." }, { status: 500 });
+    return Response.json({ success: true, message: "Xóa chương trình ưu đãi thành công." });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }

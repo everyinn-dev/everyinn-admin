@@ -1,125 +1,101 @@
-import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
-import { invalidatePromotionsCache } from "@/lib/masterData";
+import { bookingCore, newIdempotencyKey } from "@/lib/cores";
+import { toHttpError } from "@/lib/apiError";
+import {
+  toLegacyCategory,
+  type CoreCategoryDto,
+  type CoreCategoryEnvelope,
+} from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /**
  * GET /api/promotions/categories
- * Returns all categories with promotion counts
+ * Returns all categories with promotion counts from Booking Core
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: Request) {
   try {
     const db = await getDb();
     const staff = await getCurrentStaff(db);
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { results } = await db
-      .prepare(
-        `SELECT 
-          c.id, c.name, c.code, c.description, c.icon, c.badge_color, c.sort_order, c.is_active, c.created_at, c.updated_at,
-          COUNT(p.id) as promo_count
-         FROM promotion_categories c
-         LEFT JOIN promotions p ON c.id = p.category_id
-         GROUP BY c.id
-         ORDER BY c.sort_order ASC, c.name ASC`
-      )
-      .all<any>();
-
-    return NextResponse.json({ categories: results || [] });
-  } catch (error) {
-    console.error("GET /api/promotions/categories error:", error);
-    return NextResponse.json(
-      { error: "Không thể tải danh mục loại ưu đãi." },
-      { status: 500 }
+    const coreRes = await bookingCore.get<{ categories: CoreCategoryDto[] }>(
+      "/internal/v1/promotion-categories",
+      { staff }
     );
+
+    const categories = (coreRes.data?.categories || []).map(toLegacyCategory);
+    return Response.json({ categories });
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }
 
 /**
  * POST /api/promotions/categories
- * Create a new promotion category
+ * Create a new promotion category via Booking Core
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const db = await getDb();
     const staff = await getCurrentStaff(db);
     if (!staff) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = (await req.json()) as any;
-    const { name, code, description, icon = "🎁", badge_color = "purple", sort_order = 0, is_active = 1 } = body;
+    const {
+      name,
+      code,
+      description,
+      icon,
+      badge_color,
+      badgeColor,
+      sort_order,
+      sortOrder,
+      is_active,
+      isActive,
+    } = body;
 
-    if (!name?.trim() || !code?.trim()) {
-      return NextResponse.json(
-        { error: "Vui lòng nhập tên loại ưu đãi và mã code phân loại." },
-        { status: 400 }
-      );
+    const coreBody: Record<string, unknown> = {
+      name: name?.trim(),
+      code: code ? String(code).trim().toLowerCase().replace(/[^a-z0-9_]/g, "_") : "",
+    };
+
+    if (description !== undefined) coreBody.description = description ? String(description).trim() : null;
+    if (icon !== undefined) coreBody.icon = icon ? String(icon).trim() : "🎁";
+    if (badge_color !== undefined || badgeColor !== undefined) {
+      coreBody.badgeColor = badge_color || badgeColor || "purple";
+    }
+    if (sort_order !== undefined || sortOrder !== undefined) {
+      coreBody.sortOrder = Number(sort_order ?? sortOrder ?? 0);
+    }
+    if (is_active !== undefined || isActive !== undefined) {
+      coreBody.isActive = is_active !== undefined ? Boolean(is_active) : Boolean(isActive);
     }
 
-    const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
-    const categoryId = `cat_${cleanCode}`;
-
-    // Check duplicate code
-    const existing = await db
-      .prepare("SELECT id FROM promotion_categories WHERE code = ? OR id = ? LIMIT 1")
-      .bind(cleanCode, categoryId)
-      .first();
-
-    if (existing) {
-      return NextResponse.json(
-        { error: `Mã loại ưu đãi '${cleanCode}' đã tồn tại.` },
-        { status: 409 }
-      );
-    }
-
-    const now = new Date().toISOString();
-
-    await db
-      .prepare(
-        `INSERT INTO promotion_categories (
-          id, name, code, description, icon, badge_color, sort_order, is_active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .bind(
-        categoryId,
-        name.trim(),
-        cleanCode,
-        description?.trim() || null,
-        icon.trim() || "🎁",
-        badge_color,
-        Number(sort_order) || 0,
-        is_active ? 1 : 0,
-        now,
-        now
-      )
-      .run();
-
-    invalidatePromotionsCache();
-
-    return NextResponse.json({
-      success: true,
-      category: {
-        id: categoryId,
-        name: name.trim(),
-        code: cleanCode,
-        description: description?.trim() || null,
-        icon: icon.trim() || "🎁",
-        badge_color,
-        sort_order: Number(sort_order) || 0,
-        is_active: is_active ? 1 : 0,
-        promo_count: 0,
-      },
-    });
-  } catch (error) {
-    console.error("POST /api/promotions/categories error:", error);
-    return NextResponse.json(
-      { error: "Không thể tạo loại ưu đãi mới." },
-      { status: 500 }
+    const coreRes = await bookingCore.post<CoreCategoryEnvelope>(
+      "/internal/v1/promotion-categories",
+      {
+        staff,
+        idempotencyKey: newIdempotencyKey("promo-cat-create"),
+        body: coreBody,
+      }
     );
+
+    if (!coreRes.data?.category) {
+      throw new Error("Không nhận được dữ liệu danh mục từ Booking Core.");
+    }
+
+    return Response.json(
+      { success: true, category: toLegacyCategory(coreRes.data.category) },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    return toHttpError(error);
   }
 }
