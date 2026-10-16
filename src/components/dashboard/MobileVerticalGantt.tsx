@@ -30,6 +30,17 @@ const ROOM_COL_WIDTH = 71; // px (giảm 50% bề rộng cột từ 142px xuốn
 const HEADER_HEIGHT = 44; // px (header gọn, chỉ hiển thị số phòng 101, 102...)
 const DAY_HEADER_HEIGHT = 40; // px (header between days in month view)
 
+const ROOM_HEADER_PALETTES = [
+  "bg-blue-100 text-blue-900 border-blue-300",
+  "bg-emerald-100 text-emerald-900 border-emerald-300",
+  "bg-purple-100 text-purple-900 border-purple-300",
+  "bg-amber-100 text-amber-900 border-amber-300",
+  "bg-rose-100 text-rose-900 border-rose-300",
+  "bg-cyan-100 text-cyan-900 border-cyan-300",
+  "bg-indigo-100 text-indigo-900 border-indigo-300",
+  "bg-teal-100 text-teal-900 border-teal-300",
+];
+
 export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
   viewMode,
   currentMonth,
@@ -249,8 +260,9 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
               </div>
 
               {/* Room Column Headers (chỉ hiển thị số phòng 101, 102...) */}
-              {rooms.map((room) => {
+              {rooms.map((room, idx) => {
                 const isOccupied = roomOccupiedMap.get(room.id);
+                const colorPalette = ROOM_HEADER_PALETTES[idx % ROOM_HEADER_PALETTES.length];
                 return (
                   <div
                     key={room.id}
@@ -258,7 +270,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     style={{ width: `${ROOM_COL_WIDTH}px`, height: `${HEADER_HEIGHT}px` }}
                   >
                     <span
-                      className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 font-mono font-extrabold text-slate-900 flex items-center justify-center text-xs shadow-2xs"
+                      className={`w-8 h-8 rounded-lg border font-mono font-extrabold flex items-center justify-center text-xs shadow-2xs ${colorPalette}`}
                       title={`Phòng ${room.roomNumber} (Tầng ${room.floor}) - ${isOccupied ? "Đang có khách" : "Trống"}`}
                     >
                       {room.roomNumber}
