@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, coreErrorResponse } from "@/lib/cores";
 import { daysInMonthOf, toGanttRoom, type CoreGantt } from "@/lib/coreMappers";
@@ -17,8 +16,7 @@ const NO_CACHE_HEADERS = {
 /** Gantt comes from Booking Core (slot-backed, `bookingsVersion` ETag) — no direct booking SQL in Admin. */
 export async function GET(req: NextRequest) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, coreErrorResponse } from "@/lib/cores";
 import { toLegacyPricingRule, type CoreCatalog } from "@/lib/coreMappers";
@@ -9,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const staff = await getCurrentStaff(await getDb());
+    const staff = await getCurrentStaff();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data } = await bookingCore.get<CoreCatalog>("/internal/v1/catalog", { staff });

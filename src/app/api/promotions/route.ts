@@ -1,4 +1,3 @@
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, newIdempotencyKey } from "@/lib/cores";
 import { toHttpError } from "@/lib/apiError";
@@ -17,8 +16,7 @@ export const revalidate = 0;
  */
 export async function GET(req: Request) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -53,8 +51,7 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, coreErrorResponse, CoreError } from "@/lib/cores";
 import type { CoreBlock } from "@/lib/coreMappers";
@@ -13,8 +12,7 @@ export const dynamic = "force-dynamic";
  */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;

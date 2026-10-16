@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, cdpCore, coreErrorResponse } from "@/lib/cores";
 import { toLegacyCdpTiers, type CoreCatalog, type CoreLoyaltyRules } from "@/lib/coreMappers";
@@ -8,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const staff = await getCurrentStaff(await getDb());
+    const staff = await getCurrentStaff();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const [catalog, rules] = await Promise.all([

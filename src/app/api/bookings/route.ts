@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
 import {
@@ -26,8 +25,7 @@ const DEFAULT_PAYMENT_METHOD = "cash";
 
 export async function GET(req: NextRequest) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -92,8 +90,7 @@ const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
  */
 export async function POST(req: NextRequest) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

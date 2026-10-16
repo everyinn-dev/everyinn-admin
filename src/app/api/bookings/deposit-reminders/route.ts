@@ -1,4 +1,3 @@
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore } from "@/lib/cores";
 import { toHttpError } from "@/lib/apiError";
@@ -21,8 +20,7 @@ const NO_CACHE_HEADERS = {
  */
 export async function GET(req: Request) {
   try {
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { cdpCore, coreErrorResponse } from "@/lib/cores";
 import { toLegacyMemberResponse, type CoreCustomer } from "@/lib/coreMappers";
@@ -7,7 +6,7 @@ import { toLegacyMemberResponse, type CoreCustomer } from "@/lib/coreMappers";
 /** Member = CDP customer. Lookup by phone; profile edits use optimistic `expectedVersion`. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ phone: string }> }) {
   try {
-    const staff = await getCurrentStaff(await getDb());
+    const staff = await getCurrentStaff();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { phone } = await params;
@@ -27,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pho
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ phone: string }> }) {
   try {
-    const staff = await getCurrentStaff(await getDb());
+    const staff = await getCurrentStaff();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { phone } = await params;

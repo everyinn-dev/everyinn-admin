@@ -1,4 +1,3 @@
-import { getDb } from "@/lib/db";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, newIdempotencyKey } from "@/lib/cores";
 import { toHttpError } from "@/lib/apiError";
@@ -27,8 +26,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -55,8 +53,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -158,8 +155,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -212,8 +208,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const db = await getDb();
-    const staff = await getCurrentStaff(db);
+    const staff = await getCurrentStaff();
     if (!staff) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
