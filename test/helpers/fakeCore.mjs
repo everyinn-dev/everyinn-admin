@@ -34,12 +34,17 @@ export class FakeCore {
       }
     }
 
+    const normalizedHeaders = init.headers instanceof Headers
+      ? Object.fromEntries(init.headers.entries())
+      : Object.fromEntries(Object.entries(init.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
+    normalizedHeaders.get = (name) => normalizedHeaders[name.toLowerCase()];
+
     const callRecord = {
       url,
       path: url.pathname,
       query: Object.fromEntries(url.searchParams.entries()),
       method,
-      headers: init.headers,
+      headers: normalizedHeaders,
       body: parsedBody,
     };
     this.calls.push(callRecord);
