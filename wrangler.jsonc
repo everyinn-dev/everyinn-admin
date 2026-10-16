@@ -36,7 +36,11 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
-	// Production Service Bindings to the Cores are added at cutover (Phase 1.5, P-3).
+	// Production Service Bindings to the Cores (Phase 1.5, P-3 / S6).
+	"services": [
+		{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core" },
+		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" }
+	],
 	"env": {
 		"dev": {
 			"name": "everyinn-admin-dev",
