@@ -531,6 +531,13 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     updated_by_staff_id: c.updatedBy?.id ?? null,
     updated_by_staff_name: c.updatedBy?.name ?? null,
     mod_no: c.version,
+    version: c.version,
+
+    // Loyalty sync tracking (A-W8)
+    loyalty_sync_status: d.loyalty?.syncStatus ?? "not_applicable",
+    loyalty_tier: d.loyalty?.tier ?? null,
+    loyalty_step: d.loyalty?.step ?? null,
+    loyalty_synced_at: d.loyalty?.syncedAt ?? null,
   };
 }
 

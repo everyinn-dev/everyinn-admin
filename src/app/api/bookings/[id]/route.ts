@@ -241,6 +241,21 @@ export async function PATCH(
       });
     }
 
+    // ── ACTION: RETRY LOYALTY SYNC (A-W8) ─────────────────────────
+    if (action === "retry_loyalty_sync" || action === "loyalty_sync") {
+      const coreRes = await bookingCore.post<CoreBookingEnvelope>(`/internal/v1/bookings/${id}/loyalty-sync`, {
+        staff,
+        idempotencyKey: newIdempotencyKey("booking-loyalty-sync"),
+      });
+
+      const updated = toLegacyBookingRow(requireBooking(coreRes.data));
+      return Response.json({
+        success: true,
+        message: "Đã kích hoạt đồng bộ điểm tích lũy thành viên.",
+        booking: updated,
+      });
+    }
+
     return Response.json({ error: "Hành động không hợp lệ." }, { status: 400 });
   } catch (error) {
     return toHttpError(error);

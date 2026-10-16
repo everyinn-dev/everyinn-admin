@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Promotion,
   PromotionCategory,
@@ -95,7 +95,11 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  const [prevPromotionKey, setPrevPromotionKey] = useState<string | null>(null);
+  const currentPromotionKey = isOpen ? (promotion ? promotion.id : "new") : null;
+
+  if (currentPromotionKey !== prevPromotionKey) {
+    setPrevPromotionKey(currentPromotionKey);
     if (promotion) {
       setName(promotion.name || "");
       setCode(promotion.code || "");
@@ -135,7 +139,7 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
       setUsageLimit("");
       setIsActive(true);
     }
-  }, [promotion, categories, isOpen]);
+  }
 
   const toggleRoomClass = (rc: RoomClass) => {
     setRoomClasses((prev) =>
@@ -203,6 +207,7 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
         end_date: hasDateLimit && endDate ? endDate : null,
         usage_limit: hasUsageLimit && usageLimit !== "" ? Number(usageLimit) : null,
         is_active: isActive ? 1 : 0,
+        expectedVersion: promotion?.version,
       };
 
       const url = promotion ? `/api/promotions/${promotion.id}` : "/api/promotions";
@@ -216,6 +221,12 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
 
       const data = (await res.json()) as any;
       if (!res.ok) {
+        if (res.status === 409) {
+          toast.warning("Chương trình ưu đãi đã được sửa đổi bởi người khác. Đang tải lại...", "Xung đột dữ liệu (409)");
+          onSaved();
+          onClose();
+          return;
+        }
         throw new Error(data.error || "Không thể lưu chương trình ưu đãi.");
       }
 

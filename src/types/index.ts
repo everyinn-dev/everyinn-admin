@@ -193,6 +193,13 @@ export interface Booking extends ControlFields {
   remaining_paid_at?: string;
   remaining_paid_by?: number;
   remaining_paid_by_staff_name?: string | null;
+
+  // Loyalty sync tracking (A-W8)
+  loyalty_sync_status?: 'not_applicable' | 'pending' | 'synced' | 'failed';
+  loyalty_tier?: string | null;
+  loyalty_step?: number | null;
+  loyalty_synced_at?: string | null;
+  version?: number;
 }
 
 export type DepositStatus = 'none' | 'deposit_paid' | 'fully_paid';
@@ -264,7 +271,7 @@ export interface GanttBookingItem {
   version?: number;
   ratePlanCode?: string;
   occupiedUntil?: string;
-  loyaltySyncStatus?: 'not_applicable' | 'pending' | 'synced';
+  loyaltySyncStatus?: 'not_applicable' | 'pending' | 'synced' | 'failed';
 }
 
 export interface GanttBlockItem {

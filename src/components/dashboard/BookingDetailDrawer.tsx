@@ -56,6 +56,9 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   // Reminder state
   const [markingReminder, setMarkingReminder] = useState(false);
 
+  // Loyalty sync retry state (A-W8)
+  const [retryingSync, setRetryingSync] = useState(false);
+
   // Synchronize prop updates
   useEffect(() => {
     setCurrentBooking(booking);
@@ -99,6 +102,58 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     });
   };
 
+  const refetchBooking = async () => {
+    if (!currentBooking) return;
+    try {
+      const res = await apiFetch(`/api/bookings/${currentBooking.id}`);
+      if (res.ok) {
+        const data = ((await res.json()) as any);
+        if (data.booking) {
+          const fresh: GanttBookingItem = {
+            ...currentBooking,
+            ...data.booking,
+            modNo: data.booking.mod_no ?? data.booking.version ?? currentBooking.modNo,
+            version: data.booking.version ?? data.booking.mod_no ?? currentBooking.version,
+            loyaltySyncStatus: data.booking.loyalty_sync_status ?? currentBooking.loyaltySyncStatus,
+          };
+          setCurrentBooking(fresh);
+          onBookingUpdated?.(fresh);
+        }
+      }
+      notifyDataChanged("BOOKINGS_CHANGED");
+    } catch (err) {
+      console.error("Failed to refetch booking:", err);
+    }
+  };
+
+  const handleRetryLoyaltySync = async () => {
+    if (!currentBooking) return;
+    try {
+      setRetryingSync(true);
+      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry_loyalty_sync" }),
+      });
+      const data = ((await res.json()) as any);
+      if (!res.ok) {
+        throw new Error(data.error || "Không thể kích hoạt đồng bộ điểm thành viên.");
+      }
+      toast.success("Đã đồng bộ điểm thành viên thành công!", "Tích lũy thành viên");
+      const updated: GanttBookingItem = {
+        ...currentBooking,
+        loyaltySyncStatus: "synced",
+      };
+      setCurrentBooking(updated);
+      onBookingUpdated?.(updated);
+      notifyDataChanged("BOOKINGS_CHANGED");
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi đồng bộ điểm thành viên.", "Lỗi");
+    } finally {
+      setRetryingSync(false);
+    }
+  };
+
   const handleExtend1h = async () => {
     try {
       setExtending(true);
@@ -108,17 +163,21 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "extend1h" }),
+        body: JSON.stringify({
+          action: "extend1h",
+          expectedVersion: currentBooking.version ?? currentBooking.modNo,
+        }),
       });
 
       const data = (await res.json()) as any;
       if (!res.ok) {
         const errorText = data.error || "Không thể gia hạn thêm 1 giờ.";
         if (res.status === 409) {
-          toast.warning(errorText, "Xung đột lịch & Giờ dọn");
-        } else {
-          toast.error(errorText, "Lỗi gia hạn (+1h)");
+          toast.warning("Dữ liệu đặt phòng đã thay đổi bởi phiên làm việc khác. Đang tải lại dữ liệu mới nhất...", "Xung đột dữ liệu (409)");
+          await refetchBooking();
+          return;
         }
+        toast.error(errorText, "Lỗi gia hạn (+1h)");
         throw new Error(errorText);
       }
 
@@ -131,6 +190,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
         checkoutAt: data.booking.checkout_at,
         totalPrice: data.booking.total_price,
         modNo: data.booking.mod_no !== undefined ? data.booking.mod_no : (currentBooking.modNo || 0) + 1,
+        version: data.booking.version ?? data.booking.mod_no ?? (currentBooking.version || 0) + 1,
         updatedAt: data.booking.updated_at || new Date().toISOString(),
         updatedByStaffName: data.booking.updated_by_staff_name || currentBooking.updatedByStaffName,
       };
@@ -172,12 +232,20 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cancelReason }),
+        body: JSON.stringify({
+          cancelReason,
+          expectedVersion: currentBooking.version ?? currentBooking.modNo,
+        }),
       });
 
       const data = (await res.json()) as any;
       if (!res.ok) {
         const errorText = data.error || "Không thể xóa đặt phòng.";
+        if (res.status === 409) {
+          toast.warning("Dữ liệu đặt phòng đã thay đổi bởi người khác. Đang tải lại dữ liệu...", "Xung đột (409)");
+          await refetchBooking();
+          return;
+        }
         toast.error(errorText, "Lỗi xóa đặt phòng");
         throw new Error(errorText);
       }
@@ -210,12 +278,18 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
           action: "no_show",
           noShowReason,
           refundAmount: actualRefund,
+          expectedVersion: currentBooking.version ?? currentBooking.modNo,
         }),
       });
 
       const data = (await res.json()) as any;
       if (!res.ok) {
         const errorText = data.error || "Không thể đánh dấu No-Show.";
+        if (res.status === 409) {
+          toast.warning("Dữ liệu đặt phòng đã thay đổi bởi người khác. Đang tải lại dữ liệu...", "Xung đột (409)");
+          await refetchBooking();
+          return;
+        }
         toast.error(errorText, "Lỗi No-Show");
         throw new Error(errorText);
       }
@@ -235,6 +309,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
         originalPrice: currentBooking.totalPrice,
         noShowReason,
         noShowAt: new Date().toISOString(),
+        version: data.booking?.version ?? (currentBooking.version || 0) + 1,
+        modNo: data.booking?.mod_no ?? (currentBooking.modNo || 0) + 1,
       };
       setCurrentBooking(updated);
       onBookingUpdated?.(updated);
@@ -258,11 +334,17 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
           action: "complete_deposit_payment",
           paymentAmount,
           note: paymentNote,
+          expectedVersion: currentBooking.version ?? currentBooking.modNo,
         }),
       });
 
       const data = (await res.json()) as any;
       if (!res.ok) {
+        if (res.status === 409) {
+          toast.warning("Dữ liệu đặt phòng đã thay đổi. Đang tải lại dữ liệu...", "Xung đột (409)");
+          await refetchBooking();
+          return;
+        }
         throw new Error(data.error || "Không thể bổ sung thanh toán.");
       }
 
@@ -273,6 +355,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
         remainingAmount: data.remainingAmount,
         depositStatus: data.depositStatus,
         remainingPaidAt: new Date().toISOString(),
+        version: data.booking?.version ?? (currentBooking.version || 0) + 1,
+        modNo: data.booking?.mod_no ?? (currentBooking.modNo || 0) + 1,
       };
       setCurrentBooking(updated);
       setShowPaymentForm(false);
@@ -291,16 +375,26 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "mark_deposit_reminder_sent" }),
+        body: JSON.stringify({
+          action: "mark_deposit_reminder_sent",
+          expectedVersion: currentBooking.version ?? currentBooking.modNo,
+        }),
       });
       const data = (await res.json()) as any;
       if (!res.ok) {
+        if (res.status === 409) {
+          toast.warning("Dữ liệu đặt phòng đã thay đổi. Đang tải lại dữ liệu...", "Xung đột (409)");
+          await refetchBooking();
+          return;
+        }
         throw new Error(data.error || "Không thể ghi nhận gửi nhắc cọc.");
       }
       toast.success("Đã ghi nhận gửi nhắc cọc cho khách!", "Gửi nhắc thành công");
       const updated: GanttBookingItem = {
         ...currentBooking,
         depositReminderSentAt: data.depositReminderSentAt,
+        version: data.booking?.version ?? (currentBooking.version || 0) + 1,
+        modNo: data.booking?.mod_no ?? (currentBooking.modNo || 0) + 1,
       };
       setCurrentBooking(updated);
       onBookingUpdated?.(updated);
@@ -583,6 +677,50 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                         <span>{currentBooking.facebook}</span>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Loyalty Sync Status Badge (A-W8) */}
+                {currentBooking.loyaltySyncStatus && currentBooking.loyaltySyncStatus !== "not_applicable" && (
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Tích lũy thành viên:</span>
+                    <div className="flex items-center gap-2">
+                      {currentBooking.loyaltySyncStatus === "synced" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                          <span>✓</span> Đã tích lũy
+                        </span>
+                      )}
+                      {currentBooking.loyaltySyncStatus === "pending" && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                            <span>⏳</span> Đang chờ đồng bộ
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleRetryLoyaltySync}
+                            disabled={retryingSync}
+                            className="text-[11px] font-bold text-amber-700 hover:text-amber-900 underline cursor-pointer disabled:opacity-50"
+                          >
+                            {retryingSync ? "Đang đồng bộ..." : "Đồng bộ ngay"}
+                          </button>
+                        </div>
+                      )}
+                      {currentBooking.loyaltySyncStatus === "failed" && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-xs">
+                            <span>⚠️</span> Lỗi đồng bộ
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleRetryLoyaltySync}
+                            disabled={retryingSync}
+                            className="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline cursor-pointer disabled:opacity-50"
+                          >
+                            {retryingSync ? "Đang đồng bộ..." : "Thử lại"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
