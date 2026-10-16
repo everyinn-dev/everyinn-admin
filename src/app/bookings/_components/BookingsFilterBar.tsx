@@ -88,7 +88,7 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
         <div className="relative flex-1">
           <input
             type="text"
-            placeholder="Tìm theo SĐT, tên khách, Instagram, Facebook, mã đặt (tối thiểu 3 ký tự)..."
+            placeholder="Tìm theo SĐT, tên khách, Instagram, Facebook, Zalo, mã đặt (tối thiểu 3 ký tự)..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 pl-10 pr-28 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs font-medium"

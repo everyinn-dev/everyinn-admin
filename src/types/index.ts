@@ -109,6 +109,7 @@ export interface Member {
   preferredRoomClass?: string;
   instagram?: string;
   facebook?: string;
+  zalo?: string;
   internal_notes?: string;
   internalNotes?: string;
   is_blocked: number;
@@ -148,6 +149,7 @@ export interface Booking extends ControlFields {
   late_checkout_hours: number;
   instagram?: string;
   facebook?: string;
+  zalo?: string;
   closing_note?: string;
   note?: string;
   status: BookingStatus;
@@ -240,6 +242,7 @@ export interface GanttBookingItem {
   status: BookingStatus;
   instagram?: string;
   facebook?: string;
+  zalo?: string;
   closingNote?: string;
   note?: string;
   // Control fields
@@ -323,6 +326,7 @@ export interface DailyRosterItem {
   phone: string;
   instagram?: string;
   facebook?: string;
+  zalo?: string;
   bookingType: BookingType;
   checkinAt: string;
   checkoutAt: string;

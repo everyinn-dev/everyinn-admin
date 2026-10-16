@@ -64,6 +64,7 @@ export interface CoreGanttBooking {
   phone: string;
   instagram: string | null;
   facebook: string | null;
+  zalo: string | null;
   closingNote: string | null;
   note: string | null;
   bookingType: GanttBookingItem["bookingType"];
@@ -130,6 +131,7 @@ export interface CoreCustomer {
   fullName: string | null;
   instagram: string | null;
   facebook: string | null;
+  zalo: string | null;
   internalNotes: string | null;
   preferredRoomClass: string | null;
   isBlocked: boolean;
@@ -222,6 +224,7 @@ export function toGanttBooking(b: CoreGanttBooking): GanttBookingItem & {
     phone: b.phone,
     instagram: nz(b.instagram),
     facebook: nz(b.facebook),
+    zalo: nz(b.zalo),
     closingNote: nz(b.closingNote),
     note: nz(b.note),
     bookingType: b.bookingType,
@@ -294,8 +297,8 @@ export function toGanttRoom(r: CoreGantt["rooms"][number], includeDetail: boolea
       const item = toGanttBooking(b);
       if (includeDetail) return item;
       // Day view historically returned the slim shape; keep payload small.
-      const { id, roomId, guestName, phone, instagram, facebook, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } = item;
-      return { id, roomId, guestName, phone, instagram, facebook, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } as GanttBookingItem;
+      const { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } = item;
+      return { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } as GanttBookingItem;
     }),
     blocks: r.blocks.map(toGanttBlock),
   };
@@ -314,6 +317,7 @@ export function toLegacyMemberResponse(c: CoreCustomer) {
     fullName: c.fullName,
     instagram: c.instagram,
     facebook: c.facebook,
+    zalo: c.zalo,
     totalBookings: c.loyalty.lifetimeBookingCount,
     totalSpent: c.legacy.totalSpent ?? 0, // legacy reference only — never used for tier (§20.1)
     totalNights: 0,
@@ -371,6 +375,7 @@ export interface CoreBookingDto {
     name: string;
     instagram: string | null;
     facebook: string | null;
+    zalo: string | null;
   };
   numGuests: number;
   bookingType: BookingType;
@@ -487,6 +492,7 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     late_checkout_hours: d.lateCheckoutHours,
     instagram: u(g.instagram),
     facebook: u(g.facebook),
+    zalo: u(g.zalo),
     closing_note: u(d.closingNote),
     note: u(d.note),
     status: d.status,
@@ -553,6 +559,7 @@ export interface CoreRosterItem {
   phone: string;
   instagram: string | null;
   facebook: string | null;
+  zalo: string | null;
   bookingType: BookingType;
   ratePlanCode: string;
   checkinAt: string;
@@ -608,6 +615,7 @@ export function toDailyRosterItem(item: CoreRosterItem): DailyRosterItem {
     phone: item.phone,
     instagram: u(item.instagram),
     facebook: u(item.facebook),
+    zalo: u(item.zalo),
     bookingType: item.bookingType,
     checkinAt: item.checkinAt,
     checkoutAt: item.checkoutAt,

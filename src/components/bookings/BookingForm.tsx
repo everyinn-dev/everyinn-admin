@@ -50,6 +50,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [name, setName] = useState(queryName || "");
   const [instagram, setInstagram] = useState("");
   const [facebook, setFacebook] = useState("");
+  const [zalo, setZalo] = useState("");
   const [numGuests, setNumGuests] = useState(2);
   const [foundMember, setFoundMember] = useState<Member | null>(null);
   const [updatingSocial, setUpdatingSocial] = useState(false);
@@ -199,6 +200,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     }
     setInstagram(member.instagram || "");
     setFacebook(member.facebook || "");
+    setZalo(member.zalo || "");
   };
 
   const handleMemberNotFound = () => {
@@ -228,8 +230,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     }
     const cleanIg = instagram.trim();
     const cleanFb = facebook.trim();
-    if (!cleanIg && !cleanFb) {
-      setErrorMsg("Vui lòng nhập tài khoản Instagram hoặc Facebook (bắt buộc có ít nhất 1 trong 2).");
+    const cleanZalo = zalo.trim();
+    if (!cleanIg && !cleanFb && !cleanZalo) {
+      setErrorMsg("Vui lòng nhập tài khoản Facebook, Instagram hoặc Zalo (bắt buộc có ít nhất 1 trong 3).");
       return;
     }
 
@@ -243,6 +246,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         body: JSON.stringify({
           instagram: cleanIg,
           facebook: cleanFb,
+          zalo: cleanZalo,
           fullName: name.trim() || undefined,
         }),
       });
@@ -258,11 +262,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               ...prev,
               instagram: cleanIg,
               facebook: cleanFb,
+              zalo: cleanZalo,
               full_name: name.trim() || prev.full_name,
             }
           : null
       );
-      const msg = "Đã lưu cập nhật Insta/FB vào hồ sơ khách theo SĐT!";
+      const msg = "Đã lưu cập nhật MXH (Insta/FB/Zalo) vào hồ sơ khách theo SĐT!";
       setSocialUpdateFeedback(msg);
       toast.success(msg, "Cập nhật CDP");
       setTimeout(() => setSocialUpdateFeedback(null), 4000);
@@ -292,11 +297,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       return;
     }
 
-    // Mandatory: At least 1 of Instagram or Facebook
+    // Mandatory: At least 1 of Instagram, Facebook or Zalo
     const cleanIg = instagram.trim();
     const cleanFb = facebook.trim();
-    if (!cleanIg && !cleanFb) {
-      const err = "Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2).";
+    const cleanZalo = zalo.trim();
+    if (!cleanIg && !cleanFb && !cleanZalo) {
+      const err = "Vui lòng nhập tên tài khoản Facebook, Instagram hoặc Zalo (bắt buộc phải có ít nhất 1 trong 3).";
       setErrorMsg(err);
       toast.warning(err, "Thiếu tài khoản MXH");
       return;
@@ -353,6 +359,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         name: name.trim(),
         instagram: cleanIg,
         facebook: cleanFb,
+        zalo: cleanZalo,
         numGuests,
         bookingType,
         checkinAt: checkinAt.toISOString(),
@@ -456,7 +463,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           />
         </div>
 
-        {/* Row 2: Instagram + Facebook (Mandatory 1 in 2) */}
+        {/* Row 2: Instagram + Facebook + Zalo (Mandatory 1 in 3) */}
         <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
@@ -465,15 +472,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             </span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                Bắt buộc có ít nhất 1 trong 2
+                Bắt buộc có ít nhất 1 trong 3
               </span>
               {foundMember && (
                 <button
                   type="button"
                   onClick={handleDirectUpdateSocial}
-                  disabled={updatingSocial || (!instagram.trim() && !facebook.trim())}
+                  disabled={updatingSocial || (!instagram.trim() && !facebook.trim() && !zalo.trim())}
                   className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-200 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-40"
-                  title="Lưu cập nhật Insta/FB vào hồ sơ khách quen theo SĐT ngay lập tức"
+                  title="Lưu cập nhật FB/Insta/Zalo vào hồ sơ khách quen theo SĐT ngay lập tức"
                 >
                   {updatingSocial ? "⏳ Đang lưu..." : "💾 Cập nhật hồ sơ khách"}
                 </button>
@@ -492,12 +499,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             <div className="text-[11px] text-slate-600 flex items-center gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
               <span>ℹ️</span>
               <span>
-                Khách quen: Bạn có thể thay đổi Insta/FB bên dưới. Hệ thống sẽ cập nhật theo SĐT khi tạo đơn hoặc bấm &quot;Cập nhật hồ sơ khách&quot;.
+                Khách quen: Bạn có thể thay đổi FB/Insta/Zalo bên dưới. Hệ thống sẽ cập nhật theo SĐT khi tạo đơn hoặc bấm &quot;Cập nhật hồ sơ khách&quot;.
               </span>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Tài khoản Instagram
@@ -529,6 +536,24 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   placeholder="Tên Facebook hoặc link"
                   value={facebook}
                   onChange={(e) => setFacebook(e.target.value)}
+                  className="w-full rounded-xl bg-white border border-slate-300 pl-7 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 font-medium shadow-xs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Tài khoản Zalo
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs text-sky-600 font-bold">
+                  Z
+                </span>
+                <input
+                  type="text"
+                  placeholder="SĐT hoặc tên Zalo"
+                  value={zalo}
+                  onChange={(e) => setZalo(e.target.value)}
                   className="w-full rounded-xl bg-white border border-slate-300 pl-7 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 font-medium shadow-xs"
                 />
               </div>

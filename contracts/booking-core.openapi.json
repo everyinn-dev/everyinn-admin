@@ -143,14 +143,15 @@
           "guest": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["phone", "phoneDisplay", "contactRaw", "name", "instagram", "facebook"],
+            "required": ["phone", "phoneDisplay", "contactRaw", "name", "instagram", "facebook", "zalo"],
             "properties": {
               "phone": { "type": ["string", "null"], "pattern": "^\\+84[35789]\\d{8}$" },
               "phoneDisplay": { "type": "string" },
               "contactRaw": { "type": "string" },
               "name": { "type": "string" },
               "instagram": { "$ref": "#/components/schemas/NullableString" },
-              "facebook": { "$ref": "#/components/schemas/NullableString" }
+              "facebook": { "$ref": "#/components/schemas/NullableString" },
+              "zalo": { "$ref": "#/components/schemas/NullableString" }
             }
           },
           "numGuests": { "type": "integer", "minimum": 1 },
@@ -666,7 +667,7 @@
       "GanttBooking": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "roomId", "guestName", "phone", "instagram", "facebook", "closingNote", "note", "bookingType", "ratePlanCode", "checkinAt", "checkoutAt", "occupiedUntil", "totalPrice", "status", "loyaltySyncStatus", "isDeposit", "depositAmount", "paidAmount", "remainingAmount", "depositDueDate", "depositStatus", "depositPaidAt", "depositReminderSentAt", "remainingPaidAt", "modNo", "version"],
+        "required": ["id", "roomId", "guestName", "phone", "instagram", "facebook", "zalo", "closingNote", "note", "bookingType", "ratePlanCode", "checkinAt", "checkoutAt", "occupiedUntil", "totalPrice", "status", "loyaltySyncStatus", "isDeposit", "depositAmount", "paidAmount", "remainingAmount", "depositDueDate", "depositStatus", "depositPaidAt", "depositReminderSentAt", "remainingPaidAt", "modNo", "version"],
         "properties": {
           "id": { "type": "string" },
           "roomId": { "type": "string" },
@@ -674,6 +675,7 @@
           "phone": { "type": "string" },
           "instagram": { "$ref": "#/components/schemas/NullableString" },
           "facebook": { "$ref": "#/components/schemas/NullableString" },
+          "zalo": { "$ref": "#/components/schemas/NullableString" },
           "closingNote": { "$ref": "#/components/schemas/NullableString" },
           "note": { "$ref": "#/components/schemas/NullableString" },
           "bookingType": { "$ref": "#/components/schemas/BookingType" },
@@ -737,7 +739,7 @@
       "RosterItem": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "roomId", "roomName", "roomNumber", "roomClass", "guestName", "phone", "instagram", "facebook", "bookingType", "ratePlanCode", "checkinAt", "checkoutAt", "turnoverStartAt", "turnoverEndAt", "lateCheckoutHours", "totalPrice", "remainingAmount", "status", "loyaltySyncStatus", "loyaltyTier", "loyaltyStep", "closingNote", "note", "createdAt", "createdBy", "updatedAt", "version"],
+        "required": ["id", "roomId", "roomName", "roomNumber", "roomClass", "guestName", "phone", "instagram", "facebook", "zalo", "bookingType", "ratePlanCode", "checkinAt", "checkoutAt", "turnoverStartAt", "turnoverEndAt", "lateCheckoutHours", "totalPrice", "remainingAmount", "status", "loyaltySyncStatus", "loyaltyTier", "loyaltyStep", "closingNote", "note", "createdAt", "createdBy", "updatedAt", "version"],
         "properties": {
           "id": { "type": "string" },
           "roomId": { "type": "string" },
@@ -748,6 +750,7 @@
           "phone": { "type": "string" },
           "instagram": { "$ref": "#/components/schemas/NullableString" },
           "facebook": { "$ref": "#/components/schemas/NullableString" },
+          "zalo": { "$ref": "#/components/schemas/NullableString" },
           "bookingType": { "$ref": "#/components/schemas/BookingType" },
           "ratePlanCode": { "$ref": "#/components/schemas/RatePlanCode" },
           "checkinAt": { "$ref": "#/components/schemas/Instant" },
@@ -1145,7 +1148,7 @@
                   "guest": {
                     "type": "object",
                     "required": ["name"],
-                    "properties": { "name": { "type": "string" }, "phone": { "type": "string" }, "instagram": { "type": "string" }, "facebook": { "type": "string" } }
+                    "properties": { "name": { "type": "string" }, "phone": { "type": "string" }, "instagram": { "type": "string" }, "facebook": { "type": "string" }, "zalo": { "type": "string" } }
                   },
                   "note": { "type": "string" },
                   "closingNote": { "type": "string" },

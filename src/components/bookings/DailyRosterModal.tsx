@@ -99,6 +99,7 @@ export const DailyRosterModal: React.FC<DailyRosterModalProps> = ({
         c.phone.includes(q) ||
         c.instagram?.toLowerCase().includes(q) ||
         c.facebook?.toLowerCase().includes(q) ||
+        c.zalo?.toLowerCase().includes(q) ||
         c.id.toLowerCase().includes(q)
     );
   }, [data?.checkins, searchFilter]);
@@ -114,6 +115,7 @@ export const DailyRosterModal: React.FC<DailyRosterModalProps> = ({
         c.phone.includes(q) ||
         c.instagram?.toLowerCase().includes(q) ||
         c.facebook?.toLowerCase().includes(q) ||
+        c.zalo?.toLowerCase().includes(q) ||
         c.id.toLowerCase().includes(q)
     );
   }, [data?.checkouts, searchFilter]);
@@ -614,7 +616,12 @@ const CheckinCard: React.FC<CheckinCardProps> = ({ item, onCopyGuide, onOpenDeta
                 FB: {item.facebook}
               </span>
             )}
-            {!item.instagram && !item.facebook && (
+            {item.zalo && (
+              <span className="text-sky-600 font-medium truncate max-w-[130px]">
+                ZL: {item.zalo}
+              </span>
+            )}
+            {!item.instagram && !item.facebook && !item.zalo && (
               <span className="text-slate-400 italic">Chưa lưu social</span>
             )}
           </div>

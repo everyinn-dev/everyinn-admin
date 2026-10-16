@@ -663,7 +663,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                 </div>
 
                 {/* Social handles */}
-                {(currentBooking.instagram || currentBooking.facebook) && (
+                {(currentBooking.instagram || currentBooking.facebook || currentBooking.zalo) && (
                   <div className="pt-2 border-t border-slate-200 flex flex-wrap gap-2 text-xs">
                     {currentBooking.instagram && (
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-50 border border-pink-200 text-pink-700 font-bold shadow-xs">
@@ -675,6 +675,12 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-bold shadow-xs">
                         <span className="text-xs font-bold text-blue-600">f</span>
                         <span>{currentBooking.facebook}</span>
+                      </div>
+                    )}
+                    {currentBooking.zalo && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 font-bold shadow-xs">
+                        <span className="text-xs font-bold text-sky-600">Z</span>
+                        <span>{currentBooking.zalo}</span>
                       </div>
                     )}
                   </div>
