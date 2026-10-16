@@ -19,15 +19,24 @@ export interface CoreErrorBody {
 }
 
 export class CoreError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly details?: unknown;
+  readonly requestId?: string;
+
   constructor(
-    public readonly status: number,
-    public readonly code: string,
+    status: number,
+    code: string,
     message: string,
-    public readonly details?: unknown,
-    public readonly requestId?: string
+    details?: unknown,
+    requestId?: string
   ) {
     super(message);
     this.name = "CoreError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+    this.requestId = requestId;
   }
 }
 
@@ -49,7 +58,17 @@ export interface CoreResponse<T> {
   requestId: string | null;
 }
 
+let testFetcher: ((core: CoreName) => Promise<Fetcher> | Fetcher) | null = null;
+
+/** Override Service Binding fetcher for unit/integration tests. Set to null to restore. */
+export function setTestFetcher(fn: ((core: CoreName) => Promise<Fetcher> | Fetcher) | null): void {
+  testFetcher = fn;
+}
+
 async function binding(core: CoreName): Promise<Fetcher> {
+  if (testFetcher) {
+    return await testFetcher(core);
+  }
   const ctx = await getCloudflareContext({ async: true });
   const svc = (ctx.env as unknown as Record<string, Fetcher | undefined>)[BINDING[core]];
   if (!svc) {

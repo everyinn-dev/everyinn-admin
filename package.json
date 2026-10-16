@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test test/jwt.test.mjs",
+    "test": "node --experimental-strip-types --test \"test/**/*.test.mjs\"",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "echo 'Direct laptop deploy disabled. Deploys are managed by Cloudflare Workers Builds via dev/main branch pushes.' && exit 1",

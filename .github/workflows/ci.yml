@@ -58,6 +58,11 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Test
+        run: npm test --if-present
+        env:
+          JWT_SECRET: "ci_jwt_secret_test_key_for_verification_only"
+
       # Mirrors what Cloudflare Workers Builds runs, so breakage is caught here first.
       - name: Build (OpenNext → Workers)
         run: npm run cf:build
