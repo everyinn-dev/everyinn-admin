@@ -32,14 +32,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ph
     const { phone } = await params;
     if (!phone) return NextResponse.json({ error: "Missing phone parameter" }, { status: 400 });
 
-    const body = (await req.json()) as { instagram?: string; facebook?: string; fullName?: string; internalNotes?: string };
+    const body = (await req.json()) as { instagram?: string; facebook?: string; zalo?: string; fullName?: string; internalNotes?: string };
 
     const lookup = await cdpCore.post<{ found: boolean; customer: CoreCustomer | null }>("/internal/v1/customers/lookup", { staff, body: { phone } });
     const current = lookup.data?.customer;
     if (!lookup.data?.found || !current) return NextResponse.json({ error: "Không tìm thấy thành viên" }, { status: 404 });
 
     const patch: Record<string, unknown> = { expectedVersion: current.version };
-    for (const k of ["instagram", "facebook", "fullName", "internalNotes"] as const) {
+    for (const k of ["instagram", "facebook", "zalo", "fullName", "internalNotes"] as const) {
       if (typeof body[k] === "string") patch[k] = body[k];
     }
     const res = await cdpCore.patch<{ customer: CoreCustomer }>(`/internal/v1/customers/${encodeURIComponent(current.customerId)}`, { staff, body: patch });

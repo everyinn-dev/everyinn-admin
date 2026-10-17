@@ -102,12 +102,13 @@ export async function POST(req: NextRequest) {
     const bookingType = String(body.bookingType ?? "").trim();
     const instagram = String(body.instagram ?? "").trim();
     const facebook = String(body.facebook ?? "").trim();
+    const zalo = String(body.zalo ?? "").trim();
 
     if (!roomId || !phone || !name || !bookingType || !body.checkinAt || !body.checkoutAt) {
       return bad("Vui lòng điền đầy đủ các thông tin bắt buộc.");
     }
-    if (!instagram && !facebook) {
-      return bad("Vui lòng nhập tên tài khoản Instagram hoặc Facebook (bắt buộc phải có ít nhất 1 trong 2).");
+    if (!instagram && !facebook && !zalo) {
+      return bad("Vui lòng nhập tên tài khoản Facebook, Instagram hoặc Zalo (bắt buộc phải có ít nhất 1 trong 3).");
     }
 
     const checkin = new Date(body.checkinAt as string);
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
       idempotencyKey,
       body: {
         ...stay,
-        guest: { name, phone, instagram: instagram || undefined, facebook: facebook || undefined },
+        guest: { name, phone, instagram: instagram || undefined, facebook: facebook || undefined, zalo: zalo || undefined },
         note,
         closingNote,
         status,
@@ -197,6 +198,7 @@ export async function POST(req: NextRequest) {
         name: row.member_name,
         instagram: row.instagram ?? "",
         facebook: row.facebook ?? "",
+        zalo: row.zalo ?? "",
         closingNote: row.closing_note ?? "",
         bookingType: row.booking_type,
         checkinAt: row.checkin_at,

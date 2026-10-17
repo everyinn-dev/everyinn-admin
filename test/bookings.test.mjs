@@ -19,6 +19,7 @@ const sampleBookingCanonical = {
     name: "Nguyen Van A",
     instagram: "nguyenvana",
     facebook: null,
+    zalo: null,
   },
   numGuests: 2,
   bookingType: "hourly",
