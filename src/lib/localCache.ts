@@ -105,11 +105,12 @@ export const CACHE_KEY = {
 // Typed helpers for master data
 // ---------------------------------------------------------------------------
 
-import type { Room, PricingRule, BookingRulesConfig } from "@/types";
+import type { Room, PricingRule, BookingRulesConfig, SurchargeRule } from "@/types";
 
 export interface CachedConfigs {
   bookingRules: BookingRulesConfig;
   hourlySlots: number[];
+  surchargeRules?: SurchargeRule[];
 }
 
 export interface StaffIdentity {

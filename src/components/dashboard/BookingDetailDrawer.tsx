@@ -782,6 +782,50 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                   {Number(currentBooking.totalPrice).toLocaleString("vi-VN")} đ
                 </div>
 
+                {/* Itemized 4-part Bill Breakdown */}
+                {currentBooking.basePrice !== undefined && (
+                  <div className="pt-2 border-t border-emerald-200/60 space-y-1 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Giá cơ bản ({currentBooking.numGuests || 2} khách):</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {Number(currentBooking.basePrice).toLocaleString("vi-VN")} đ
+                      </span>
+                    </div>
+                    {(currentBooking.discountAmount || 0) > 0 && (
+                      <div className="flex justify-between text-rose-700 font-semibold">
+                        <span>Ưu đãi {currentBooking.promotionName ? `(${currentBooking.promotionName})` : ""}:</span>
+                        <span className="font-mono font-bold">
+                          -{Number(currentBooking.discountAmount).toLocaleString("vi-VN")} đ
+                        </span>
+                      </div>
+                    )}
+                    {(currentBooking.holidaySurcharge || 0) > 0 && (
+                      <div className="flex justify-between text-amber-800 font-semibold">
+                        <span>Phụ thu Ngày Lễ:</span>
+                        <span className="font-mono font-bold">
+                          +{Number(currentBooking.holidaySurcharge).toLocaleString("vi-VN")} đ
+                        </span>
+                      </div>
+                    )}
+                    {(currentBooking.extraFee || 0) > 0 && (
+                      <div className="flex justify-between text-amber-800 font-semibold">
+                        <span>Phụ phí giờ thêm:</span>
+                        <span className="font-mono font-bold">
+                          +{Number(currentBooking.extraFee).toLocaleString("vi-VN")} đ
+                        </span>
+                      </div>
+                    )}
+                    {(currentBooking.extraGuestFee || 0) > 0 && (
+                      <div className="flex justify-between text-indigo-800 font-semibold">
+                        <span>Phụ thu khách thứ 3+:</span>
+                        <span className="font-mono font-bold">
+                          +{Number(currentBooking.extraGuestFee).toLocaleString("vi-VN")} đ
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Deposit Details Breakdown */}
                 {currentBooking.isDeposit === 1 && (
                   <div className="pt-2.5 border-t border-slate-200 space-y-2 text-xs">

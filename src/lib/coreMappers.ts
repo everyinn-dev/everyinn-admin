@@ -10,6 +10,8 @@ import type {
   BookingRulesConfig,
   BookingStatus,
   BookingType,
+  CappingWarning,
+  CdpTiersConfig,
   DailyRosterItem,
   DailyRosterResponse,
   DepositStatus,
@@ -17,11 +19,14 @@ import type {
   GanttBookingItem,
   GanttRoomData,
   LoyaltyTier,
+  Member,
+  NightlyBreakdownItem,
   PricingRule,
   Room,
   RoomClass,
+  SurchargeRule,
 } from "@/types";
-import type { Promotion, PromotionCategory, PromotionBadgeColor } from "@/types/promotions";
+import type { DiscountType, Promotion, PromotionCategory, PromotionBadgeColor } from "@/types/promotions";
 
 // ───────────────────────── Booking Core DTOs (subset the BFF reads) ─────────────────────────
 
@@ -36,7 +41,12 @@ export interface CoreRoom {
   sortOrder: number;
   isActive: boolean;
   version: number;
+  amenities?: string[];
+  images?: string[];
+  description?: string;
 }
+
+export type CoreRoomDto = CoreRoom;
 
 export interface CoreBlock {
   id: string;
@@ -71,7 +81,15 @@ export interface CoreGanttBooking {
   ratePlanCode: string;
   checkinAt: string;
   checkoutAt: string;
+  earlyCheckinHours?: number;
+  lateCheckoutHours?: number;
   occupiedUntil: string;
+  basePrice?: number;
+  holidaySurcharge?: number;
+  extraGuestFee?: number;
+  extraFee?: number;
+  discountAmount?: number;
+  promotionName?: string | null;
   totalPrice: number;
   status: "pending" | "confirmed";
   loyaltySyncStatus: "not_applicable" | "pending" | "synced";
@@ -98,26 +116,64 @@ export interface CoreGantt {
 }
 
 export interface CoreRateRule {
-  id: string;
+  id: string | number;
   roomClass: RoomClass;
-  ratePlanCode: "combo3h" | "combo6h" | "overnight" | "dayroom" | "custom";
+  ratePlanCode: "combo3h" | "combo6h" | "overnight" | "dayroom" | "custom" | string;
+  bookingType?: Exclude<BookingType, "custom">;
+  baseDurationHours?: number;
   basePrice: number;
   extraHourFee: number;
   isActive: boolean;
   version: number;
   updatedAt: string;
+  notes?: string;
+}
+
+export type CorePricingRuleDto = CoreRateRule;
+
+export interface CoreSurchargeRuleDto {
+  id: string;
+  code: string;
+  name: string;
+  surchargeType: "holiday" | "extra_guest" | "custom_fee";
+  calcMode: "percentage" | "fixed_amount";
+  amount: number;
+  unitScope: "per_night" | "per_guest_night" | "per_booking";
+  guestThreshold: number;
+  startDate: string | null;
+  endDate: string | null;
+  applicableDaysOfWeek: number[];
+  applicableRoomClasses: RoomClass[];
+  applicableBookingTypes: BookingType[];
+  priority: number;
+  isActive: boolean;
+  notes?: string | null;
+  version?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CoreSurchargeRulesListResponse {
+  surchargeRules: CoreSurchargeRuleDto[];
+  total: number;
+}
+
+export interface CoreSurchargeRuleEnvelope {
+  surchargeRule: CoreSurchargeRuleDto;
 }
 
 export interface CoreCatalog {
-  catalogVersion: number;
-  property: { id: string; name: string; address: string } | null;
+  catalogVersion: number | string;
+  property?: { id: string; name: string; address: string } | null;
   rooms: CoreRoom[];
-  rateRules: CoreRateRule[];
-  bookingRules: BookingRulesConfig & { max_stay_hours: number; require_social_account: boolean; version?: number };
-  hourlyCheckinSlots: { slots: number[]; version: number };
-  inventoryPolicy: { slotMinutes: number; turnoverMinutes: number; timezone: string };
-  promotionCategories: unknown[];
-  activePromotions: unknown[];
+  rateRules?: CoreRateRule[];
+  pricingRules?: CoreRateRule[];
+  surchargeRules?: CoreSurchargeRuleDto[];
+  bookingRules: BookingRulesConfig & { max_stay_hours?: number; require_social_account?: boolean; version?: number };
+  hourlyCheckinSlots: { slots: number[]; version?: number; minHour?: number; maxHour?: number };
+  inventoryPolicy: { slotMinutes?: number; turnoverMinutes?: number; turnoverBufferMinutes?: number; conflictRule?: string; timezone?: string };
+  promotionCategories?: unknown[];
+  activePromotions?: unknown[];
 }
 
 // ───────────────────────── CDP Core DTOs ─────────────────────────
@@ -184,30 +240,59 @@ export function toLegacyRoom(r: CoreRoom, propertyId = "every-inn"): Room {
   return {
     id: r.id,
     property_id: propertyId,
-    room_number: r.roomNumber,
+    room_number: r.roomNumber || r.name,
     name: r.name,
     room_class: r.roomClass,
     floor: r.floor,
     area_sqm: nz(r.areaSqm),
     max_guests: r.maxGuests,
-    sort_order: r.sortOrder,
+    sort_order: r.sortOrder ?? 0,
     is_active: r.isActive ? 1 : 0,
+    amenities: r.amenities,
+    images: r.images,
+    description: r.description,
     created_at: "",
     updated_at: "",
   };
 }
 
 export function toLegacyPricingRule(r: CoreRateRule, propertyId = "every-inn", index = 0): PricingRule | null {
-  if (r.ratePlanCode === "custom") return null; // custom has no catalog price in the legacy UI
+  if (r.ratePlanCode === "custom") return null;
   return {
-    id: index + 1,
+    id: typeof r.id === "number" ? r.id : index + 1,
     property_id: propertyId,
     room_class: r.roomClass,
-    booking_type: r.ratePlanCode,
+    booking_type: (r.bookingType || r.ratePlanCode) as any,
+    base_duration_hours: r.baseDurationHours,
     base_price: r.basePrice,
     extra_hour_fee: r.extraHourFee,
     is_active: r.isActive ? 1 : 0,
     created_at: r.updatedAt,
+    notes: r.notes,
+  };
+}
+
+export function toLegacySurchargeRule(s: CoreSurchargeRuleDto): SurchargeRule {
+  return {
+    id: s.id,
+    code: s.code,
+    name: s.name,
+    surcharge_type: s.surchargeType,
+    calc_mode: s.calcMode,
+    amount: s.amount,
+    unit_scope: s.unitScope,
+    guest_threshold: s.guestThreshold,
+    start_date: s.startDate,
+    end_date: s.endDate,
+    applicable_days_of_week: s.applicableDaysOfWeek || [0, 1, 2, 3, 4, 5, 6],
+    applicable_room_classes: s.applicableRoomClasses || ["haven", "signature"],
+    applicable_booking_types: s.applicableBookingTypes || ["hourly", "overnight", "dayuse", "custom"],
+    priority: s.priority ?? 0,
+    is_active: s.isActive ? 1 : 0,
+    notes: s.notes,
+    version: s.version ?? 1,
+    created_at: s.createdAt,
+    updated_at: s.updatedAt,
   };
 }
 
@@ -230,6 +315,14 @@ export function toGanttBooking(b: CoreGanttBooking): GanttBookingItem & {
     bookingType: b.bookingType,
     checkinAt: b.checkinAt,
     checkoutAt: b.checkoutAt,
+    earlyCheckinHours: b.earlyCheckinHours,
+    lateCheckoutHours: b.lateCheckoutHours,
+    basePrice: b.basePrice,
+    holidaySurcharge: b.holidaySurcharge,
+    extraGuestFee: b.extraGuestFee,
+    extraFee: b.extraFee,
+    discountAmount: b.discountAmount,
+    promotionName: b.promotionName,
     totalPrice: b.totalPrice,
     status: b.status,
     isDeposit: b.isDeposit,
@@ -242,7 +335,6 @@ export function toGanttBooking(b: CoreGanttBooking): GanttBookingItem & {
     depositReminderSentAt: nz(b.depositReminderSentAt),
     remainingPaidAt: nz(b.remainingPaidAt),
     modNo: b.modNo,
-    // Core-only fields the UI needs for optimistic concurrency, turnover rendering and sync badges.
     version: b.version,
     ratePlanCode: b.ratePlanCode,
     occupiedUntil: b.occupiedUntil,
@@ -264,7 +356,6 @@ export function toGanttBlock(b: CoreBlock): GanttBlockItem & { version: number }
   };
 }
 
-/** Legacy `GET /api/room-blocks` row shape (snake_case, joined room + staff name). */
 export function toLegacyRoomBlock(b: CoreBlock) {
   return {
     id: b.id,
@@ -281,7 +372,6 @@ export function toLegacyRoomBlock(b: CoreBlock) {
     created_at: b.createdAt,
     released_at: b.releasedAt,
     release_reason: b.releaseReason,
-    // Needed by the UI to release the block (optimistic concurrency).
     version: b.version,
   };
 }
@@ -296,7 +386,6 @@ export function toGanttRoom(r: CoreGantt["rooms"][number], includeDetail: boolea
     bookings: r.bookings.map((b) => {
       const item = toGanttBooking(b);
       if (includeDetail) return item;
-      // Day view historically returned the slim shape; keep payload small.
       const { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } = item;
       return { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } as GanttBookingItem;
     }),
@@ -304,12 +393,10 @@ export function toGanttRoom(r: CoreGantt["rooms"][number], includeDetail: boolea
   };
 }
 
-/** Legacy `LoyaltyTier` had `new` for non-members. */
 export function toLegacyTier(t: CoreTier): "new" | "bronze" | "silver" | "gold" {
   return t === "not_member" ? "new" : t;
 }
 
-/** Shape returned by the old `GET /api/members/[phone]` plus the new loyalty block. */
 export function toLegacyMemberResponse(c: CoreCustomer) {
   return {
     phone: c.phoneNational ?? c.phone ?? "",
@@ -319,7 +406,7 @@ export function toLegacyMemberResponse(c: CoreCustomer) {
     facebook: c.facebook,
     zalo: c.zalo,
     totalBookings: c.loyalty.lifetimeBookingCount,
-    totalSpent: c.legacy.totalSpent ?? 0, // legacy reference only — never used for tier (§20.1)
+    totalSpent: c.legacy.totalSpent ?? 0,
     totalNights: 0,
     loyaltyTier: toLegacyTier(c.loyalty.tier),
     preferredRoomClass: c.preferredRoomClass,
@@ -333,7 +420,6 @@ export function toLegacyMemberResponse(c: CoreCustomer) {
   };
 }
 
-/** Legacy `cdpTiers` config derived from CDP rules (booking-count thresholds only; spend no longer drives tier). */
 export function toLegacyCdpTiers(rules: CoreLoyaltyRules) {
   const out: Record<string, { min_spent: number; min_bookings: number }> = {};
   for (const t of rules.tierRules.tiers) {
@@ -350,16 +436,11 @@ export function daysInMonthOf(month: string): number {
 
 // ───────────────────────── Booking list/detail (A-W1a) ─────────────────────────
 
-/** `{ id, name }` reference the Core returns for any staff-attributed action. */
 export interface CoreStaffRef {
   id: number;
   name: string | null;
 }
 
-/**
- * Full booking DTO from Booking Core (`bookingDto`). Staff names are denormalised inside
- * `booking-db`, so the BFF never has to join Admin's `staff` table to render a list.
- */
 export interface CoreBookingDto {
   id: string;
   propertyId: string;
@@ -382,6 +463,7 @@ export interface CoreBookingDto {
   ratePlanCode: string;
   checkinAt: string;
   checkoutAt: string;
+  earlyCheckinHours?: number;
   occupiedUntil: string;
   lateCheckoutHours: number;
   status: BookingStatus;
@@ -391,6 +473,8 @@ export interface CoreBookingDto {
   pricing: {
     basePrice: number;
     extraFee: number;
+    holidaySurcharge?: number;
+    extraGuestFee?: number;
     promotionDiscount: number;
     loyaltyDiscount: number;
     discountAmount: number;
@@ -445,36 +529,33 @@ export interface CoreBookingListResponse {
   totalPages: number;
 }
 
-/** `POST /internal/v1/bookings` (and lifecycle commands) response. `replayed` = idempotent replay of an earlier call. */
 export interface CoreBookingEnvelope {
   booking: CoreBookingDto;
   replayed?: boolean;
 }
 
-/** `POST /internal/v1/quotes` — only the fields the BFF consumes. */
 export interface CoreQuoteResponse {
   quote: {
     subtotal: number;
-    /** Authoritative total (promotion applied) the guest owes before any loyalty reward. */
     totalBeforeLoyalty: number;
     estimatedTotal: number;
     promotion: { id: string | null; code: string | null; eligible: boolean; reason: string | null; discount: number } | null;
+    pricingBreakdown?: {
+      basePrice: number;
+      holidaySurcharge: number;
+      extraGuestFee: number;
+      extraFee: number;
+      discountAmount: number;
+      totalPrice: number;
+    };
+    nightlyBreakdown?: NightlyBreakdownItem[];
+    cappingWarning?: CappingWarning;
   };
   availability: { available: boolean; conflicts: Array<{ conflictType: string; message: string }> };
 }
 
-/** Legacy rows were raw snake_case D1 columns; `undefined` (not `null`) is what the UI expects for "absent". */
 const u = <T>(v: T | null | undefined): T | undefined => (v === null || v === undefined ? undefined : v);
 
-/**
- * Flatten a Core booking DTO back into the legacy snake_case row the bookings table renders.
- *
- * Intentional semantic notes (approved, EI-PHASE1-STATUS A-W1a):
- * - `mod_no` maps to `control.version`. Core bumps version on every write whereas legacy `mod_no`
- *   counted modifications, so the "edited by" badge can appear slightly sooner. Cosmetic only.
- * - `member_phone` uses `guest.phoneDisplay` (national format) to match legacy rendering; bookings
- *   with no parsable phone fall back to the raw contact string.
- */
 export function toLegacyBookingRow(d: CoreBookingDto): Booking {
   const { guest: g, pricing: p, financial: f, lifecycle: l, control: c } = d;
   return {
@@ -489,6 +570,7 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     booking_type: d.bookingType,
     checkin_at: d.checkinAt,
     checkout_at: d.checkoutAt,
+    early_checkin_hours: d.earlyCheckinHours,
     late_checkout_hours: d.lateCheckoutHours,
     instagram: u(g.instagram),
     facebook: u(g.facebook),
@@ -498,6 +580,8 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     status: d.status,
 
     base_price: p.basePrice,
+    holiday_surcharge: p.holidaySurcharge,
+    extra_guest_fee: p.extraGuestFee,
     extra_fee: p.extraFee,
     discount_amount: p.discountAmount,
     total_price: p.totalPrice,
@@ -505,6 +589,7 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
 
     promotion_id: u(d.promotion?.id),
     promotion_code: u(d.promotion?.code),
+    promotion_name: u(d.promotion?.name),
 
     cancelled_at: u(l.cancelledAt),
     cancel_reason: u(l.cancelReason),
@@ -678,15 +763,21 @@ export interface CorePromotionDto {
   minOrderAmount: number;
   applicableRoomClasses: RoomClass[];
   applicableBookingTypes: BookingType[];
-  applicableRatePlanCodes: string[];
-  applicableLoyaltyTiers: string[];
-  applicableDaysOfWeek: number[];
+  applicableRatePlanCodes?: string[];
+  applicableLoyaltyTiers?: string[];
+  applicableDaysOfWeek?: number[];
   startDate: string | null;
   endDate: string | null;
+  bookingWindowStart?: string | null;
+  bookingWindowEnd?: string | null;
+  minNights?: number;
+  blackoutDates?: string[];
+  isStackableWithHoliday?: boolean | number;
   usageLimit: number | null;
+  maxUsesPerGuest?: number | null;
   usedCount: number;
   isActive: boolean;
-  archivedAt: string | null;
+  archivedAt?: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -733,10 +824,16 @@ export function toLegacyPromotion(p: CorePromotionDto): Promotion & { version: n
     applicable_room_classes: p.applicableRoomClasses,
     applicable_booking_types: p.applicableBookingTypes,
     applicable_loyalty_tiers: (p.applicableLoyaltyTiers || []).map((t) => (t === "not_member" ? "new" : t)) as LoyaltyTier[],
-    applicable_days_of_week: p.applicableDaysOfWeek,
-    start_date: p.startDate ?? undefined,
-    end_date: p.endDate ?? undefined,
-    usage_limit: p.usageLimit ?? undefined,
+    applicable_days_of_week: p.applicableDaysOfWeek ?? [0, 1, 2, 3, 4, 5, 6],
+    start_date: p.startDate ?? null,
+    end_date: p.endDate ?? null,
+    booking_window_start: p.bookingWindowStart ?? null,
+    booking_window_end: p.bookingWindowEnd ?? null,
+    min_nights: p.minNights ?? 1,
+    blackout_dates: p.blackoutDates ?? [],
+    is_stackable_with_holiday: typeof p.isStackableWithHoliday === "boolean" ? (p.isStackableWithHoliday ? 1 : 0) : (p.isStackableWithHoliday ?? 1),
+    usage_limit: p.usageLimit ?? null,
+    max_uses_per_guest: p.maxUsesPerGuest ?? null,
     used_count: p.usedCount,
     is_active: p.isActive ? 1 : 0,
     created_at: p.createdAt,
@@ -761,5 +858,3 @@ export function toLegacyCategory(c: CoreCategoryDto): PromotionCategory & { vers
     version: c.version,
   };
 }
-
-

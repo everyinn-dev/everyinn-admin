@@ -124,9 +124,29 @@ export async function POST(req: Request) {
     }
     if (start_date || startDate) coreBody.startDate = start_date || startDate;
     if (end_date || endDate) coreBody.endDate = end_date || endDate;
+    if (body.booking_window_start || body.bookingWindowStart) {
+      coreBody.bookingWindowStart = body.booking_window_start || body.bookingWindowStart;
+    }
+    if (body.booking_window_end || body.bookingWindowEnd) {
+      coreBody.bookingWindowEnd = body.booking_window_end || body.bookingWindowEnd;
+    }
+    if (body.min_nights !== undefined || body.minNights !== undefined) {
+      coreBody.minNights = Math.max(1, Number(body.min_nights ?? body.minNights ?? 1));
+    }
+    if (body.blackout_dates || body.blackoutDates) {
+      coreBody.blackoutDates = body.blackout_dates || body.blackoutDates;
+    }
+    if (body.is_stackable_with_holiday !== undefined || body.isStackableWithHoliday !== undefined) {
+      const st = body.is_stackable_with_holiday ?? body.isStackableWithHoliday;
+      coreBody.isStackableWithHoliday = Boolean(st);
+    }
     if (usage_limit !== undefined || usageLimit !== undefined) {
       const u = usage_limit ?? usageLimit;
       coreBody.usageLimit = u !== null && u !== "" ? Number(u) : null;
+    }
+    if (body.max_uses_per_guest !== undefined || body.maxUsesPerGuest !== undefined) {
+      const mug = body.max_uses_per_guest ?? body.maxUsesPerGuest;
+      coreBody.maxUsesPerGuest = mug !== null && mug !== "" ? Number(mug) : null;
     }
     if (is_active !== undefined || isActive !== undefined) {
       coreBody.isActive = is_active !== undefined ? Boolean(is_active) : Boolean(isActive);

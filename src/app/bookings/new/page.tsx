@@ -4,7 +4,7 @@ import React, { useEffect, useState, Suspense } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { BookingForm } from "@/components/bookings/BookingForm";
 import { Spinner } from "@/components/ui/Spinner";
-import { BookingRulesConfig, PricingRule, Room } from "@/types";
+import { BookingRulesConfig, PricingRule, Room, SurchargeRule } from "@/types";
 import {
   getCachedRoomsClient,
   setCachedRoomsClient,
@@ -14,10 +14,10 @@ import {
   setCachedConfigsClient,
 } from "@/lib/localCache";
 
-
 export default function NewBookingPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
+  const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([]);
   const [bookingRules, setBookingRules] = useState<BookingRulesConfig | undefined>(undefined);
   const [hourlySlots, setHourlySlots] = useState<number[] | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -25,25 +25,24 @@ export default function NewBookingPage() {
   useEffect(() => {
     async function loadMasterData() {
       try {
-        // Fast-path: serve all 3 datasets from localStorage cache (TTL 60 min)
         const cachedRooms = getCachedRoomsClient();
         const cachedPricing = getCachedPricingRulesClient();
         const cachedConfigs = getCachedConfigsClient();
 
-        if (cachedRooms && cachedPricing && cachedConfigs) {
+        if (cachedRooms && cachedPricing && cachedConfigs && cachedConfigs.surchargeRules) {
           setRooms(cachedRooms);
           setPricingRules(cachedPricing);
           setBookingRules(cachedConfigs.bookingRules);
           setHourlySlots(cachedConfigs.hourlySlots);
+          setSurchargeRules(cachedConfigs.surchargeRules);
           setLoading(false);
-          return; // Zero fetch calls — instant form ready!
+          return;
         }
 
-        // Cache miss: fetch in parallel only what's missing
         const [roomsRes, rulesRes, configsRes] = await Promise.all([
           cachedRooms ? null : fetch("/api/rooms"),
           cachedPricing ? null : fetch("/api/pricing-rules"),
-          cachedConfigs ? null : fetch("/api/configs"),
+          cachedConfigs && cachedConfigs.surchargeRules ? null : fetch("/api/configs"),
         ]);
 
         if (cachedRooms) {
@@ -64,16 +63,19 @@ export default function NewBookingPage() {
           setCachedPricingRulesClient(fetchedRules);
         }
 
-        if (cachedConfigs) {
+        if (cachedConfigs && cachedConfigs.surchargeRules) {
           setBookingRules(cachedConfigs.bookingRules);
           setHourlySlots(cachedConfigs.hourlySlots);
+          setSurchargeRules(cachedConfigs.surchargeRules);
         } else if (configsRes?.ok) {
           const configsData = (await configsRes.json()) as any;
           setBookingRules(configsData.bookingRules);
           setHourlySlots(configsData.hourlySlots);
+          setSurchargeRules(configsData.surchargeRules || []);
           setCachedConfigsClient({
             bookingRules: configsData.bookingRules,
             hourlySlots: configsData.hourlySlots,
+            surchargeRules: configsData.surchargeRules || [],
           });
         }
       } catch (e) {
@@ -108,6 +110,7 @@ export default function NewBookingPage() {
             <BookingForm
               initialRooms={rooms}
               initialPricingRules={pricingRules}
+              initialSurchargeRules={surchargeRules}
               bookingRules={bookingRules}
               hourlySlots={hourlySlots}
             />

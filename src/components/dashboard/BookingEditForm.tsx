@@ -226,6 +226,13 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       return;
     }
 
+    if (!closingNote || closingNote.trim().length < 3) {
+      const err = "Vui lòng nhập 'Câu chốt với khách' (bắt buộc tối thiểu 3 ký tự).";
+      setErrorMessage(err);
+      toast.warning(err, "Thiếu Câu chốt với khách");
+      return;
+    }
+
     try {
       setSubmitting(true);
       const res = await fetch(`/api/bookings/${bookingId}`, {

@@ -1,197 +1,232 @@
 import {
   Promotion,
-  PromotionEligibilityContext,
-  PromotionValidationResult,
+  PromotionEvaluationContext,
+  PromotionEvaluationResult,
 } from "@/types/promotions";
+import { getLogicalStayDate } from "./pricing";
 
-/**
- * Validate whether a promotion is applicable to a specific booking context
- */
-export function validatePromotionEligibility(
-  promotion: Promotion,
-  context: PromotionEligibilityContext
-): { eligible: boolean; reason?: string } {
-  // 1. Is active
-  if (!promotion.is_active) {
-    return { eligible: false, reason: "Chương trình ưu đãi đang tạm dừng." };
-  }
-
-  // 2. Usage limit
-  if (
-    promotion.usage_limit !== null &&
-    promotion.usage_limit !== undefined &&
-    promotion.used_count >= promotion.usage_limit
-  ) {
-    return { eligible: false, reason: "Mã ưu đãi đã hết lượt sử dụng." };
-  }
-
-  // 3. Time validity (start_date & end_date)
-  // Format checkinAt to YYYY-MM-DD
-  const checkinIso = context.checkinAt.toISOString();
-  const checkinDateStr = checkinIso.slice(0, 10);
-
-  if (promotion.start_date && checkinDateStr < promotion.start_date) {
-    return {
-      eligible: false,
-      reason: `Ưu đãi bắt đầu áp dụng từ ngày ${promotion.start_date}.`,
-    };
-  }
-
-  if (promotion.end_date && checkinDateStr > promotion.end_date) {
-    return {
-      eligible: false,
-      reason: `Ưu đãi đã hết hạn từ ngày ${promotion.end_date}.`,
-    };
-  }
-
-  // 4. Days of week [0..6] (0 = Chủ Nhật, 1 = Thứ Hai... 6 = Thứ Bảy)
-  if (
-    Array.isArray(promotion.applicable_days_of_week) &&
-    promotion.applicable_days_of_week.length > 0
-  ) {
-    const dayOfWeek = context.checkinAt.getDay();
-    if (!promotion.applicable_days_of_week.includes(dayOfWeek)) {
-      const dayNames = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
-      const allowedNames = promotion.applicable_days_of_week.map((d) => dayNames[d]).join(", ");
-      return {
-        eligible: false,
-        reason: `Ưu đãi chỉ áp dụng vào các ngày: ${allowedNames}.`,
-      };
-    }
-  }
-
-  // 5. Room class
-  if (
-    Array.isArray(promotion.applicable_room_classes) &&
-    promotion.applicable_room_classes.length > 0
-  ) {
-    if (!promotion.applicable_room_classes.includes(context.roomClass)) {
-      return {
-        eligible: false,
-        reason: `Chỉ áp dụng cho hạng phòng: ${promotion.applicable_room_classes.join(", ").toUpperCase()}.`,
-      };
-    }
-  }
-
-  // 6. Booking type
-  if (
-    Array.isArray(promotion.applicable_booking_types) &&
-    promotion.applicable_booking_types.length > 0
-  ) {
-    if (!promotion.applicable_booking_types.includes(context.bookingType)) {
-      const typeLabels: Record<string, string> = {
-        hourly: "Theo Giờ",
-        overnight: "Qua Đêm",
-        dayuse: "Theo Ngày",
-        custom: "Tuỳ Chỉnh",
-      };
-      const allowedLabels = promotion.applicable_booking_types
-        .map((t) => typeLabels[t] || t)
-        .join(", ");
-      return {
-        eligible: false,
-        reason: `Chỉ áp dụng cho hình thức đặt: ${allowedLabels}.`,
-      };
-    }
-  }
-
-  // 7. Loyalty tier (Mini CDP)
-  if (
-    Array.isArray(promotion.applicable_loyalty_tiers) &&
-    promotion.applicable_loyalty_tiers.length > 0
-  ) {
-    const userTier = context.memberTier || "new";
-    if (!promotion.applicable_loyalty_tiers.includes(userTier)) {
-      const tierLabels: Record<string, string> = {
-        new: "Khách Mới",
-        bronze: "Bronze",
-        silver: "Silver",
-        gold: "Gold",
-      };
-      const allowedTiers = promotion.applicable_loyalty_tiers
-        .map((t) => tierLabels[t] || t)
-        .join(", ");
-      return {
-        eligible: false,
-        reason: `Đặc quyền ưu đãi dành riêng cho hạng: ${allowedTiers}.`,
-      };
-    }
-  }
-
-  // 8. Min order amount
-  if (promotion.min_order_amount > 0 && context.rawSubtotal < promotion.min_order_amount) {
-    return {
-      eligible: false,
-      reason: `Đơn phòng tối thiểu ${promotion.min_order_amount.toLocaleString("vi-VN")} đ để áp dụng ưu đãi này.`,
-    };
-  }
-
-  return { eligible: true };
+function formatYmdLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /**
- * Compute the discount amount and final price for an eligible promotion
- */
-export function computePromotionDiscount(
-  promotion: Promotion,
-  rawSubtotal: number
-): { discountAmount: number; finalPrice: number } {
-  if (rawSubtotal <= 0) {
-    return { discountAmount: 0, finalPrice: 0 };
-  }
-
-  let discount = 0;
-
-  if (promotion.discount_type === "percentage") {
-    const pct = Math.max(0, Math.min(100, promotion.discount_value));
-    const rawDiscount = Math.round((rawSubtotal * pct) / 100);
-
-    if (
-      promotion.max_discount_amount !== null &&
-      promotion.max_discount_amount !== undefined &&
-      promotion.max_discount_amount > 0
-    ) {
-      discount = Math.min(rawDiscount, promotion.max_discount_amount);
-    } else {
-      discount = rawDiscount;
-    }
-  } else {
-    // fixed_amount
-    discount = Math.max(0, promotion.discount_value);
-  }
-
-  // Discount cannot exceed subtotal
-  discount = Math.min(rawSubtotal, discount);
-  const finalPrice = Math.max(0, rawSubtotal - discount);
-
-  return { discountAmount: discount, finalPrice };
-}
-
-/**
- * Convenience helper to validate and compute discount in one pass
+ * Pure function to evaluate if a promotion is eligible for a given booking context
+ * and compute the exact discount amount in VND (strictly on basePrice!).
  */
 export function evaluatePromotion(
-  promotion: Promotion,
-  context: PromotionEligibilityContext
-): PromotionValidationResult {
-  const eligibility = validatePromotionEligibility(promotion, context);
+  promo: Promotion,
+  ctx: PromotionEvaluationContext
+): PromotionEvaluationResult {
+  const basePrice = ctx.basePrice ?? ctx.rawSubtotal ?? 0;
 
-  if (!eligibility.eligible) {
+  // 1. Check active status
+  if (!promo.is_active) {
     return {
       eligible: false,
-      reason: eligibility.reason,
+      reason: "Chương trình ưu đãi đang tạm dừng.",
       discountAmount: 0,
-      finalPrice: context.rawSubtotal,
-      promotion,
+      finalPrice: basePrice,
     };
   }
 
-  const { discountAmount, finalPrice } = computePromotionDiscount(promotion, context.rawSubtotal);
+  // 2. Check usage limit
+  if (promo.usage_limit !== null && promo.used_count >= promo.usage_limit) {
+    return {
+      eligible: false,
+      reason: `Đã hết lượt sử dụng (${promo.used_count}/${promo.usage_limit}).`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  if (
+    promo.max_uses_per_guest !== null &&
+    promo.max_uses_per_guest !== undefined &&
+    ctx.guestUsedCount !== undefined &&
+    ctx.guestUsedCount >= promo.max_uses_per_guest
+  ) {
+    return {
+      eligible: false,
+      reason: `Khách đã dùng tối đa ${promo.max_uses_per_guest} lần mã này.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 3. Check minimum order amount (against basePrice)
+  if (promo.min_order_amount > 0 && basePrice < promo.min_order_amount) {
+    return {
+      eligible: false,
+      reason: `Đơn tối thiểu ${promo.min_order_amount.toLocaleString("vi-VN")}đ.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 4. Check room class
+  if (
+    promo.applicable_room_classes.length > 0 &&
+    !promo.applicable_room_classes.includes(ctx.roomClass)
+  ) {
+    return {
+      eligible: false,
+      reason: `Chỉ áp dụng cho hạng phòng ${promo.applicable_room_classes.join(", ").toUpperCase()}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 5. Check booking type
+  if (
+    promo.applicable_booking_types.length > 0 &&
+    !promo.applicable_booking_types.includes(ctx.bookingType)
+  ) {
+    const typeMap: Record<string, string> = {
+      hourly: "Theo giờ",
+      overnight: "Qua đêm",
+      dayuse: "Theo ngày",
+      custom: "Tuỳ chỉnh",
+    };
+    const allowedLabels = promo.applicable_booking_types.map((t) => typeMap[t] || t).join(", ");
+    return {
+      eligible: false,
+      reason: `Chỉ áp dụng cho hình thức: ${allowedLabels}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 6. Check loyalty tier
+  if (
+    promo.applicable_loyalty_tiers.length > 0 &&
+    !promo.applicable_loyalty_tiers.includes(ctx.memberTier)
+  ) {
+    return {
+      eligible: false,
+      reason: `Yêu cầu hạng thành viên: ${promo.applicable_loyalty_tiers.join(", ").toUpperCase()}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 7. Check date range (start_date .. end_date) using logical stay date
+  const checkinDateStr = getLogicalStayDate(ctx.checkinAt, ctx.bookingType);
+  if (promo.start_date && checkinDateStr < promo.start_date) {
+    return {
+      eligible: false,
+      reason: `Áp dụng từ ngày ${promo.start_date}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+  if (promo.end_date && checkinDateStr > promo.end_date) {
+    return {
+      eligible: false,
+      reason: `Đã hết hạn từ ngày ${promo.end_date}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 7b. Check booking window
+  const todayYmd = formatYmdLocal(new Date());
+  if (promo.booking_window_start && todayYmd < promo.booking_window_start) {
+    return {
+      eligible: false,
+      reason: `Mở đặt từ ngày ${promo.booking_window_start}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+  if (promo.booking_window_end && todayYmd > promo.booking_window_end) {
+    return {
+      eligible: false,
+      reason: `Đã đóng cửa sổ đặt ngày ${promo.booking_window_end}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 7c. Check min nights
+  if (promo.min_nights && promo.min_nights > 1 && ctx.checkoutAt) {
+    const nights =
+      ctx.bookingType === "dayuse"
+        ? Math.max(1, Math.round((ctx.checkoutAt.getTime() - ctx.checkinAt.getTime()) / (21 * 3600_000)))
+        : 1;
+    if (nights < promo.min_nights) {
+      return {
+        eligible: false,
+        reason: `Yêu cầu đặt tối thiểu ${promo.min_nights} đêm.`,
+        discountAmount: 0,
+        finalPrice: basePrice,
+      };
+    }
+  }
+
+  // 7d. Check blackout dates
+  if (promo.blackout_dates && promo.blackout_dates.includes(checkinDateStr)) {
+    return {
+      eligible: false,
+      reason: `Không áp dụng vào ngày lễ/cao điểm (${checkinDateStr}).`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 7e. Check holiday stackability
+  if (promo.is_stackable_with_holiday === 0 && ctx.hasHolidaySurcharge) {
+    return {
+      eligible: false,
+      reason: "Không áp dụng đồng thời với phụ thu Lễ/Tết.",
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 8. Check day of week (0 = Sunday .. 6 = Saturday)
+  const dayOfWeek = new Date(`${checkinDateStr}T00:00:00`).getDay();
+  const applicableDays = promo.applicable_days_of_week || [];
+  if (
+    applicableDays.length > 0 &&
+    !applicableDays.includes(dayOfWeek)
+  ) {
+    const dayLabels: Record<number, string> = {
+      0: "CN",
+      1: "T2",
+      2: "T3",
+      3: "T4",
+      4: "T5",
+      5: "T6",
+      6: "T7",
+    };
+    const allowedDays = applicableDays.map((d) => dayLabels[d]).join(", ");
+    return {
+      eligible: false,
+      reason: `Chỉ áp dụng các ngày: ${allowedDays}.`,
+      discountAmount: 0,
+      finalPrice: basePrice,
+    };
+  }
+
+  // 9. Calculate discount amount strictly on basePrice
+  let discountAmount = 0;
+  if (promo.discount_type === "percentage") {
+    discountAmount = Math.round((basePrice * promo.discount_value) / 100);
+    if (promo.max_discount_amount && promo.max_discount_amount > 0) {
+      discountAmount = Math.min(discountAmount, promo.max_discount_amount);
+    }
+  } else {
+    discountAmount = Math.round(promo.discount_value);
+  }
+
+  discountAmount = Math.min(discountAmount, basePrice);
 
   return {
     eligible: true,
     discountAmount,
-    finalPrice,
-    promotion,
+    finalPrice: Math.max(0, basePrice - discountAmount),
   };
 }

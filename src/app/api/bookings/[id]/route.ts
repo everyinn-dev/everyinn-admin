@@ -221,6 +221,7 @@ export async function PATCH(
       if (body.bookingType) updatePayload.bookingType = body.bookingType;
       if (body.checkinAt) updatePayload.checkinAt = body.checkinAt;
       if (body.checkoutAt) updatePayload.checkoutAt = body.checkoutAt;
+      if (body.earlyCheckinHours !== undefined) updatePayload.earlyCheckinHours = Number(body.earlyCheckinHours);
       if (body.lateCheckoutHours !== undefined) updatePayload.lateCheckoutHours = Number(body.lateCheckoutHours);
       if (body.numGuests !== undefined) updatePayload.numGuests = Number(body.numGuests);
       if (body.note !== undefined) updatePayload.note = body.note || null;

@@ -4,17 +4,21 @@ import React, { useState, useEffect, useCallback } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { PromotionsList } from "@/components/promotions/PromotionsList";
 import { CategoriesList } from "@/components/promotions/CategoriesList";
+import { SurchargesList } from "@/components/promotions/SurchargesList";
 import { PromotionModal } from "@/components/promotions/PromotionModal";
 import { CategoryModal } from "@/components/promotions/CategoryModal";
+import { SurchargeModal } from "@/components/promotions/SurchargeModal";
 import { Promotion, PromotionCategory } from "@/types/promotions";
+import { SurchargeRule } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 
 export default function PromotionsPage() {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"promotions" | "categories">("promotions");
+  const [activeTab, setActiveTab] = useState<"promotions" | "surcharges" | "categories">("promotions");
 
   const [categories, setCategories] = useState<PromotionCategory[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -24,12 +28,16 @@ export default function PromotionsPage() {
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [selectedCat, setSelectedCat] = useState<PromotionCategory | null>(null);
 
+  const [surchargeModalOpen, setSurchargeModalOpen] = useState(false);
+  const [selectedSurcharge, setSelectedSurcharge] = useState<SurchargeRule | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [catRes, promoRes] = await Promise.all([
+      const [catRes, promoRes, surRes] = await Promise.all([
         fetch("/api/promotions/categories"),
         fetch("/api/promotions"),
+        fetch("/api/surcharges"),
       ]);
 
       if (catRes.ok) {
@@ -41,9 +49,14 @@ export default function PromotionsPage() {
         const promoData = (await promoRes.json()) as any;
         setPromotions(promoData.promotions || []);
       }
+
+      if (surRes.ok) {
+        const surData = (await surRes.json()) as any;
+        setSurchargeRules(surData.surchargeRules || []);
+      }
     } catch (err: any) {
       console.error("Failed to load promotions data:", err);
-      toast.error("Không thể tải danh sách ưu đãi.", "Lỗi tải dữ liệu");
+      toast.error("Không thể tải danh sách ưu đãi & phụ thu.", "Lỗi tải dữ liệu");
     } finally {
       setLoading(false);
     }
@@ -72,37 +85,48 @@ export default function PromotionsPage() {
             <div className="flex items-center gap-2">
               <span className="text-2xl">🏷️</span>
               <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                Quản Lý Ưu Đãi & Khuyến Mãi
+                Quản Lý Ưu Đãi & Phụ Thu
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Quản lý danh mục loại ưu đãi, ưu đãi theo mùa (Seasonal) và đặc quyền hạng thành viên Mini CDP.
+              Quản lý chương trình khuyến mãi, phụ thu ngày lễ / khách thêm và đặc quyền hạng thành viên Mini CDP.
             </p>
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex items-center bg-slate-200/80 p-1 rounded-xl shrink-0 self-start sm:self-auto">
+          <div className="flex items-center bg-slate-200/80 p-1 rounded-xl shrink-0 self-start sm:self-auto flex-wrap gap-1">
             <button
               type="button"
               onClick={() => setActiveTab("promotions")}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === "promotions"
                   ? "bg-white text-emerald-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              🎁 Chương Trình Ưu Đãi ({promotions.length})
+              🎁 Ưu Đãi ({promotions.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("surcharges")}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === "surcharges"
+                  ? "bg-white text-amber-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              💰 Phụ Thu Lễ & Khách ({surchargeRules.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("categories")}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === "categories"
                   ? "bg-white text-emerald-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              📁 Danh Mục Loại ({categories.length})
+              📁 Danh Mục ({categories.length})
             </button>
           </div>
         </div>
@@ -127,10 +151,12 @@ export default function PromotionsPage() {
 
           <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-white border border-amber-200 shadow-xs">
             <span className="text-xs font-bold text-amber-700 uppercase tracking-wide block">
-              Ưu đãi Seasonal
+              Quy tắc Phụ thu
             </span>
-            <div className="text-2xl font-black text-amber-800 font-mono mt-1">{seasonalPromos}</div>
-            <span className="text-[11px] text-amber-600 font-medium">Theo mùa & Dịp lễ</span>
+            <div className="text-2xl font-black text-amber-800 font-mono mt-1">
+              {surchargeRules.filter((r) => r.is_active === 1).length}/{surchargeRules.length}
+            </div>
+            <span className="text-[11px] text-amber-600 font-medium">Lễ Tết & Khách thêm ({seasonalPromos} promo mùa)</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-white border border-purple-200 shadow-xs">
@@ -156,6 +182,20 @@ export default function PromotionsPage() {
             onCreateNew={() => {
               setSelectedPromo(null);
               setPromoModalOpen(true);
+            }}
+          />
+        ) : activeTab === "surcharges" ? (
+          <SurchargesList
+            rules={surchargeRules}
+            loading={loading}
+            onRefresh={loadData}
+            onEdit={(r) => {
+              setSelectedSurcharge(r);
+              setSurchargeModalOpen(true);
+            }}
+            onCreateNew={() => {
+              setSelectedSurcharge(null);
+              setSurchargeModalOpen(true);
             }}
           />
         ) : (
@@ -187,6 +227,13 @@ export default function PromotionsPage() {
           isOpen={catModalOpen}
           onClose={() => setCatModalOpen(false)}
           category={selectedCat}
+          onSaved={loadData}
+        />
+
+        <SurchargeModal
+          isOpen={surchargeModalOpen}
+          onClose={() => setSurchargeModalOpen(false)}
+          rule={selectedSurcharge}
           onSaved={loadData}
         />
       </div>

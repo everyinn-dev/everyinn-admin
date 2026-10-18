@@ -22,6 +22,7 @@
       "PromotionId": { "name": "promotionId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
       "CategoryId": { "name": "categoryId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
       "RateRuleId": { "name": "rateRuleId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
+      "SurchargeRuleId": { "name": "surchargeRuleId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
       "ConfigKey": { "name": "configKey", "in": "path", "required": true, "schema": { "enum": ["booking_rules", "hourly_checkin_slots"] } },
       "OutboxId": { "name": "outboxId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,120}$" } }
     },
@@ -32,7 +33,8 @@
       "Block": { "description": "Room block", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BlockEnvelope" } } } },
       "Entry": { "description": "Financial entry + booking projection", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EntryEnvelope" } } } },
       "Promotion": { "description": "Promotion", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PromotionEnvelope" } } } },
-      "Category": { "description": "Promotion category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryEnvelope" } } } }
+      "Category": { "description": "Promotion category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryEnvelope" } } } },
+      "SurchargeRule": { "description": "Surcharge rule", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SurchargeRuleEnvelope" } } } }
     },
     "schemas": {
       "Instant": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" },
@@ -88,13 +90,111 @@
         "additionalProperties": false,
         "required": ["code", "label", "amount"],
         "properties": {
-          "code": { "enum": ["base", "extra_hours", "promotion", "loyalty_reward"] },
+          "code": { "enum": ["base", "holiday_surcharge", "extra_guest", "extra_hours", "promotion", "loyalty_reward"] },
           "label": { "type": "string" },
           "amount": { "$ref": "#/components/schemas/Vnd" },
           "quantity": { "type": "integer" },
           "unitAmount": { "type": "number" },
           "ref": { "type": "object" },
           "advisory": { "type": "boolean" }
+        }
+      },
+      "NightlyBreakdownItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stayDate",
+          "baseRate",
+          "holidayRuleId",
+          "holidayRuleName",
+          "holidaySurchargePercent",
+          "holidaySurchargeAmount"
+        ],
+        "properties": {
+          "stayDate": { "$ref": "#/components/schemas/BusinessDate" },
+          "businessDate": { "$ref": "#/components/schemas/BusinessDate" },
+          "baseRate": { "$ref": "#/components/schemas/Vnd" },
+          "holidayRuleId": { "type": ["string", "null"] },
+          "holidayRuleName": { "type": ["string", "null"] },
+          "holidaySurchargePercent": { "type": "number" },
+          "holidaySurchargeAmount": { "$ref": "#/components/schemas/Vnd" },
+          "holidaySurcharge": { "$ref": "#/components/schemas/Vnd" },
+          "extraGuests": { "type": "integer" },
+          "extraGuestFee": { "$ref": "#/components/schemas/Vnd" }
+        }
+      },
+      "CappingWarning": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exceeded",
+          "currentSubtotal",
+          "suggestedBookingType",
+          "suggestedBasePrice",
+          "savingAmount",
+          "message"
+        ],
+        "properties": {
+          "exceeded": { "type": "boolean" },
+          "currentSubtotal": { "$ref": "#/components/schemas/Vnd" },
+          "suggestedBookingType": { "type": "string", "enum": ["overnight", "dayuse"] },
+          "suggestedRatePlanCode": { "type": "string", "enum": ["overnight", "dayroom"] },
+          "suggestedBasePrice": { "$ref": "#/components/schemas/Vnd" },
+          "currentPrice": { "$ref": "#/components/schemas/Vnd" },
+          "savingAmount": { "$ref": "#/components/schemas/Vnd" },
+          "message": { "type": "string" }
+        }
+      },
+      "SurchargeRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "propertyId",
+          "name",
+          "ruleType",
+          "calcMethod",
+          "amount",
+          "chargeUnit",
+          "startDate",
+          "endDate",
+          "applicableDaysOfWeek",
+          "applicableBookingTypes",
+          "applicableRoomClasses",
+          "priority",
+          "isActive",
+          "archivedAt",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "propertyId": { "type": "string" },
+          "name": { "type": "string" },
+          "ruleType": { "enum": ["holiday", "extra_guest", "custom_fee", "early_checkin", "late_checkout", "custom"] },
+          "calcMethod": { "enum": ["fixed_amount", "percentage"] },
+          "amount": { "type": "number", "minimum": 0 },
+          "chargeUnit": { "enum": ["per_night", "per_stay", "per_guest_night", "per_guest_stay"] },
+          "startDate": { "$ref": "#/components/schemas/NullableBusinessDate" },
+          "endDate": { "$ref": "#/components/schemas/NullableBusinessDate" },
+          "applicableDaysOfWeek": { "type": "array", "items": { "enum": [0, 1, 2, 3, 4, 5, 6] } },
+          "applicableBookingTypes": { "type": "array", "items": { "$ref": "#/components/schemas/BookingType" } },
+          "applicableRoomClasses": { "type": "array", "items": { "$ref": "#/components/schemas/RoomClass" } },
+          "priority": { "type": "integer" },
+          "isActive": { "type": "boolean" },
+          "archivedAt": { "$ref": "#/components/schemas/NullableInstant" },
+          "version": { "type": "integer", "minimum": 1 },
+          "createdAt": { "$ref": "#/components/schemas/Instant" },
+          "updatedAt": { "$ref": "#/components/schemas/Instant" }
+        }
+      },
+      "SurchargeRuleEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surchargeRule"],
+        "properties": {
+          "surchargeRule": { "$ref": "#/components/schemas/SurchargeRule" }
         }
       },
       "Conflict": {
@@ -131,7 +231,7 @@
         "type": "object",
         "additionalProperties": false,
         "description": "Full internal booking DTO. Never contains door codes or secrets. pricing.isFinal=false while the CDP accrual result is pending (§6.7 rule 4).",
-        "required": ["id", "propertyId", "roomId", "roomName", "roomNumber", "roomClass", "customerId", "guest", "numGuests", "bookingType", "ratePlanCode", "checkinAt", "checkoutAt", "occupiedUntil", "lateCheckoutHours", "status", "source", "note", "closingNote", "pricing", "promotion", "loyalty", "financial", "lifecycle", "control", "reconciliationStatus"],
+        "required": ["id", "propertyId", "roomId", "roomName", "roomNumber", "roomClass", "customerId", "guest", "numGuests", "bookingType", "ratePlanCode", "checkinAt", "checkoutAt", "occupiedUntil", "earlyCheckinHours", "lateCheckoutHours", "status", "source", "note", "closingNote", "pricing", "promotion", "loyalty", "financial", "lifecycle", "control", "reconciliationStatus"],
         "properties": {
           "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,64}$" },
           "propertyId": { "type": "string" },
@@ -160,6 +260,7 @@
           "checkinAt": { "$ref": "#/components/schemas/Instant" },
           "checkoutAt": { "$ref": "#/components/schemas/Instant" },
           "occupiedUntil": { "$ref": "#/components/schemas/Instant" },
+          "earlyCheckinHours": { "type": "integer", "minimum": 0 },
           "lateCheckoutHours": { "type": "integer", "minimum": 0 },
           "status": { "$ref": "#/components/schemas/BookingStatus" },
           "source": { "enum": ["admin", "legacy_import"] },
@@ -168,7 +269,7 @@
           "pricing": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["currency", "comboLabel", "durationLabel", "rateRule", "basePrice", "extraFee", "subtotal", "promotionDiscount", "loyaltyDiscount", "discountAmount", "totalPrice", "originalPrice", "lines", "isFinal"],
+            "required": ["currency", "comboLabel", "durationLabel", "rateRule", "basePrice", "holidaySurcharge", "extraGuestFee", "extraFee", "subtotal", "promotionDiscount", "loyaltyDiscount", "discountAmount", "totalPrice", "originalPrice", "lines", "nightlyBreakdown", "cappingWarning", "isFinal"],
             "properties": {
               "currency": { "const": "VND" },
               "comboLabel": { "$ref": "#/components/schemas/NullableString" },
@@ -180,6 +281,8 @@
                 "properties": { "id": { "type": "string" }, "version": { "type": "integer" }, "basePrice": { "type": "integer" }, "extraHourFee": { "type": "integer" } }
               },
               "basePrice": { "$ref": "#/components/schemas/Vnd" },
+              "holidaySurcharge": { "$ref": "#/components/schemas/Vnd" },
+              "extraGuestFee": { "$ref": "#/components/schemas/Vnd" },
               "extraFee": { "$ref": "#/components/schemas/Vnd" },
               "subtotal": { "$ref": "#/components/schemas/Vnd" },
               "promotionDiscount": { "$ref": "#/components/schemas/Vnd" },
@@ -188,6 +291,8 @@
               "totalPrice": { "type": "integer", "minimum": 0 },
               "originalPrice": { "type": ["integer", "null"] },
               "lines": { "type": "array", "items": { "$ref": "#/components/schemas/PriceLine" } },
+              "nightlyBreakdown": { "type": "array", "items": { "$ref": "#/components/schemas/NightlyBreakdownItem" } },
+              "cappingWarning": { "oneOf": [{ "$ref": "#/components/schemas/CappingWarning" }, { "type": "null" }] },
               "isFinal": { "type": "boolean" }
             }
           },
@@ -368,7 +473,7 @@
       "Promotion": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "categoryId", "categoryName", "categoryCode", "categoryIcon", "categoryColor", "name", "code", "description", "discountType", "discountValue", "maxDiscountAmount", "minOrderAmount", "applicableRoomClasses", "applicableBookingTypes", "applicableRatePlanCodes", "applicableLoyaltyTiers", "applicableDaysOfWeek", "startDate", "endDate", "usageLimit", "usedCount", "isActive", "archivedAt", "version", "createdAt", "updatedAt"],
+        "required": ["id", "categoryId", "categoryName", "categoryCode", "categoryIcon", "categoryColor", "name", "code", "description", "discountType", "discountValue", "maxDiscountAmount", "minOrderAmount", "applicableRoomClasses", "applicableBookingTypes", "applicableRatePlanCodes", "applicableLoyaltyTiers", "applicableDaysOfWeek", "startDate", "endDate", "bookingWindowStart", "bookingWindowEnd", "minNights", "blackoutDates", "isStackableWithHoliday", "usageLimit", "maxUsesPerGuest", "usedCount", "isActive", "archivedAt", "version", "createdAt", "updatedAt"],
         "properties": {
           "id": { "type": "string" },
           "categoryId": { "type": "string" },
@@ -390,7 +495,13 @@
           "applicableDaysOfWeek": { "type": "array", "items": { "enum": [0, 1, 2, 3, 4, 5, 6] } },
           "startDate": { "$ref": "#/components/schemas/NullableBusinessDate" },
           "endDate": { "$ref": "#/components/schemas/NullableBusinessDate" },
+          "bookingWindowStart": { "$ref": "#/components/schemas/NullableBusinessDate" },
+          "bookingWindowEnd": { "$ref": "#/components/schemas/NullableBusinessDate" },
+          "minNights": { "type": "integer", "minimum": 1 },
+          "blackoutDates": { "type": "array", "items": { "$ref": "#/components/schemas/BusinessDate" } },
+          "isStackableWithHoliday": { "type": "boolean" },
           "usageLimit": { "type": ["integer", "null"] },
+          "maxUsesPerGuest": { "type": ["integer", "null"] },
           "usedCount": { "type": "integer", "minimum": 0 },
           "isActive": { "type": "boolean" },
           "archivedAt": { "$ref": "#/components/schemas/NullableInstant" },
@@ -433,9 +544,10 @@
       "BookingRules": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["min_hourly", "max_hourly_checkin", "overnight_start", "overnight_max_checkout", "day_checkin", "day_checkout", "max_late_checkout_hours", "extra_hour_fee", "max_stay_hours", "require_social_account"],
+        "required": ["min_hourly", "min_hourly_checkin", "max_hourly_checkin", "overnight_start", "overnight_max_checkout", "day_checkin", "day_checkout", "max_late_checkout_hours", "extra_hour_fee", "max_stay_hours", "require_social_account", "standard_guests"],
         "properties": {
           "min_hourly": { "type": "integer" },
+          "min_hourly_checkin": { "type": "string" },
           "max_hourly_checkin": { "type": "string" },
           "overnight_start": { "type": "string" },
           "overnight_max_checkout": { "type": "string" },
@@ -445,13 +557,14 @@
           "extra_hour_fee": { "type": "integer" },
           "max_stay_hours": { "type": "integer" },
           "require_social_account": { "type": "boolean" },
+          "standard_guests": { "type": "integer" },
           "version": { "type": "integer" }
         }
       },
       "Catalog": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["catalogVersion", "property", "rooms", "rateRules", "bookingRules", "hourlyCheckinSlots", "inventoryPolicy", "promotionCategories", "activePromotions"],
+        "required": ["catalogVersion", "property", "rooms", "rateRules", "surchargeRules", "bookingRules", "hourlyCheckinSlots", "inventoryPolicy", "promotionCategories", "activePromotions"],
         "properties": {
           "catalogVersion": { "type": "integer" },
           "property": {
@@ -493,6 +606,7 @@
               }
             }
           },
+          "surchargeRules": { "type": "array", "items": { "$ref": "#/components/schemas/SurchargeRule" } },
           "bookingRules": { "$ref": "#/components/schemas/BookingRules" },
           "hourlyCheckinSlots": {
             "type": "object",
@@ -519,7 +633,7 @@
             "type": "object",
             "additionalProperties": false,
             "description": "Never final: the stamp reward is advisory until the CDP accrual result (isFinal is always false).",
-            "required": ["roomId", "roomClass", "bookingType", "ratePlanCode", "comboLabel", "durationLabel", "lines", "subtotal", "promotion", "totalBeforeLoyalty", "loyaltyPreview", "estimatedTotal", "isFinal", "calculatedAt", "checksum", "bookingRulesVersion"],
+            "required": ["roomId", "roomClass", "bookingType", "ratePlanCode", "comboLabel", "durationLabel", "basePrice", "holidaySurcharge", "extraGuestFee", "extraFee", "earlyCheckinHours", "lateCheckoutHours", "lines", "nightlyBreakdown", "cappingWarning", "subtotal", "promotion", "totalBeforeLoyalty", "loyaltyPreview", "estimatedTotal", "isFinal", "calculatedAt", "checksum", "bookingRulesVersion"],
             "properties": {
               "roomId": { "type": "string" },
               "roomClass": { "$ref": "#/components/schemas/RoomClass" },
@@ -527,7 +641,15 @@
               "ratePlanCode": { "$ref": "#/components/schemas/RatePlanCode" },
               "comboLabel": { "type": "string" },
               "durationLabel": { "type": "string" },
+              "basePrice": { "$ref": "#/components/schemas/Vnd" },
+              "holidaySurcharge": { "$ref": "#/components/schemas/Vnd" },
+              "extraGuestFee": { "$ref": "#/components/schemas/Vnd" },
+              "extraFee": { "$ref": "#/components/schemas/Vnd" },
+              "earlyCheckinHours": { "type": "integer", "minimum": 0 },
+              "lateCheckoutHours": { "type": "integer", "minimum": 0 },
               "lines": { "type": "array", "items": { "$ref": "#/components/schemas/PriceLine" } },
+              "nightlyBreakdown": { "type": "array", "items": { "$ref": "#/components/schemas/NightlyBreakdownItem" } },
+              "cappingWarning": { "oneOf": [{ "$ref": "#/components/schemas/CappingWarning" }, { "type": "null" }] },
               "subtotal": { "$ref": "#/components/schemas/Vnd" },
               "promotion": {
                 "type": ["object", "null"],
@@ -601,13 +723,18 @@
                 "price": {
                   "type": ["object", "null"],
                   "additionalProperties": false,
-                  "required": ["ratePlanCode", "comboLabel", "durationLabel", "subtotal", "lines"],
+                  "required": ["ratePlanCode", "comboLabel", "durationLabel", "basePrice", "holidaySurcharge", "extraGuestFee", "extraFee", "subtotal", "lines", "cappingWarning"],
                   "properties": {
                     "ratePlanCode": { "$ref": "#/components/schemas/RatePlanCode" },
                     "comboLabel": { "type": "string" },
                     "durationLabel": { "type": "string" },
+                    "basePrice": { "$ref": "#/components/schemas/Vnd" },
+                    "holidaySurcharge": { "$ref": "#/components/schemas/Vnd" },
+                    "extraGuestFee": { "$ref": "#/components/schemas/Vnd" },
+                    "extraFee": { "$ref": "#/components/schemas/Vnd" },
                     "subtotal": { "$ref": "#/components/schemas/Vnd" },
-                    "lines": { "type": "array", "items": { "$ref": "#/components/schemas/PriceLine" } }
+                    "lines": { "type": "array", "items": { "$ref": "#/components/schemas/PriceLine" } },
+                    "cappingWarning": { "oneOf": [{ "$ref": "#/components/schemas/CappingWarning" }, { "type": "null" }] }
                   }
                 }
               }
@@ -1524,6 +1651,63 @@
               }
             }
           },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/surcharge-rules": {
+      "get": {
+        "operationId": "listSurchargeRules",
+        "x-callers": ["admin-bff"],
+        "responses": {
+          "200": {
+            "description": "Surcharge rules list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["surchargeRules"],
+                  "properties": {
+                    "surchargeRules": { "type": "array", "items": { "$ref": "#/components/schemas/SurchargeRule" } }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "createSurchargeRule",
+        "x-callers": ["admin-bff"],
+        "x-required-role": "manager",
+        "responses": {
+          "201": { "$ref": "#/components/responses/SurchargeRule" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/surcharge-rules/{surchargeRuleId}": {
+      "parameters": [{ "$ref": "#/components/parameters/SurchargeRuleId" }],
+      "patch": {
+        "operationId": "updateSurchargeRule",
+        "x-callers": ["admin-bff"],
+        "x-required-role": "manager",
+        "responses": {
+          "200": { "$ref": "#/components/responses/SurchargeRule" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/surcharge-rules/{surchargeRuleId}/archive": {
+      "parameters": [{ "$ref": "#/components/parameters/SurchargeRuleId" }],
+      "post": {
+        "operationId": "archiveSurchargeRule",
+        "x-callers": ["admin-bff"],
+        "x-required-role": "manager",
+        "responses": {
+          "200": { "$ref": "#/components/responses/SurchargeRule" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
