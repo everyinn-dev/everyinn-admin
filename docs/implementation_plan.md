@@ -292,8 +292,8 @@ INSERT INTO rooms VALUES
 INSERT INTO pricing_rules (property_id,room_class,booking_type,base_price) VALUES
   ('pxl','haven',    'combo3h',  320000),
   ('pxl','haven',    'combo6h',  600000),
-  ('pxl','haven',    'overnight',490000),
-  ('pxl','haven',    'dayroom',  590000),
+  ('pxl','haven',    'overnight',520000),
+  ('pxl','haven',    'dayroom',  620000),
   ('pxl','signature','combo3h',  360000),
   ('pxl','signature','combo6h',  640000),
   ('pxl','signature','overnight',620000),
@@ -543,7 +543,7 @@ Rows with no bookings show a subtle dashed/dotted pattern background with text "
 │ ┌─────────────────────────┐ │
 │ │ ✅  21:00 hôm qua→09:00 │ │
 │ │ Trần Thị B              │ │
-│ │ Overnight · 490,000đ    │ │
+│ │ Overnight · 520,000đ    │ │
 │ │          [Xem chi tiết] │ │
 │ └─────────────────────────┘ │
 ├─────────────────────────────┤

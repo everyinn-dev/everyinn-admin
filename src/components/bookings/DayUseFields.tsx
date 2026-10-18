@@ -20,7 +20,7 @@ export const DayUseFields: React.FC<DayUseFieldsProps> = ({
   onChangeLateCheckout,
 }) => {
   const nightOptions = Array.from({ length: 14 }).map((_, i) => i + 1);
-  const lateCheckoutOptions = [0, 1, 2, 3, 4, 5, 6];
+  const lateCheckoutOptions = Array.from({ length: 13 }, (_, i) => i);
 
   const calculatedCheckout = useMemo(() => {
     const d = new Date(`${checkinDate}T15:00:00`);
@@ -41,7 +41,7 @@ export const DayUseFields: React.FC<DayUseFieldsProps> = ({
         <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
           <span>📅</span> Quy tắc đặt theo ngày (Checkin 15:00 - Checkout 12:00)
         </span>
-        <span className="text-[11px] text-slate-500 font-medium">Tối đa trễ 6 tiếng</span>
+        <span className="text-[11px] text-slate-500 font-medium">Giờ trả phòng trễ</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

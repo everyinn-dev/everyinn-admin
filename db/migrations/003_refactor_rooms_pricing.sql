@@ -18,12 +18,12 @@ DELETE FROM pricing_rules WHERE id > 0;
 
 INSERT INTO pricing_rules (id, property_id, room_class, booking_type, base_price, extra_hour_fee, is_active) VALUES
   (1, 'prop-01', 'haven',     'combo3h',   320000, 60000, 1),
-  (2, 'prop-01', 'haven',     'combo6h',   600000, 60000, 1),
-  (3, 'prop-01', 'haven',     'overnight', 490000, 60000, 1),
-  (4, 'prop-01', 'haven',     'dayroom',   590000, 60000, 1),
+  (2, 'prop-01', 'haven',     'combo6h',   600000, 60000, 0),
+  (3, 'prop-01', 'haven',     'overnight', 520000, 60000, 1),
+  (4, 'prop-01', 'haven',     'dayroom',   620000, 60000, 1),
 
   (5, 'prop-01', 'signature', 'combo3h',   360000, 60000, 1),
-  (6, 'prop-01', 'signature', 'combo6h',   640000, 60000, 1),
+  (6, 'prop-01', 'signature', 'combo6h',   640000, 60000, 0),
   (7, 'prop-01', 'signature', 'overnight', 620000, 60000, 1),
   (8, 'prop-01', 'signature', 'dayroom',   750000, 60000, 1);
 
