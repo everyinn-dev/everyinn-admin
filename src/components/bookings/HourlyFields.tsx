@@ -46,7 +46,7 @@ export const HourlyFields: React.FC<HourlyFieldsProps> = ({
     <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-xs">
       <div className="flex items-center justify-between border-b border-slate-200 pb-2">
         <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
-          <span>⏱️</span> Quy tắc đặt theo giờ (Combo 3h & 6h)
+          <span>⏱️</span> Quy tắc đặt theo giờ (Combo 3h)
         </span>
         <span className="text-[11px] text-slate-500 font-medium">Khung giờ nhận: 9:00 - 21:00</span>
       </div>

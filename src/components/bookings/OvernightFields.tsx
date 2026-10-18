@@ -20,14 +20,14 @@ export const OvernightFields: React.FC<OvernightFieldsProps> = ({
   lateCheckoutHours,
   hourlySlots,
   extraHourFee = 60000,
-  maxLateCheckoutHours = 2,
+  maxLateCheckoutHours = 12,
   onChangeDate,
   onChangeStartHour,
   onChangeLateCheckout,
 }) => {
   const slots = hourlySlots && hourlySlots.length > 0 ? hourlySlots : [21, 22, 23, 24];
   const unitFee = extraHourFee;
-  const maxLate = maxLateCheckoutHours;
+  const maxLate = maxLateCheckoutHours && maxLateCheckoutHours > 0 ? maxLateCheckoutHours : 12;
 
   // Allowed overnight checkin options generated dynamically from master data
   const startHourOptions = useMemo(() => {

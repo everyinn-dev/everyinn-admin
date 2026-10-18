@@ -28,8 +28,8 @@ INSERT OR IGNORE INTO rooms (id, property_id, room_number, name, room_class, flo
 INSERT OR IGNORE INTO pricing_rules (property_id, room_class, booking_type, base_price, extra_hour_fee) VALUES
   ('prop-01', 'haven', 'combo3h',   320000, 60000),
   ('prop-01', 'haven', 'combo6h',   600000, 60000),
-  ('prop-01', 'haven', 'overnight', 490000, 60000),
-  ('prop-01', 'haven', 'dayroom',   590000, 60000),
+  ('prop-01', 'haven', 'overnight', 520000, 60000),
+  ('prop-01', 'haven', 'dayroom',   620000, 60000),
 
   ('prop-01', 'signature', 'combo3h',   360000, 60000),
   ('prop-01', 'signature', 'combo6h',   640000, 60000),

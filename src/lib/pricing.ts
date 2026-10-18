@@ -15,26 +15,16 @@ export interface PricingBreakdown {
 }
 
 export function resolveHourlyCombo(hours: number): {
-  comboKey: 'combo3h' | 'combo6h';
+  comboKey: 'combo3h';
   comboLabel: string;
   extraHours: number;
 } {
   const roundedHours = Math.max(3, Math.round(hours));
-  if (roundedHours < 6) {
-    // 3, 4, 5 hours -> combo 3h + (hours - 3) extra
-    return {
-      comboKey: 'combo3h',
-      comboLabel: 'Combo 3 Giờ',
-      extraHours: roundedHours - 3,
-    };
-  } else {
-    // 6, 7, 8, ... hours -> combo 6h + (hours - 6) extra
-    return {
-      comboKey: 'combo6h',
-      comboLabel: 'Combo 6 Giờ',
-      extraHours: roundedHours - 6,
-    };
-  }
+  return {
+    comboKey: 'combo3h',
+    comboLabel: 'Combo 3 Giờ',
+    extraHours: roundedHours - 3,
+  };
 }
 
 export function calculatePrice(params: {
@@ -135,7 +125,7 @@ export function calculatePrice(params: {
 
   if (bookingType === 'overnight') {
     const basePrice = getBase('overnight');
-    const validLateHours = Math.min(6, Math.max(0, lateCheckoutHours));
+    const validLateHours = Math.max(0, lateCheckoutHours);
     const totalExtraFee = validLateHours * extraUnitFee;
     const totalPrice = Math.max(0, basePrice + totalExtraFee - discountAmount);
 
@@ -159,7 +149,7 @@ export function calculatePrice(params: {
   const diffDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
   const unitDayPrice = getBase('dayroom');
   const basePrice = unitDayPrice * diffDays;
-  const validLateHours = Math.min(6, Math.max(0, lateCheckoutHours));
+  const validLateHours = Math.max(0, lateCheckoutHours);
   const totalExtraFee = validLateHours * extraUnitFee;
   const totalPrice = Math.max(0, basePrice + totalExtraFee - discountAmount);
 
