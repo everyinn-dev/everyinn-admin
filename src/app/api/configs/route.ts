@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, cdpCore, coreErrorResponse } from "@/lib/cores";
-import { toLegacyCdpTiers, type CoreCatalog, type CoreLoyaltyRules } from "@/lib/coreMappers";
+import {
+  toLegacyCdpTiers,
+  toLegacySurchargeRule,
+  type CoreCatalog,
+  type CoreLoyaltyRules,
+} from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +25,7 @@ export async function GET() {
       {
         bookingRules: c.bookingRules,
         hourlySlots: c.hourlyCheckinSlots.slots,
+        surchargeRules: (c.surchargeRules || []).map(toLegacySurchargeRule),
         cdpTiers: rules?.data ? toLegacyCdpTiers(rules.data) : {},
         loyaltyRules: rules?.data ?? null,
         inventoryPolicy: c.inventoryPolicy,
@@ -32,4 +38,3 @@ export async function GET() {
     return coreErrorResponse(error);
   }
 }
-

@@ -41,6 +41,9 @@
 		{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core" },
 		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" }
 	],
+	// Owner Telegram Notification Secrets (Phase 2.1):
+	// Set via `npx wrangler secret put TELEGRAM_BOT_TOKEN` & `npx wrangler secret put TELEGRAM_CHAT_ID`
+	// (and with `--env dev` for UAT, or in `.dev.vars` for local `npm run dev`).
 	"env": {
 		"dev": {
 			"name": "everyinn-admin-dev",

@@ -9,7 +9,10 @@ interface PromotionSelectorProps {
   roomClass: RoomClass;
   bookingType: BookingType;
   checkinAt: Date;
+  checkoutAt?: Date;
+  basePrice?: number;
   rawSubtotal: number;
+  hasHolidaySurcharge?: boolean;
   memberTier: LoyaltyTier;
   selectedPromotion: Promotion | null;
   onSelectPromotion: (promo: Promotion | null, discountAmount: number) => void;
@@ -19,7 +22,10 @@ export const PromotionSelector: React.FC<PromotionSelectorProps> = ({
   roomClass,
   bookingType,
   checkinAt,
+  checkoutAt,
+  basePrice,
   rawSubtotal,
+  hasHolidaySurcharge = false,
   memberTier,
   selectedPromotion,
   onSelectPromotion,
@@ -55,14 +61,18 @@ export const PromotionSelector: React.FC<PromotionSelectorProps> = ({
     };
   }, []);
 
-  // Evaluate promotions in real-time against current booking context
+  // Evaluate promotions in real-time against current booking context (strictly on basePrice!)
   const evaluatedPromotions = useMemo(() => {
+    const effectiveBase = basePrice ?? rawSubtotal;
     return promotions.map((p) => {
       const evaluation = evaluatePromotion(p, {
         roomClass,
         bookingType,
         checkinAt,
+        checkoutAt,
+        basePrice: effectiveBase,
         rawSubtotal,
+        hasHolidaySurcharge,
         memberTier,
       });
 
@@ -73,7 +83,7 @@ export const PromotionSelector: React.FC<PromotionSelectorProps> = ({
         discountAmount: evaluation.discountAmount,
       };
     });
-  }, [promotions, roomClass, bookingType, checkinAt, rawSubtotal, memberTier]);
+  }, [promotions, roomClass, bookingType, checkinAt, checkoutAt, basePrice, rawSubtotal, hasHolidaySurcharge, memberTier]);
 
   // Recalculate discount if currently selected promotion's discount changes with subtotal
   useEffect(() => {

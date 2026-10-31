@@ -45,9 +45,9 @@ Mọi AI model hoặc lập trình viên khi viết code cho dự án **BẮT BU
 | **Xử lý No-Show vs Hủy phòng** | Ghi chú tương lai | **Hoàn thành 100% ✅** | **ĐÃ PHÁT TRIỂN MỞ RỘNG**: No-Show giữ phòng / hoàn tiền + Rollback CDP. |
 | **Gia hạn giờ (+1h Trả trễ)** | Ghi chú tương lai | **Hoàn thành 100% ✅** | **ĐÃ PHÁT TRIỂN MỞ RỘNG**: Nút 1-click kiểm tra lịch kế tiếp. |
 | **Bảng lịch trực hàng ngày (`Daily Roster`)** | *Chưa có trong kế hoạch MVP* | **Hoàn thành 100% ✅** | **ĐÃ PHÁT TRIỂN MỞ RỘNG**: Modal xem nhanh lượt khách trong ngày. |
-| **Khóa giữ phòng 5 phút (5-min Hold)** | Kế hoạch tương lai | **Chưa triển khai ⏳** | Nằm trong **Backlog Epic 1**. |
-| **Tạo mã VietQR động & Đối soát** | Kế hoạch tương lai | **Chưa triển khai ⏳** | Nằm trong **Backlog Epic 2**. |
-| **Thông báo Telegram Bot (TG-01..05)** | Kế hoạch tương lai | **Chưa triển khai ⏳** | Nằm trong **Backlog Epic 3**. |
+| **Khóa giữ phòng 15 phút & Tìm kiếm/Thanh toán (`/bookings/search`)** | Kế hoạch tương lai | **Hoàn thành 100% ✅** | **PHASE 2.1**: Tìm phòng trống (Giờ/Đêm/Ngày) + Giữ phòng 15p (`room_holds` + `inventory_slots`) + Bước thanh toán Mock + Thông báo Telegram. |
+| **Tạo mã VietQR động & Đối soát** | Kế hoạch tương lai | **Đang chờ Webhook ⏳** | Đã có màn hình Bước Thanh Toán (`/bookings/search`), sẵn sàng đấu nối Casso/PayOS/SePay. |
+| **Thông báo Telegram Bot (TG-01)** | Kế hoạch tương lai | **Hoàn thành TG-01 ✅** | Module `src/lib/telegram.ts` gửi thông báo đặt phòng thành công cho Chủ (chờ điền `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`). |
 | **Sinh mã khóa cửa 6 chữ số (Door Code)** | Kế hoạch tương lai | **Chưa triển khai ⏳** | Nằm trong **Backlog Epic 4**. |
 | **Màn hình Cấu hình Bảng giá (`/settings`)** | Kế hoạch tương lai | **Chưa triển khai ⏳** | Nằm trong **Backlog Epic 5**. |
 | **Guest Portal tra cứu (`/view/:token`)** | Kế hoạch tương lai | **Chưa triển khai ⏳** | Nằm trong **Backlog Epic 6**. |

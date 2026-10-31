@@ -2,7 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookingRulesConfig, BookingType, Member, PricingRule, Promotion, Room } from "@/types";
+import {
+  BookingRulesConfig,
+  BookingType,
+  LoyaltyTier,
+  Member,
+  PricingRule,
+  Promotion,
+  Room,
+  SurchargeRule,
+} from "@/types";
 import { calculatePrice } from "@/lib/pricing";
 import { PhoneLookupField } from "./PhoneLookupField";
 import { BookingTypeTabs } from "./BookingTypeTabs";
@@ -21,6 +30,7 @@ import { notifyDataChanged } from "@/lib/syncEvents";
 interface BookingFormProps {
   initialRooms: Room[];
   initialPricingRules: PricingRule[];
+  initialSurchargeRules?: SurchargeRule[];
   bookingRules?: BookingRulesConfig;
   hourlySlots?: number[];
 }
@@ -28,6 +38,7 @@ interface BookingFormProps {
 export const BookingForm: React.FC<BookingFormProps> = ({
   initialRooms,
   initialPricingRules,
+  initialSurchargeRules = [],
   bookingRules,
   hourlySlots,
 }) => {
@@ -51,7 +62,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [instagram, setInstagram] = useState("");
   const [facebook, setFacebook] = useState("");
   const [zalo, setZalo] = useState("");
-  const [numGuests, setNumGuests] = useState(2);
+  // Guest count state (Haven max 2, Signature max 4)
+  const [numGuests, setNumGuests] = useState<number>(2);
   const [foundMember, setFoundMember] = useState<Member | null>(null);
   const [updatingSocial, setUpdatingSocial] = useState(false);
   const [socialUpdateFeedback, setSocialUpdateFeedback] = useState<string | null>(null);
@@ -82,11 +94,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       ? parseInt(queryHour, 10)
       : 22
   );
+  const [overnightEarlyHours, setOvernightEarlyHours] = useState(0);
   const [overnightLateHours, setOvernightLateHours] = useState(0);
 
   // Day use specific
   const [dayuseDate, setDayuseDate] = useState(defaultDate);
   const [dayuseNights, setDayuseNights] = useState(1);
+  const [dayuseEarlyHours, setDayuseEarlyHours] = useState(0);
   const [dayuseLateHours, setDayuseLateHours] = useState(0);
 
   // Custom specific
@@ -118,37 +132,71 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     return initialRooms.find((r) => r.id === roomId) || initialRooms[0] || null;
   }, [initialRooms, roomId]);
 
-  // Compute checkin & checkout Date objects
-  const { checkinAt, checkoutAt, lateHours } = useMemo(() => {
-    if (bookingType === "hourly") {
-      const inDate = new Date(`${hourlyDate}T00:00:00`);
-      inDate.setHours(hourlyCheckinHour, 0, 0, 0);
+  // Capacity safety guard: Haven max 2, Signature max 4
+  useEffect(() => {
+    if (selectedRoom && numGuests > selectedRoom.max_guests) {
+      setNumGuests(selectedRoom.max_guests);
+    }
+  }, [selectedRoom, numGuests]);
 
-      const outDate = new Date(inDate.getTime() + hourlyDuration * 3600 * 1000);
-      return { checkinAt: inDate, checkoutAt: outDate, lateHours: 0 };
+  // Compute actual checkinAt & checkoutAt Date objects based on selected tab
+  const {
+    calculatedCheckinAt,
+    calculatedCheckoutAt,
+    calculatedEarlyHours,
+    calculatedLateHours,
+  } = useMemo(() => {
+    if (bookingType === "hourly") {
+      const d = new Date(`${hourlyDate}T00:00:00`);
+      d.setHours(hourlyCheckinHour, 0, 0, 0);
+      const out = new Date(d.getTime() + hourlyDuration * 3600 * 1000);
+      return {
+        calculatedCheckinAt: d,
+        calculatedCheckoutAt: out,
+        calculatedEarlyHours: 0,
+        calculatedLateHours: 0,
+      };
     }
 
     if (bookingType === "overnight") {
-      const inDate = new Date(`${overnightDate}T00:00:00`);
-      inDate.setHours(overnightStartHour, 0, 0, 0);
-
-      const outDate = new Date(`${overnightDate}T00:00:00`);
-      outDate.setHours(overnightStartHour + 12 + overnightLateHours, 0, 0, 0);
-      return { checkinAt: inDate, checkoutAt: outDate, lateHours: overnightLateHours };
+      const maxEarly = Math.max(0, overnightStartHour - 21);
+      const earlyH = Math.min(maxEarly, Math.max(0, overnightEarlyHours));
+      const d = new Date(`${overnightDate}T00:00:00`);
+      d.setHours(overnightStartHour - earlyH, 0, 0, 0);
+      const out = new Date(`${overnightDate}T00:00:00`);
+      out.setHours(overnightStartHour + 12 + overnightLateHours, 0, 0, 0);
+      return {
+        calculatedCheckinAt: d,
+        calculatedCheckoutAt: out,
+        calculatedEarlyHours: earlyH,
+        calculatedLateHours: overnightLateHours,
+      };
     }
 
     if (bookingType === "dayuse") {
-      const inDate = new Date(`${dayuseDate}T15:00:00`);
-      const outDate = new Date(`${dayuseDate}T00:00:00`);
-      outDate.setDate(outDate.getDate() + dayuseNights);
-      outDate.setHours(12 + dayuseLateHours, 0, 0, 0);
-      return { checkinAt: inDate, checkoutAt: outDate, lateHours: dayuseLateHours };
+      const earlyH = Math.max(0, dayuseEarlyHours);
+      const d = new Date(`${dayuseDate}T15:00:00`);
+      d.setHours(15 - earlyH, 0, 0, 0);
+      const out = new Date(`${dayuseDate}T15:00:00`);
+      out.setDate(out.getDate() + dayuseNights);
+      out.setHours(12 + dayuseLateHours, 0, 0, 0);
+      return {
+        calculatedCheckinAt: d,
+        calculatedCheckoutAt: out,
+        calculatedEarlyHours: earlyH,
+        calculatedLateHours: dayuseLateHours,
+      };
     }
 
     // Custom
-    const inDate = new Date(`${customCheckinDate}T${customCheckinTime}:00`);
-    const outDate = new Date(`${customCheckoutDate}T${customCheckoutTime}:00`);
-    return { checkinAt: inDate, checkoutAt: outDate, lateHours: 0 };
+    const d = new Date(`${customCheckinDate}T${customCheckinTime}:00`);
+    const out = new Date(`${customCheckoutDate}T${customCheckoutTime}:00`);
+    return {
+      calculatedCheckinAt: d,
+      calculatedCheckoutAt: out,
+      calculatedEarlyHours: 0,
+      calculatedLateHours: 0,
+    };
   }, [
     bookingType,
     hourlyDate,
@@ -156,9 +204,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     hourlyDuration,
     overnightDate,
     overnightStartHour,
+    overnightEarlyHours,
     overnightLateHours,
     dayuseDate,
     dayuseNights,
+    dayuseEarlyHours,
     dayuseLateHours,
     customCheckinDate,
     customCheckinTime,
@@ -166,30 +216,54 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     customCheckoutTime,
   ]);
 
-  // Live pricing
-  const pricing = useMemo(() => {
-    return calculatePrice({
-      bookingType,
-      roomClass: selectedRoom?.room_class || "haven",
-      checkinAt,
-      checkoutAt,
-      lateCheckoutHours: lateHours,
-      pricingRules: initialPricingRules,
-      extraHourFee: bookingRules?.extra_hour_fee,
-      customPrice: bookingType === "custom" ? customPrice : 0,
-      discountAmount,
-    });
+  // Calculate Raw Subtotal (before promotion discount) to feed into PromotionSelector
+  const rawPricing = useMemo(() => {
+    if (!selectedRoom) return null;
+    try {
+      return calculatePrice({
+        bookingType,
+        roomClass: selectedRoom.room_class,
+        checkinAt: calculatedCheckinAt,
+        checkoutAt: calculatedCheckoutAt,
+        earlyCheckinHours: calculatedEarlyHours,
+        lateCheckoutHours: calculatedLateHours,
+        numGuests,
+        pricingRules: initialPricingRules,
+        surchargeRules: initialSurchargeRules,
+        customPrice,
+        discountAmount: 0,
+      });
+    } catch {
+      return null;
+    }
   }, [
-    bookingType,
     selectedRoom,
-    checkinAt,
-    checkoutAt,
-    lateHours,
+    bookingType,
+    calculatedCheckinAt,
+    calculatedCheckoutAt,
+    calculatedEarlyHours,
+    calculatedLateHours,
+    numGuests,
     initialPricingRules,
-    bookingRules,
+    initialSurchargeRules,
     customPrice,
-    discountAmount,
   ]);
+
+  // Calculate live pricing with active promotion discount
+  const currentPricing = useMemo(() => {
+    if (!rawPricing) return null;
+    const validDiscount = Math.min(discountAmount, rawPricing.basePrice);
+    const totalBeforeDiscount =
+      rawPricing.basePrice +
+      rawPricing.holidaySurcharge +
+      rawPricing.totalExtraFee +
+      rawPricing.extraGuestFee;
+    return {
+      ...rawPricing,
+      discountAmount: validDiscount,
+      totalPrice: Math.max(0, totalBeforeDiscount - validDiscount),
+    };
+  }, [rawPricing, discountAmount]);
 
   // CDP Auto-fill callback (Phone lookup found returning member)
   const handleMemberFound = (member: Member) => {
@@ -315,17 +389,25 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       return;
     }
 
+    if (calculatedCheckoutAt <= calculatedCheckinAt) {
+      const msg = "Thời gian trả phòng phải sau thời gian nhận phòng.";
+      setErrorMsg(msg);
+      toast.warning(msg, "Thời gian không hợp lệ");
+      return;
+    }
+
+    if (!closingNote || closingNote.trim().length < 3) {
+      const msg = "Vui lòng nhập 'Câu chốt với khách' (bắt buộc tối thiểu 3 ký tự để đối soát).";
+      setErrorMsg(msg);
+      toast.warning(msg, "Thiếu Câu chốt với khách");
+      return;
+    }
+
     if (bookingType === "custom") {
       if (customPrice <= 0) {
         const err = "Vui lòng nhập số tiền thanh toán cho đơn đặt phòng tuỳ chỉnh.";
         setErrorMsg(err);
         toast.warning(err, "Chưa nhập giá");
-        return;
-      }
-      if (checkoutAt <= checkinAt) {
-        const err = "Thời gian trả phòng phải sau thời gian nhận phòng.";
-        setErrorMsg(err);
-        toast.warning(err, "Lỗi thời gian");
         return;
       }
     }
@@ -337,7 +419,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         toast.warning(err, "Chưa nhập tiền cọc");
         return;
       }
-      if (depositAmount > pricing.totalPrice) {
+      if (currentPricing && depositAmount > currentPricing.totalPrice) {
         const err = "Số tiền cọc không được lớn hơn tổng giá trị đơn phòng.";
         setErrorMsg(err);
         toast.warning(err, "Tiền cọc không hợp lệ");
@@ -360,21 +442,22 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         instagram: cleanIg,
         facebook: cleanFb,
         zalo: cleanZalo,
-        numGuests,
         bookingType,
-        checkinAt: checkinAt.toISOString(),
-        checkoutAt: checkoutAt.toISOString(),
-        lateCheckoutHours: lateHours,
-        customPrice: bookingType === "custom" ? customPrice : undefined,
-        discountAmount,
-        promotionId: selectedPromotion?.id,
-        promotionCode: selectedPromotion?.code,
-        closingNote: closingNote.trim(),
+        checkinAt: calculatedCheckinAt.toISOString(),
+        checkoutAt: calculatedCheckoutAt.toISOString(),
+        earlyCheckinHours: calculatedEarlyHours,
+        lateCheckoutHours: calculatedLateHours,
+        numGuests,
+        customPrice: bookingType === "custom" ? customPrice : 0,
+        promotionId: selectedPromotion?.id || null,
+        promotionCode: selectedPromotion?.code || null,
+        discountAmount: currentPricing?.discountAmount || 0,
         note: note.trim(),
+        closingNote: closingNote.trim(),
         status: "confirmed",
         isDeposit,
         depositAmount: isDeposit ? depositAmount : 0,
-        depositDueDate: isDeposit ? depositDueDate.trim() : undefined,
+        depositDueDate: isDeposit && depositDueDate ? depositDueDate : null,
       };
 
       const res = await fetch("/api/bookings", {
@@ -402,7 +485,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       notifyDataChanged("BOOKINGS_CHANGED");
 
       setTimeout(() => {
-        router.push(`/dashboard?date=${checkinAt.toISOString().slice(0, 10)}`);
+        router.push(`/dashboard?date=${calculatedCheckinAt.toISOString().slice(0, 10)}`);
       }, 1500);
     } catch (err: any) {
       setErrorMsg(err.message || "Đã xảy ra lỗi khi tạo đặt phòng.");
@@ -560,43 +643,53 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Row 3: Number of Guests */}
-        <div className="pt-1">
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Số lượng khách
-          </label>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setNumGuests(Math.max(1, numGuests - 1))}
-              className="w-10 h-10 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-base flex items-center justify-center border border-slate-300 transition-colors cursor-pointer shadow-xs"
-            >
-              −
-            </button>
-            <span className="font-mono font-bold text-base text-slate-900 px-2">
-              {numGuests} người
-            </span>
-            <button
-              type="button"
-              onClick={() => setNumGuests(Math.min(4, numGuests + 1))}
-              className="w-10 h-10 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-base flex items-center justify-center border border-slate-300 transition-colors cursor-pointer shadow-xs"
-            >
-              +
-            </button>
-            <span className="text-xs text-slate-500 pl-2">
-              (Tiêu chuẩn 2 người / phòng)
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* 2. Booking Type & Time Specs (With Room Selection At Bottom) */}
       <div className="rounded-2xl bg-white border border-slate-200 p-5 space-y-5 shadow-xs">
-        <BookingTypeTabs
-          selectedType={bookingType}
-          onChangeType={(type) => setBookingType(type)}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <BookingTypeTabs selectedType={bookingType} onChangeType={setBookingType} />
+
+          {/* Guest Count Selector (Haven max 2, Signature max 4) */}
+          {selectedRoom && (
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 shrink-0">
+              <span className="text-xs font-bold text-slate-700">👥 Số khách:</span>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4].map((g) => {
+                  const disabled = g > selectedRoom.max_guests;
+                  const active = numGuests === g;
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setNumGuests(g)}
+                      title={
+                        disabled
+                          ? `Hạng phòng ${selectedRoom.room_class.toUpperCase()} chỉ nhận tối đa ${selectedRoom.max_guests} khách`
+                          : g > 2
+                          ? `${g} khách (Phụ thu +${((g - 2) * 150).toLocaleString("vi-VN")}k/đêm)`
+                          : `${g} khách (Tiêu chuẩn)`
+                      }
+                      className={`w-8 h-7 rounded-lg text-xs font-bold transition-all ${
+                        active
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : disabled
+                          ? "bg-slate-100 text-slate-300 cursor-not-allowed"
+                          : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-100"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-[11px] text-slate-500">
+                (Tối đa {selectedRoom.max_guests} khách)
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Conditional Time Fields */}
         {bookingType === "hourly" && (
@@ -604,6 +697,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             checkinDate={hourlyDate}
             checkinHour={hourlyCheckinHour}
             durationHours={hourlyDuration}
+            hourlySlots={hourlySlots}
+            cappingWarning={rawPricing?.cappingWarning}
+            onSwitchBookingType={(target) => setBookingType(target)}
             onChangeDate={setHourlyDate}
             onChangeHour={setHourlyCheckinHour}
             onChangeDuration={setHourlyDuration}
@@ -614,12 +710,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           <OvernightFields
             checkinDate={overnightDate}
             startHour={overnightStartHour}
+            earlyCheckinHours={overnightEarlyHours}
             lateCheckoutHours={overnightLateHours}
-            hourlySlots={hourlySlots}
-            extraHourFee={bookingRules?.extra_hour_fee}
-            maxLateCheckoutHours={bookingRules?.max_late_checkout_hours}
             onChangeDate={setOvernightDate}
             onChangeStartHour={setOvernightStartHour}
+            onChangeEarlyCheckin={setOvernightEarlyHours}
             onChangeLateCheckout={setOvernightLateHours}
           />
         )}
@@ -628,10 +723,26 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           <DayUseFields
             checkinDate={dayuseDate}
             nights={dayuseNights}
+            earlyCheckinHours={dayuseEarlyHours}
             lateCheckoutHours={dayuseLateHours}
             onChangeDate={setDayuseDate}
             onChangeNights={setDayuseNights}
+            onChangeEarlyCheckin={setDayuseEarlyHours}
             onChangeLateCheckout={setDayuseLateHours}
+            onSwitchToCustom={() => {
+              setCustomCheckinDate(dayuseDate);
+              setCustomCheckinTime(
+                `${String(Math.max(6, 15 - dayuseEarlyHours)).padStart(2, "0")}:00`
+              );
+              const outD = new Date(`${dayuseDate}T00:00:00`);
+              outD.setDate(outD.getDate() + dayuseNights);
+              setCustomCheckoutDate(outD.toISOString().slice(0, 10));
+              setCustomCheckoutTime(
+                `${String(Math.min(20, 12 + dayuseLateHours)).padStart(2, "0")}:00`
+              );
+              if (rawPricing) setCustomPrice(rawPricing.totalPrice);
+              setBookingType("custom");
+            }}
           />
         )}
 
@@ -683,48 +794,59 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           </select>
         </div>
 
-        {/* Closing / Confirmation Note with Guest */}
-        <div className="pt-2">
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1">
-            Câu chốt với khách (Thoả thuận đặt phòng)
-          </label>
-          <textarea
-            rows={2}
-            value={closingNote}
-            onChange={(e) => setClosingNote(e.target.value)}
-            placeholder="VD: Dạ vậy bên Home xin chốt là bên mình book 201 in 21H 23/9 out 9H 24/9 tổng là 392K ạ..."
-            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 resize-none font-sans shadow-xs"
-          />
-        </div>
+        {/* Section: Notes & Final Confirmation */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start pt-2 border-t border-slate-100">
+          {/* Closing Note / Agreement with Guest (MANDATORY) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
+              <span>💬</span>
+              <span>Câu chốt với khách (Thỏa thuận đặt phòng)</span>
+              <span className="text-rose-600 font-black">* Bắt buộc</span>
+            </label>
+            <textarea
+              rows={2}
+              required
+              value={closingNote}
+              onChange={(e) => setClosingNote(e.target.value)}
+              placeholder="BẮT BUỘC NHẬP — VD: Khách chốt phòng 201 qua Zalo, nhận 22h trả 10h, đã cọc 300k VCB..."
+              className="w-full rounded-xl bg-amber-50/50 border border-amber-300 px-3.5 py-2.5 text-sm text-amber-950 placeholder-slate-400 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 shadow-xs"
+            />
+          </div>
 
-        {/* Internal Receptionist Note */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1">
-            Ghi chú nội bộ cho lễ tân (Tùy chọn)
-          </label>
-          <textarea
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Yêu cầu thêm gối, khách cần hóa đơn, xe gửi bãi ngoài..."
-            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 resize-none shadow-xs"
-          />
+          {/* Receptionist Internal Note (Optional) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+              Ghi chú nội bộ của lễ tân (Tùy chọn)
+            </label>
+            <textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ghi chú thêm: khách cần trang trí sinh nhật, dọn phòng kỹ..."
+              className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
+            />
+          </div>
         </div>
       </div>
 
       {/* Promotion Selector */}
-      <PromotionSelector
-        roomClass={selectedRoom?.room_class || "haven"}
-        bookingType={bookingType}
-        checkinAt={checkinAt}
-        rawSubtotal={pricing.basePrice + pricing.totalExtraFee}
-        memberTier={foundMember?.loyalty_tier || foundMember?.loyaltyTier || "new"}
-        selectedPromotion={selectedPromotion}
-        onSelectPromotion={(promo, amount) => {
-          setSelectedPromotion(promo);
-          setDiscountAmount(amount);
-        }}
-      />
+      {selectedRoom && rawPricing && (
+        <PromotionSelector
+          roomClass={selectedRoom.room_class}
+          bookingType={bookingType}
+          checkinAt={calculatedCheckinAt}
+          checkoutAt={calculatedCheckoutAt}
+          basePrice={rawPricing.basePrice}
+          rawSubtotal={rawPricing.basePrice}
+          hasHolidaySurcharge={rawPricing.holidaySurcharge > 0}
+          memberTier={(foundMember?.loyalty_tier as LoyaltyTier) || (foundMember?.loyaltyTier as LoyaltyTier) || "new"}
+          selectedPromotion={selectedPromotion}
+          onSelectPromotion={(promo, amount) => {
+            setSelectedPromotion(promo);
+            setDiscountAmount(amount);
+          }}
+        />
+      )}
 
       {/* 3. Deposit Configuration Section */}
       <DepositSection
@@ -734,20 +856,23 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         onChangeDepositAmount={setDepositAmount}
         depositDueDate={depositDueDate}
         onChangeDepositDueDate={setDepositDueDate}
-        totalPrice={pricing.totalPrice}
-        checkinDateStr={checkinAt ? checkinAt.toISOString().slice(0, 10) : defaultDate}
+        totalPrice={currentPricing?.totalPrice || 0}
+        checkinDateStr={calculatedCheckinAt ? calculatedCheckinAt.toISOString().slice(0, 10) : defaultDate}
       />
 
       {/* 4. Price Summary Card */}
-      <PriceSummaryCard
-        pricing={pricing}
-        selectedRoom={selectedRoom}
-        promotionName={selectedPromotion?.name}
-        isDeposit={isDeposit}
-        depositAmount={depositAmount}
-        remainingAmount={Math.max(0, pricing.totalPrice - depositAmount)}
-        depositDueDate={depositDueDate}
-      />
+      {currentPricing && (
+        <PriceSummaryCard
+          pricing={currentPricing}
+          selectedRoom={selectedRoom}
+          numGuests={numGuests}
+          promotionName={selectedPromotion?.name}
+          isDeposit={isDeposit}
+          depositAmount={depositAmount}
+          remainingAmount={Math.max(0, currentPricing.totalPrice - depositAmount)}
+          depositDueDate={depositDueDate}
+        />
+      )}
 
       {/* 5. Action Buttons */}
       <div className="flex items-center justify-end gap-3 pt-2">

@@ -129,9 +129,13 @@ export async function POST(req: NextRequest) {
 
     const promotionId = String(body.promotionId ?? body.promotion_id ?? "").trim() || undefined;
     const promotionCode = String(body.promotionCode ?? body.promotion_code ?? "").trim().toUpperCase() || undefined;
-    const closingNote = String(body.closingNote ?? body.closing_note ?? "").trim() || undefined;
+    const closingNote = String(body.closingNote ?? body.closing_note ?? "").trim();
+    if (closingNote.length < 3) {
+      return bad("Vui lòng nhập 'Câu chốt với khách' (bắt buộc tối thiểu 3 ký tự).");
+    }
     const note = String(body.note ?? "").trim() || undefined;
     const status = body.status === "pending" ? "pending" : "confirmed";
+    const earlyCheckinHours = Math.max(0, Math.round(Number(body.earlyCheckinHours) || 0));
     const lateCheckoutHours = Math.max(0, Math.round(Number(body.lateCheckoutHours) || 0));
     const numGuests = Math.max(1, Math.round(Number(body.numGuests) || 2));
 
@@ -140,6 +144,7 @@ export async function POST(req: NextRequest) {
       bookingType,
       checkinAt: checkin.toISOString(),
       checkoutAt: checkout.toISOString(),
+      earlyCheckinHours,
       lateCheckoutHours,
       numGuests,
       customPrice,

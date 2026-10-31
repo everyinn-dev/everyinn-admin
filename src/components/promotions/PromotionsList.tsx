@@ -204,7 +204,7 @@ export const PromotionsList: React.FC<PromotionsListProps> = ({
             const isExpired = !!(p.end_date && p.end_date < todayStr);
             const isSeasonal = !!(p.start_date || p.end_date);
             const badgeStyle =
-              BADGE_COLOR_STYLES[p.category_color || "purple"] || BADGE_COLOR_STYLES.purple;
+              BADGE_COLOR_STYLES[(p.category_color as PromotionBadgeColor) || "purple"] || BADGE_COLOR_STYLES.purple;
 
             return (
               <div

@@ -14,7 +14,8 @@ export async function GET() {
     const { data } = await bookingCore.get<CoreCatalog>("/internal/v1/catalog", { staff });
     const catalog = data!;
     const propertyId = catalog.property?.id ?? "every-inn";
-    const pricingRules = catalog.rateRules
+    const rawRules = catalog.rateRules || catalog.pricingRules || [];
+    const pricingRules = rawRules
       .filter((r) => r.isActive)
       .map((r, i) => toLegacyPricingRule(r, propertyId, i))
       .filter((r): r is PricingRule => r !== null);

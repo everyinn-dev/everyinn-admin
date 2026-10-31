@@ -1,81 +1,78 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { resolveHourlyCombo } from "@/lib/pricing";
+import React from "react";
+import { CappingWarning } from "@/types";
+import { DEFAULT_HOURLY_SLOTS } from "@/lib/pricing";
 
 interface HourlyFieldsProps {
   checkinDate: string; // YYYY-MM-DD
-  checkinHour: number; // 9 to 21
-  durationHours: number; // 3 to 12
+  checkinHour: number;
+  durationHours: number;
+  hourlySlots?: number[];
+  cappingWarning?: CappingWarning | null;
+  onSwitchBookingType?: (targetType: "overnight" | "dayuse") => void;
   onChangeDate: (date: string) => void;
   onChangeHour: (hour: number) => void;
   onChangeDuration: (duration: number) => void;
 }
 
+const DURATION_OPTIONS = [3, 4, 5, 6, 7, 8];
+
 export const HourlyFields: React.FC<HourlyFieldsProps> = ({
   checkinDate,
   checkinHour,
   durationHours,
+  hourlySlots = DEFAULT_HOURLY_SLOTS,
+  cappingWarning,
+  onSwitchBookingType,
   onChangeDate,
   onChangeHour,
   onChangeDuration,
 }) => {
-  // Allowed check-in hours: 9h to 21h
-  const checkinHoursList = Array.from({ length: 13 }).map((_, i) => i + 9);
-
-  // Durations from 3h to 10h
-  const durationOptions = [3, 4, 5, 6, 7, 8, 9, 10];
-
-  const comboInfo = useMemo(() => {
-    return resolveHourlyCombo(durationHours);
-  }, [durationHours]);
-
-  // Compute checkout time
-  const calculatedCheckout = useMemo(() => {
-    const d = new Date(`${checkinDate}T00:00:00`);
-    d.setHours(checkinHour + durationHours, 0, 0, 0);
-    return d.toLocaleString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      day: "2-digit",
-      month: "2-digit",
-    });
-  }, [checkinDate, checkinHour, durationHours]);
+  const checkoutHour = checkinHour + durationHours;
+  const isNextDay = checkoutHour >= 24;
+  const displayCheckoutHour = isNextDay ? checkoutHour - 24 : checkoutHour;
 
   return (
-    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-xs">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-        <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
-          <span>⏱️</span> Quy tắc đặt theo giờ (Combo 3h)
+    <div className="space-y-4 p-4 rounded-2xl bg-slate-100/80 border border-slate-200/80">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+          ⏱️ Đặt phòng Theo Giờ (Combo khởi điểm 3 giờ, nhận phòng 08:00 – 21:00)
         </span>
-        <span className="text-[11px] text-slate-500 font-medium">Khung giờ nhận: 9:00 - 21:00</span>
+        <span className="text-xs text-slate-600">
+          Trả phòng dự kiến:{" "}
+          <strong className="text-slate-900 font-mono">
+            {String(displayCheckoutHour).padStart(2, "0")}:00{" "}
+            {isNextDay ? "(Hôm sau)" : "(Cùng ngày)"}
+          </strong>
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Date */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Check-in Date */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
             Ngày nhận phòng
           </label>
           <input
             type="date"
             value={checkinDate}
-            onChange={(e) => e.target.value && onChangeDate(e.target.value)}
-            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
+            onChange={(e) => onChangeDate(e.target.value)}
+            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
           />
         </div>
 
-        {/* Check-in Hour */}
+        {/* Check-in Hour (8h -> 21h) */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
-            Giờ nhận phòng
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+            Giờ Check-in (08:00 – 21:00)
           </label>
           <select
             value={checkinHour}
             onChange={(e) => onChangeHour(Number(e.target.value))}
-            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
           >
-            {checkinHoursList.map((h) => (
+            {hourlySlots.map((h) => (
               <option key={h} value={h}>
                 {String(h).padStart(2, "0")}:00
               </option>
@@ -83,50 +80,48 @@ export const HourlyFields: React.FC<HourlyFieldsProps> = ({
           </select>
         </div>
 
-        {/* Duration Hours */}
+        {/* Duration (min 3h) */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
             Thời lượng lưu trú
           </label>
           <select
             value={durationHours}
             onChange={(e) => onChangeDuration(Number(e.target.value))}
-            className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-emerald-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 font-bold shadow-xs"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
           >
-            {durationOptions.map((hours) => {
-              const info = resolveHourlyCombo(hours);
-              const label =
-                info.extraHours > 0
-                  ? `${hours} Giờ (${info.comboLabel} + ${info.extraHours}h)`
-                  : `${hours} Giờ (${info.comboLabel})`;
-              return (
-                <option key={hours} value={hours}>
-                  {label}
-                </option>
-              );
-            })}
+            {DURATION_OPTIONS.map((d) => (
+              <option key={d} value={d}>
+                {d === 3 ? "3 giờ (Combo chuẩn)" : `${d} giờ (Combo 3h + ${d - 3}h thêm)`}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* Formula & Checkout preview */}
-      <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-        <div className="text-slate-600">
-          <span className="text-slate-500 font-medium">Công thức tính: </span>
-          <strong className="text-emerald-700 font-bold">{comboInfo.comboLabel}</strong>
-          {comboInfo.extraHours > 0 && (
-            <span className="text-amber-800 font-semibold">
-              {" "}
-              + {comboInfo.extraHours} giờ phụ trội (+
-              {Number(comboInfo.extraHours * 60000).toLocaleString("vi-VN")}đ)
-            </span>
+      {/* Soft Capping Advisory Banner */}
+      {(cappingWarning?.exceeded || cappingWarning?.exceedsThreshold) && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-2 text-xs text-amber-950">
+            <span className="text-base shrink-0">💡</span>
+            <div>
+              <span className="font-extrabold block text-amber-900">
+                Gợi ý tối ưu gói giá cho khách (Capping Advisory):
+              </span>
+              <span>{cappingWarning.message}</span>
+            </div>
+          </div>
+          {onSwitchBookingType && cappingWarning.suggestedBookingType && (
+            <button
+              type="button"
+              onClick={() => cappingWarning.suggestedBookingType && onSwitchBookingType(cappingWarning.suggestedBookingType)}
+              className="px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold shrink-0 cursor-pointer shadow-xs"
+            >
+              Chuyển sang {cappingWarning.suggestedBookingType === "overnight" ? "Qua Đêm" : "Theo Ngày"}
+            </button>
           )}
         </div>
-        <div className="text-right">
-          <span className="text-slate-500 font-medium">Trả phòng lúc: </span>
-          <strong className="text-slate-900 font-mono font-bold">{calculatedCheckout}</strong>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

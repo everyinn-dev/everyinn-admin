@@ -88,9 +88,15 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // Usage Limit
+  // Usage Limit & v2.0 OTA Controls
   const [hasUsageLimit, setHasUsageLimit] = useState(false);
   const [usageLimit, setUsageLimit] = useState<number | string>("");
+  const [maxUsesPerGuest, setMaxUsesPerGuest] = useState<number | string>("");
+  const [minNights, setMinNights] = useState<number | string>(1);
+  const [bookingWindowStart, setBookingWindowStart] = useState("");
+  const [bookingWindowEnd, setBookingWindowEnd] = useState("");
+  const [blackoutDatesInput, setBlackoutDatesInput] = useState("");
+  const [isStackableWithHoliday, setIsStackableWithHoliday] = useState(true);
 
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -118,6 +124,12 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
       setEndDate(promotion.end_date || "");
       setHasUsageLimit(promotion.usage_limit !== null && promotion.usage_limit !== undefined);
       setUsageLimit(promotion.usage_limit ?? "");
+      setMaxUsesPerGuest(promotion.max_uses_per_guest ?? "");
+      setMinNights(promotion.min_nights ?? 1);
+      setBookingWindowStart(promotion.booking_window_start || "");
+      setBookingWindowEnd(promotion.booking_window_end || "");
+      setBlackoutDatesInput((promotion.blackout_dates || []).join(", "));
+      setIsStackableWithHoliday(promotion.is_stackable_with_holiday !== 0);
       setIsActive(promotion.is_active === 1);
     } else {
       setName("");
@@ -137,6 +149,12 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
       setEndDate("");
       setHasUsageLimit(false);
       setUsageLimit("");
+      setMaxUsesPerGuest("");
+      setMinNights(1);
+      setBookingWindowStart("");
+      setBookingWindowEnd("");
+      setBlackoutDatesInput("");
+      setIsStackableWithHoliday(true);
       setIsActive(true);
     }
   }
@@ -205,7 +223,16 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
         applicable_days_of_week: daysOfWeek,
         start_date: hasDateLimit && startDate ? startDate : null,
         end_date: hasDateLimit && endDate ? endDate : null,
+        booking_window_start: bookingWindowStart || null,
+        booking_window_end: bookingWindowEnd || null,
+        min_nights: Math.max(1, Number(minNights) || 1),
+        blackout_dates: blackoutDatesInput
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)),
+        is_stackable_with_holiday: isStackableWithHoliday ? 1 : 0,
         usage_limit: hasUsageLimit && usageLimit !== "" ? Number(usageLimit) : null,
+        max_uses_per_guest: maxUsesPerGuest !== "" ? Number(maxUsesPerGuest) : null,
         is_active: isActive ? 1 : 0,
         expectedVersion: promotion?.version,
       };
@@ -587,6 +614,62 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
               })}
             </div>
           </div>
+        </div>
+
+        {/* Section 5B: OTA v2.0 Advanced Rules (Min Nights, Per-guest limit, Blackout dates, Holiday stacking) */}
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
+            ⚙️ Điều Kiện Nâng Cao (OTA Rules v2.0)
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Số đêm tối thiểu (Min Nights)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={minNights}
+                onChange={(e) => setMinNights(e.target.value)}
+                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs font-mono font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Giới hạn lượt / 1 SĐT khách
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={maxUsesPerGuest}
+                onChange={(e) => setMaxUsesPerGuest(e.target.value)}
+                placeholder="Không giới hạn"
+                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs font-mono font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Ngày loại trừ (Blackout YYYY-MM-DD)
+              </label>
+              <input
+                type="text"
+                value={blackoutDatesInput}
+                onChange={(e) => setBlackoutDatesInput(e.target.value)}
+                placeholder="VD: 2026-09-01, 2026-09-02"
+                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs font-mono"
+              />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 pt-1">
+            <input
+              type="checkbox"
+              checked={isStackableWithHoliday}
+              onChange={(e) => setIsStackableWithHoliday(e.target.checked)}
+              className="w-4 h-4 rounded text-emerald-600"
+            />
+            <span>Cho phép áp dụng đồng thời trong ngày có Phụ thu Lễ/Tết (chỉ giảm trên giá cơ bản)</span>
+          </label>
         </div>
 
         {/* Section 6: Limits & Status */}

@@ -7,6 +7,7 @@ import { Room } from "@/types";
 interface PriceSummaryCardProps {
   pricing: PricingBreakdown;
   selectedRoom?: Room | null;
+  numGuests?: number;
   promotionName?: string;
   isDeposit?: boolean;
   depositAmount?: number;
@@ -17,6 +18,7 @@ interface PriceSummaryCardProps {
 export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
   pricing,
   selectedRoom,
+  numGuests = 2,
   promotionName,
   isDeposit,
   depositAmount = 0,
@@ -28,10 +30,12 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
       <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <div>
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-            Tóm tắt chi phí
+            Tóm tắt chi phí (Bill 4 phần)
           </span>
           <span className="text-sm font-bold text-slate-900">
-            {selectedRoom ? `${selectedRoom.name} (${selectedRoom.room_class.toUpperCase()})` : "Chưa chọn phòng"}
+            {selectedRoom
+              ? `${selectedRoom.name} (${selectedRoom.room_class.toUpperCase()} · ${numGuests} khách)`
+              : "Chưa chọn phòng"}
           </span>
         </div>
         <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold">
@@ -39,19 +43,68 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
         </span>
       </div>
 
-      {/* Itemized lines */}
+      {/* Itemized lines (4-part bill formula) */}
       <div className="space-y-2 text-xs">
-        <div className="flex justify-between text-slate-600">
-          <span>Giá gốc ({pricing.durationLabel}):</span>
+        {/* 1. Base Price */}
+        <div className="flex justify-between text-slate-700">
+          <span>1. Giá cơ bản ({pricing.durationLabel}):</span>
           <span className="font-mono font-bold text-slate-900">
             {pricing.basePrice.toLocaleString("vi-VN")} đ
           </span>
         </div>
 
+        {/* 2. Promotion Discount (strictly on Base Price) */}
+        {pricing.discountAmount > 0 && (
+          <div className="flex justify-between text-rose-700 font-semibold">
+            <span>
+              2. Ưu đãi giảm trên giá cơ bản {promotionName ? `(${promotionName})` : ""}:
+            </span>
+            <span className="font-mono font-bold text-rose-800">
+              -{pricing.discountAmount.toLocaleString("vi-VN")} đ
+            </span>
+          </div>
+        )}
+
+        {/* 3. Holiday Surcharge (on Base Price per night) */}
+        {pricing.holidaySurcharge > 0 && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-amber-800 font-semibold">
+              <span>3. Phụ thu Ngày Lễ/Tết (trên giá cơ bản):</span>
+              <span className="font-mono font-bold text-amber-900">
+                +{pricing.holidaySurcharge.toLocaleString("vi-VN")} đ
+              </span>
+            </div>
+            {pricing.nightlyBreakdown.filter((n) => (n.holidaySurchargeAmount ?? n.holidaySurcharge ?? 0) > 0).length > 0 && (
+              <div className="pl-3 border-l-2 border-amber-200 space-y-0.5 text-[11px] text-amber-700">
+                {pricing.nightlyBreakdown
+                  .filter((n) => (n.holidaySurchargeAmount ?? n.holidaySurcharge ?? 0) > 0)
+                  .map((n) => (
+                    <div key={n.stayDate} className="flex justify-between">
+                      <span>
+                        • Đêm {n.stayDate} ({n.holidayRuleName || `+${n.holidaySurchargePercent || 0}%`}):
+                      </span>
+                      <span className="font-mono">
+                        +{((n.holidaySurchargeAmount ?? n.holidaySurcharge ?? 0)).toLocaleString("vi-VN")} đ
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 4a. Extra Hours Surcharge */}
         {pricing.totalExtraFee > 0 && (
           <div className="flex justify-between text-amber-800 font-semibold">
             <span>
-              Phụ phí giờ thêm ({pricing.extraHours}h × {pricing.extraHourFee.toLocaleString("vi-VN")}đ):
+              4. Phụ phí thêm giờ (
+              {pricing.earlyCheckinHours > 0 ? `Sớm ${pricing.earlyCheckinHours}h` : ""}
+              {pricing.earlyCheckinHours > 0 && pricing.lateCheckoutHours > 0 ? " + " : ""}
+              {pricing.lateCheckoutHours > 0 ? `Muộn ${pricing.lateCheckoutHours}h` : ""}
+              {pricing.earlyCheckinHours === 0 && pricing.lateCheckoutHours === 0
+                ? `${pricing.extraHours}h`
+                : ""}{" "}
+              × {pricing.extraHourFee.toLocaleString("vi-VN")}đ):
             </span>
             <span className="font-mono font-bold text-amber-900">
               +{pricing.totalExtraFee.toLocaleString("vi-VN")} đ
@@ -59,13 +112,14 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
           </div>
         )}
 
-        {pricing.discountAmount > 0 && (
-          <div className="flex justify-between text-rose-700 font-semibold">
+        {/* 4b. Extra Guest Surcharge */}
+        {pricing.extraGuestFee > 0 && (
+          <div className="flex justify-between text-indigo-800 font-semibold">
             <span>
-              Giảm trừ {promotionName ? `(${promotionName})` : ""}:
+              Phụ thu khách thêm ({Math.max(0, numGuests - 2)} người × 150.000đ × {pricing.nightsCount} đêm):
             </span>
-            <span className="font-mono font-bold text-rose-800">
-              -{pricing.discountAmount.toLocaleString("vi-VN")} đ
+            <span className="font-mono font-bold text-indigo-900">
+              +{pricing.extraGuestFee.toLocaleString("vi-VN")} đ
             </span>
           </div>
         )}
@@ -74,7 +128,9 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
       {/* Total Section */}
       <div className="pt-3 border-t border-slate-200 flex items-baseline justify-between">
         <div>
-          <span className="text-xs text-slate-500 font-bold block uppercase tracking-wider">TỔNG GIÁ TRỊ ĐƠN</span>
+          <span className="text-xs text-slate-500 font-bold block uppercase tracking-wider">
+            TỔNG GIÁ TRỊ ĐƠN
+          </span>
           <span className="text-[11px] text-emerald-700 font-medium">
             {isDeposit ? "Đơn có đặt cọc giữ phòng" : "Thu tiền trực tiếp tại quầy"}
           </span>
