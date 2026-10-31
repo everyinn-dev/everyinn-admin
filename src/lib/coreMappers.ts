@@ -858,3 +858,102 @@ export function toLegacyCategory(c: CoreCategoryDto): PromotionCategory & { vers
     version: c.version,
   };
 }
+
+// ───────────────────────── Phase 2.1: Availability Search & 15-Minute Room Holds ─────────────────────────
+
+export interface CoreAvailabilityPriceDto {
+  ratePlanCode: string;
+  comboLabel: string;
+  durationLabel: string;
+  basePrice: number;
+  holidaySurcharge: number;
+  extraGuestFee: number;
+  extraFee: number;
+  subtotal: number;
+  lines: Array<{ code: string; label: string; amount: number; quantity?: number; unitAmount?: number }>;
+  cappingWarning: CappingWarning | null;
+}
+
+export interface CoreAvailabilityRoomItem {
+  room: CoreRoom;
+  available: boolean;
+  reasons: Array<{ code: string; message: string }>;
+  conflicts: Array<{
+    conflictType: "direct" | "buffer_prior" | "buffer_next" | "room_block" | "room_hold";
+    allocationType: "booking" | "block" | "hold";
+    id: string;
+    from: string;
+    to: string;
+    message: string;
+  }>;
+  price: CoreAvailabilityPriceDto | null;
+}
+
+export interface CoreAvailabilitySearchResponse {
+  searchedAt: string;
+  bookingsVersion: number;
+  checkinAt: string;
+  checkoutAt: string;
+  rooms: CoreAvailabilityRoomItem[];
+}
+
+export interface CoreHoldCheckoutDraft {
+  guest: {
+    name: string;
+    phoneRaw: string | null;
+    phone: string | null;
+    instagram: string | null;
+    facebook: string | null;
+    zalo: string | null;
+  };
+  promotionId: string | null;
+  promotionCode: string | null;
+  promotionName: string | null;
+  promotionDiscount: number;
+  loyaltyTier: string | null;
+  subtotal: number;
+  totalPrice: number;
+  isDeposit: boolean;
+  depositAmount: number;
+  depositDueDate: string | null;
+  paymentMethod: string;
+  closingNote: string;
+  note: string | null;
+}
+
+export interface CoreHoldDto {
+  id: string;
+  propertyId: string;
+  roomId: string;
+  roomName: string | null;
+  roomNumber: string | null;
+  roomClass: RoomClass;
+  bookingType: BookingType;
+  ratePlanCode: string;
+  checkinAt: string;
+  checkoutAt: string;
+  occupiedUntil: string;
+  earlyCheckinHours: number;
+  lateCheckoutHours: number;
+  numGuests: number;
+  quotedBasePrice: number;
+  quotedTotalPrice: number;
+  payableAmount: number;
+  paymentReference: string | null;
+  status: "active" | "awaiting_payment" | "converted" | "cancelled" | "expired";
+  expiresAt: string;
+  expiresAtSec: number;
+  remainingSeconds: number;
+  convertedBookingId: string | null;
+  checkoutDraft: CoreHoldCheckoutDraft | null;
+  createdBy: CoreStaffRef | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoreHoldEnvelope {
+  hold: CoreHoldDto;
+  replayed?: boolean;
+}
+
