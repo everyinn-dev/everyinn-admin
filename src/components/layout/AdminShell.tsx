@@ -169,6 +169,22 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
           <span>Bảng Phòng</span>
         </Link>
         <Link
+          href="/bookings/search"
+          className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
+            pathname === "/bookings/search" ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <span>Tìm Phòng</span>
+        </Link>
+        <Link
           href="/bookings/new"
           className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
             pathname === "/bookings/new" ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"

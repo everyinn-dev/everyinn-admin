@@ -17,6 +17,7 @@
       "ActorName": { "name": "X-EI-Actor-Name", "in": "header", "required": false, "schema": { "type": "string", "description": "encodeURIComponent(display name)" } },
       "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$" }, "description": "Scope = operation:caller:actor. Same key + same body → replay (200, replayed=true); same key + different body → 409 IDEMPOTENCY_KEY_REUSED. TTL 7 days." },
       "BookingId": { "name": "bookingId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,64}$" } },
+      "HoldId": { "name": "holdId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
       "BlockId": { "name": "blockId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
       "EntryId": { "name": "entryId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
       "PromotionId": { "name": "promotionId", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{3,80}$" } },
@@ -30,6 +31,7 @@
       "Error": { "description": "Error (4xx/5xx)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
       "NotModified": { "description": "ETag matched (If-None-Match)" },
       "Booking": { "description": "Booking (current state)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BookingEnvelope" } } } },
+      "Hold": { "description": "Room hold (15-minute checkout lock)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HoldEnvelope" } } } },
       "Block": { "description": "Room block", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BlockEnvelope" } } } },
       "Entry": { "description": "Financial entry + booking projection", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EntryEnvelope" } } } },
       "Promotion": { "description": "Promotion", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PromotionEnvelope" } } } },
@@ -202,13 +204,83 @@
         "additionalProperties": false,
         "required": ["conflictType", "allocationType", "id", "from", "to", "message"],
         "properties": {
-          "conflictType": { "enum": ["direct", "buffer_prior", "buffer_next", "room_block"] },
-          "allocationType": { "enum": ["booking", "block"] },
+          "conflictType": { "enum": ["direct", "buffer_prior", "buffer_next", "room_block", "room_hold"] },
+          "allocationType": { "enum": ["booking", "block", "hold"] },
           "id": { "type": "string" },
           "from": { "$ref": "#/components/schemas/Instant" },
           "to": { "$ref": "#/components/schemas/Instant" },
           "message": { "type": "string" }
         }
+      },
+      "Hold": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "propertyId",
+          "roomId",
+          "roomName",
+          "roomNumber",
+          "roomClass",
+          "bookingType",
+          "ratePlanCode",
+          "checkinAt",
+          "checkoutAt",
+          "occupiedUntil",
+          "earlyCheckinHours",
+          "lateCheckoutHours",
+          "numGuests",
+          "quotedBasePrice",
+          "quotedTotalPrice",
+          "payableAmount",
+          "paymentReference",
+          "status",
+          "expiresAt",
+          "expiresAtSec",
+          "remainingSeconds",
+          "convertedBookingId",
+          "checkoutDraft",
+          "createdBy",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "propertyId": { "type": "string" },
+          "roomId": { "type": "string" },
+          "roomName": { "$ref": "#/components/schemas/NullableString" },
+          "roomNumber": { "$ref": "#/components/schemas/NullableString" },
+          "roomClass": { "$ref": "#/components/schemas/RoomClass" },
+          "bookingType": { "$ref": "#/components/schemas/BookingType" },
+          "ratePlanCode": { "$ref": "#/components/schemas/RatePlanCode" },
+          "checkinAt": { "$ref": "#/components/schemas/Instant" },
+          "checkoutAt": { "$ref": "#/components/schemas/Instant" },
+          "occupiedUntil": { "$ref": "#/components/schemas/Instant" },
+          "earlyCheckinHours": { "type": "integer", "minimum": 0 },
+          "lateCheckoutHours": { "type": "integer", "minimum": 0 },
+          "numGuests": { "type": "integer", "minimum": 1 },
+          "quotedBasePrice": { "$ref": "#/components/schemas/Vnd" },
+          "quotedTotalPrice": { "$ref": "#/components/schemas/Vnd" },
+          "payableAmount": { "$ref": "#/components/schemas/Vnd" },
+          "paymentReference": { "$ref": "#/components/schemas/NullableString" },
+          "status": { "enum": ["active", "awaiting_payment", "converted", "cancelled", "expired"] },
+          "expiresAt": { "$ref": "#/components/schemas/Instant" },
+          "expiresAtSec": { "type": "integer" },
+          "remainingSeconds": { "type": "integer", "minimum": 0 },
+          "convertedBookingId": { "$ref": "#/components/schemas/NullableString" },
+          "checkoutDraft": { "type": ["object", "null"] },
+          "createdBy": { "$ref": "#/components/schemas/StaffRef" },
+          "version": { "type": "integer", "minimum": 1 },
+          "createdAt": { "$ref": "#/components/schemas/Instant" },
+          "updatedAt": { "$ref": "#/components/schemas/Instant" }
+        }
+      },
+      "HoldEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hold"],
+        "properties": { "hold": { "$ref": "#/components/schemas/Hold" }, "replayed": { "type": "boolean" } }
       },
       "Room": {
         "type": "object",
@@ -1219,6 +1291,112 @@
         },
         "responses": {
           "200": { "description": "Quote", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Quote" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/holds": {
+      "post": {
+        "operationId": "createHold",
+        "x-callers": ["admin-bff"],
+        "x-idempotency": "required",
+        "summary": "Create a 15-minute room hold locking occupancy and turnover inventory slots.",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["roomId", "bookingType", "checkinAt", "checkoutAt"],
+                "properties": {
+                  "roomId": { "type": "string" },
+                  "bookingType": { "$ref": "#/components/schemas/BookingType" },
+                  "checkinAt": { "$ref": "#/components/schemas/Instant" },
+                  "checkoutAt": { "$ref": "#/components/schemas/Instant" },
+                  "earlyCheckinHours": { "type": "integer" },
+                  "lateCheckoutHours": { "type": "integer" },
+                  "numGuests": { "type": "integer" },
+                  "customPrice": { "type": "integer" },
+                  "ttlSeconds": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/Hold" },
+          "200": { "$ref": "#/components/responses/Hold" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/holds/{holdId}": {
+      "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
+      "get": {
+        "operationId": "getHold",
+        "x-callers": ["admin-bff"],
+        "summary": "Get current hold status and remaining seconds.",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Hold" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "patch": {
+        "operationId": "updateHoldDraft",
+        "x-callers": ["admin-bff"],
+        "summary": "Validate and save guest & payment draft onto the active hold (transitions to awaiting_payment without resetting timer).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["guest", "closingNote"],
+                "properties": {
+                  "guest": { "type": "object" },
+                  "closingNote": { "type": "string" },
+                  "note": { "type": "string" },
+                  "promotionId": { "type": "string" },
+                  "promotionCode": { "type": "string" },
+                  "isDeposit": { "type": "boolean" },
+                  "depositAmount": { "type": "integer" },
+                  "depositDueDate": { "$ref": "#/components/schemas/BusinessDate" },
+                  "paymentMethod": { "$ref": "#/components/schemas/PaymentMethod" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Hold" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/holds/{holdId}/release": {
+      "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
+      "post": {
+        "operationId": "releaseHold",
+        "x-callers": ["admin-bff"],
+        "summary": "Cancel the room hold and immediately free its inventory slots.",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Hold" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/holds/{holdId}/confirm": {
+      "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
+      "post": {
+        "operationId": "confirmHold",
+        "x-callers": ["admin-bff"],
+        "x-idempotency": "required",
+        "summary": "Atomically convert an active hold into a confirmed booking with financial ledger entry and CDP accrual.",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": {
+          "201": { "$ref": "#/components/responses/Booking" },
+          "200": { "$ref": "#/components/responses/Booking" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
