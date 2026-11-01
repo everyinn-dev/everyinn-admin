@@ -33,10 +33,10 @@ export const DAY_SLOT_WIDTH_NORMAL = 56; // px
 export const DAY_SLOT_WIDTH_NIGHT = 104; // px
 export const SINGLE_DAY_TOTAL_WIDTH = 18 * DAY_SLOT_WIDTH_NORMAL + DAY_SLOT_WIDTH_NIGHT; // 1112px
 
-// Mobile Vertical Sizing
-export const MOBILE_SLOT_HEIGHT_NORMAL = 52; // px
-export const MOBILE_SLOT_HEIGHT_NIGHT = 84; // px
-export const MOBILE_TOTAL_DAY_HEIGHT = 18 * MOBILE_SLOT_HEIGHT_NORMAL + MOBILE_SLOT_HEIGHT_NIGHT; // 1020px
+// Mobile Vertical Sizing (thu ngắn chiều cao hàng đi một nửa)
+export const MOBILE_SLOT_HEIGHT_NORMAL = 26; // px (giảm 50% từ 52px xuống 26px)
+export const MOBILE_SLOT_HEIGHT_NIGHT = 42; // px (giảm 50% từ 84px xuống 42px)
+export const MOBILE_TOTAL_DAY_HEIGHT = 18 * MOBILE_SLOT_HEIGHT_NORMAL + MOBILE_SLOT_HEIGHT_NIGHT; // 510px (giảm 50% từ 1020px)
 
 /**
  * Calculate offset in pixels within a single day for a given time

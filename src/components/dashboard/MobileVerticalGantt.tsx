@@ -26,9 +26,9 @@ interface MobileVerticalGanttProps {
 }
 
 const TIME_COL_WIDTH = 54; // px (giảm ~20% từ 68px xuống 54px)
-const ROOM_COL_WIDTH = 71; // px (giảm 50% bề rộng cột từ 142px xuống 71px)
+const ROOM_COL_WIDTH = 57; // px (giảm thêm 20% từ 71px xuống 57px: 71 * 0.8 = 56.8px)
 const HEADER_HEIGHT = 44; // px (header gọn, chỉ hiển thị số phòng 101, 102...)
-const DAY_HEADER_HEIGHT = 40; // px (header between days in month view)
+const DAY_HEADER_HEIGHT = 32; // px (header ngày giữa các ngày trong month view, cân đối với hàng giờ 26px)
 
 const ROOM_HEADER_PALETTES = [
   "bg-blue-100 text-blue-900 border-blue-300",
@@ -39,6 +39,94 @@ const ROOM_HEADER_PALETTES = [
   "bg-cyan-100 text-cyan-900 border-cyan-300",
   "bg-indigo-100 text-indigo-900 border-indigo-300",
   "bg-teal-100 text-teal-900 border-teal-300",
+];
+
+// 7 màu sắc riêng biệt cho 7 ngày trong tuần (0: CN, 1: T2, 2: T3, 3: T4, 4: T5, 5: T6, 6: T7)
+const DAY_OF_WEEK_THEMES = [
+  // 0: Chủ nhật (Đỏ Ruby)
+  {
+    weekday: "CN",
+    name: "Chủ nhật",
+    markerBg: "bg-red-600 text-white",
+    markerBorder: "border-red-700",
+    dividerBg: "bg-red-100/90 text-red-950",
+    dividerBorder: "border-red-300",
+    dividerTopBorder: "border-t-2 border-t-red-600",
+    badgeBg: "bg-red-600 text-white",
+    daySlotTint: "bg-red-50/15",
+  },
+  // 1: Thứ 2 (Xanh lam)
+  {
+    weekday: "T2",
+    name: "Thứ hai",
+    markerBg: "bg-blue-600 text-white",
+    markerBorder: "border-blue-700",
+    dividerBg: "bg-blue-100/90 text-blue-950",
+    dividerBorder: "border-blue-300",
+    dividerTopBorder: "border-t-2 border-t-blue-600",
+    badgeBg: "bg-blue-600 text-white",
+    daySlotTint: "bg-blue-50/15",
+  },
+  // 2: Thứ 3 (Xanh ngọc / Teal)
+  {
+    weekday: "T3",
+    name: "Thứ ba",
+    markerBg: "bg-teal-600 text-white",
+    markerBorder: "border-teal-700",
+    dividerBg: "bg-teal-100/90 text-teal-950",
+    dividerBorder: "border-teal-300",
+    dividerTopBorder: "border-t-2 border-t-teal-600",
+    badgeBg: "bg-teal-600 text-white",
+    daySlotTint: "bg-teal-50/15",
+  },
+  // 3: Thứ 4 (Hổ phách / Vàng cam)
+  {
+    weekday: "T4",
+    name: "Thứ tư",
+    markerBg: "bg-amber-500 text-amber-950 font-black",
+    markerBorder: "border-amber-600",
+    dividerBg: "bg-amber-100/90 text-amber-950",
+    dividerBorder: "border-amber-300",
+    dividerTopBorder: "border-t-2 border-t-amber-500",
+    badgeBg: "bg-amber-600 text-white",
+    daySlotTint: "bg-amber-50/15",
+  },
+  // 4: Thứ 5 (Tím Violet)
+  {
+    weekday: "T5",
+    name: "Thứ năm",
+    markerBg: "bg-purple-600 text-white",
+    markerBorder: "border-purple-700",
+    dividerBg: "bg-purple-100/90 text-purple-950",
+    dividerBorder: "border-purple-300",
+    dividerTopBorder: "border-t-2 border-t-purple-600",
+    badgeBg: "bg-purple-600 text-white",
+    daySlotTint: "bg-purple-50/15",
+  },
+  // 5: Thứ 6 (Hồng dâu / Rose)
+  {
+    weekday: "T6",
+    name: "Thứ sáu",
+    markerBg: "bg-rose-500 text-white",
+    markerBorder: "border-rose-600",
+    dividerBg: "bg-rose-100/90 text-rose-950",
+    dividerBorder: "border-rose-300",
+    dividerTopBorder: "border-t-2 border-t-rose-500",
+    badgeBg: "bg-rose-600 text-white",
+    daySlotTint: "bg-rose-50/15",
+  },
+  // 6: Thứ 7 (Cam đậm / Orange)
+  {
+    weekday: "T7",
+    name: "Thứ bảy",
+    markerBg: "bg-orange-500 text-white",
+    markerBorder: "border-orange-600",
+    dividerBg: "bg-orange-100/90 text-orange-950",
+    dividerBorder: "border-orange-300",
+    dividerTopBorder: "border-t-2 border-t-orange-500",
+    badgeBg: "bg-orange-600 text-white",
+    daySlotTint: "bg-orange-50/15",
+  },
 ];
 
 export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
@@ -67,6 +155,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
   // Generate days array
   const days = useMemo(() => {
     if (!isMonth) {
+      const dObj = new Date(`${currentDate}T12:00:00`);
       const dayStart = new Date(`${currentDate}T00:00:00`).getTime();
       const dayEnd = dayStart + 24 * 3600 * 1000 - 1;
       const { weekday, dateFormatted } = formatDayHeaderShort(currentDate);
@@ -78,6 +167,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
           isToday: currentDate === vnToday,
           weekday,
           dateFormatted,
+          dayOfWeek: dObj.getDay(), // 0: CN, 1: T2, 2: T3, 3: T4, 4: T5, 5: T6, 6: T7
         },
       ];
     }
@@ -88,6 +178,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentMonth}-${String(d).padStart(2, "0")}`;
+      const dObj = new Date(`${dateStr}T12:00:00`);
       const dayStart = new Date(`${dateStr}T00:00:00`).getTime();
       const dayEnd = dayStart + 24 * 3600 * 1000 - 1;
       const { weekday, dateFormatted } = formatDayHeaderShort(dateStr);
@@ -98,6 +189,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
         isToday: dateStr === vnToday,
         weekday,
         dateFormatted,
+        dayOfWeek: dObj.getDay(),
       });
     }
 
@@ -266,11 +358,11 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                 return (
                   <div
                     key={room.id}
-                    className="border-r border-slate-200 flex items-center justify-center p-1 bg-white shrink-0"
+                    className="border-r border-slate-200 flex items-center justify-center p-0.5 bg-white shrink-0"
                     style={{ width: `${ROOM_COL_WIDTH}px`, height: `${HEADER_HEIGHT}px` }}
                   >
                     <span
-                      className={`w-8 h-8 rounded-lg border font-mono font-extrabold flex items-center justify-center text-xs shadow-2xs ${colorPalette}`}
+                      className={`w-8 h-8 rounded-lg border font-mono font-extrabold flex items-center justify-center text-[11px] shadow-2xs ${colorPalette}`}
                       title={`Phòng ${room.roomNumber} (Tầng ${room.floor}) - ${isOccupied ? "Đang có khách" : "Trống"}`}
                     >
                       {room.roomNumber}
@@ -287,61 +379,69 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                 className="sticky left-0 z-20 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 select-none shadow-[2px_0_4px_rgba(0,0,0,0.04)]"
                 style={{ width: `${TIME_COL_WIDTH}px`, height: `${totalTimelineHeight}px` }}
               >
-                {days.map((day) => (
-                  <div key={day.dateStr} className="flex flex-col">
-                    {/* Day Header Marker in Column */}
-                    {isMonth && (
-                      <div
-                        id={`mobile-day-${day.dateStr}`}
-                        className={`h-[40px] border-b flex flex-col items-center justify-center px-0.5 font-mono text-[9px] font-bold leading-tight ${
-                          day.isToday
-                            ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                            : "bg-slate-100 text-slate-700 border-slate-200"
-                        }`}
-                      >
-                        <span className="uppercase text-[8.5px]">{day.weekday}</span>
-                        <span>{day.dateFormatted}</span>
-                      </div>
-                    )}
-
-                    {/* 19 Slots */}
-                    {TIMELINE_SLOTS.map((slot) => {
-                      const height = slot.isNight ? slotNight : slotNormal;
-                      const isKeyHour = [9, 12, 15, 21].includes(slot.hour);
-
-                      return (
+                {days.map((day) => {
+                  const dayTheme = DAY_OF_WEEK_THEMES[day.dayOfWeek];
+                  return (
+                    <div key={day.dateStr} className="flex flex-col">
+                      {/* Day Header Marker in Column (7 ngày 7 màu riêng biệt) */}
+                      {isMonth && (
                         <div
-                          key={slot.id}
-                          className={`border-b relative flex flex-col items-center justify-center px-0.5 font-mono text-[10px] ${
-                            slot.isNight
-                              ? "bg-indigo-50/80 text-indigo-900 font-extrabold border-slate-200"
-                              : `border-slate-200 ${
-                                  isKeyHour
-                                    ? slot.hour === 21
-                                      ? "text-indigo-700 font-bold bg-indigo-50/30"
-                                      : slot.hour === 15
-                                      ? "text-amber-700 font-bold bg-amber-50/30"
-                                      : slot.hour === 12
-                                      ? "text-sky-700 font-bold bg-sky-50/30"
-                                      : "text-emerald-700 font-bold bg-emerald-50/30"
-                                    : "text-slate-600 bg-white"
-                                }`
+                          id={`mobile-day-${day.dateStr}`}
+                          className={`h-[32px] border-b flex flex-col items-center justify-center px-0.5 font-mono text-[9px] font-bold leading-tight ${
+                            day.isToday
+                              ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                              : `${dayTheme.markerBg} ${dayTheme.markerBorder}`
                           }`}
-                          style={{ height: `${height}px` }}
                         >
-                          {slot.isNight ? (
-                            <div className="flex flex-col items-center leading-tight">
-                              <span className="text-[9px] font-bold tracking-tight">01h-07h</span>
-                              <span className="text-[8px] text-indigo-600 font-semibold">Đêm</span>
-                            </div>
-                          ) : (
-                            <span className="tracking-tight">{slot.label}</span>
-                          )}
+                          <div className="flex items-center gap-0.5">
+                            <span className="uppercase text-[8.5px] font-extrabold">{day.weekday}</span>
+                            {day.isToday && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                            )}
+                          </div>
+                          <span className="text-[7.5px] font-mono opacity-90">{day.dateFormatted}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                      )}
+
+                      {/* 19 Slots (chiều cao giảm 50%: 26px ngày / 42px đêm) */}
+                      {TIMELINE_SLOTS.map((slot) => {
+                        const height = slot.isNight ? slotNight : slotNormal;
+                        const isKeyHour = [9, 12, 15, 21].includes(slot.hour);
+
+                        return (
+                          <div
+                            key={slot.id}
+                            className={`border-b relative flex flex-col items-center justify-center px-0.5 font-mono ${
+                              slot.isNight
+                                ? "bg-indigo-50/80 text-indigo-900 font-extrabold border-slate-200"
+                                : `border-slate-200 ${
+                                    isKeyHour
+                                      ? slot.hour === 21
+                                        ? "text-indigo-700 font-bold bg-indigo-50/30"
+                                        : slot.hour === 15
+                                        ? "text-amber-700 font-bold bg-amber-50/30"
+                                        : slot.hour === 12
+                                        ? "text-sky-700 font-bold bg-sky-50/30"
+                                        : "text-emerald-700 font-bold bg-emerald-50/30"
+                                      : "text-slate-600 bg-white"
+                                  }`
+                            }`}
+                            style={{ height: `${height}px` }}
+                          >
+                            {slot.isNight ? (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="text-[8px] font-bold tracking-tight">01h-07h</span>
+                                <span className="text-[7px] text-indigo-600 font-semibold">Đêm</span>
+                              </div>
+                            ) : (
+                              <span className="text-[9.5px] tracking-tight leading-none">{slot.label}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* 2. ROOM COLUMNS TRACKS */}
@@ -355,51 +455,57 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                   }}
                 >
                   {/* Days and Hour Rows Background */}
-                  {days.map((day) => (
-                    <div key={day.dateStr} className="flex flex-col">
-                      {/* Day Header divider row */}
-                      {isMonth && (
-                        <div
-                          className={`h-[40px] border-b flex items-center justify-center px-1 text-[9px] font-bold ${
-                            day.isToday
-                              ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                              : "bg-slate-50 text-slate-500 border-slate-200"
-                          }`}
-                        >
-                          {day.isToday ? (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[8px] font-bold shadow-2xs">
-                              Nay
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 text-[8px] font-mono">
-                              {day.dateFormatted}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 19 Slot Rows */}
-                      {TIMELINE_SLOTS.map((slot) => {
-                        const height = slot.isNight ? slotNight : slotNormal;
-                        return (
+                  {days.map((day) => {
+                    const dayTheme = DAY_OF_WEEK_THEMES[day.dayOfWeek];
+                    return (
+                      <div key={day.dateStr} className={`flex flex-col ${dayTheme.daySlotTint}`}>
+                        {/* Day Header divider row (phân chia ngày mới rõ ràng với 7 màu cho 7 ngày) */}
+                        {isMonth && (
                           <div
-                            key={slot.id}
-                            className={`border-b relative group ${
-                              slot.isNight ? "bg-indigo-50/20 border-slate-200" : "border-slate-100"
+                            className={`h-[32px] border-b flex items-center justify-center px-0.5 text-[8.5px] font-bold ${
+                              dayTheme.dividerBorder
+                            } ${dayTheme.dividerTopBorder} ${
+                              day.isToday
+                                ? "bg-emerald-100 text-emerald-950 border-t-2 border-t-emerald-600"
+                                : dayTheme.dividerBg
                             }`}
-                            style={{ height: `${height}px` }}
                           >
-                            {/* Tap Slot to Book */}
-                            <Link
-                              href={`/bookings/new?roomId=${room.id}&date=${day.dateStr}&hour=${slot.hour}`}
-                              className="absolute inset-0 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/10 transition-opacity"
-                              title={`Đặt phòng ${room.roomNumber} lúc ${slot.label}`}
-                            />
+                            {day.isToday ? (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[7.5px] font-extrabold uppercase tracking-wider shadow-2xs flex items-center gap-1">
+                                <span className="w-1 h-1 rounded-full bg-white animate-ping" />
+                                Nay
+                              </span>
+                            ) : (
+                              <span className={`px-1 py-0.5 rounded text-[7.5px] font-mono font-bold shadow-2xs ${dayTheme.badgeBg}`}>
+                                {day.dateFormatted}
+                              </span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                        )}
+
+                        {/* 19 Slot Rows */}
+                        {TIMELINE_SLOTS.map((slot) => {
+                          const height = slot.isNight ? slotNight : slotNormal;
+                          return (
+                            <div
+                              key={slot.id}
+                              className={`border-b relative group ${
+                                slot.isNight ? "bg-indigo-50/20 border-slate-200" : "border-slate-100"
+                              }`}
+                              style={{ height: `${height}px` }}
+                            >
+                              {/* Tap Slot to Book */}
+                              <Link
+                                href={`/bookings/new?roomId=${room.id}&date=${day.dateStr}&hour=${slot.hour}`}
+                                className="absolute inset-0 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/10 transition-opacity"
+                                title={`Đặt phòng ${room.roomNumber} lúc ${slot.label}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
 
                   {/* Room Blocks (Bảo trì / Khóa phòng - Họa tiết sọc chéo hazard hổ phách trên nền sáng) */}
                   {room.blocks.map((block) => {
@@ -412,13 +518,13 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
 
                     const top = timeToTimelineY(blockStart);
                     const bottom = timeToTimelineY(blockEnd);
-                    const durationPx = Math.max(32, bottom - top);
+                    const durationPx = Math.max(20, bottom - top);
 
                     return (
                       <div
                         key={block.id}
                         onClick={() => onBlockClick?.(block, room)}
-                        className="absolute left-0.5 right-0.5 rounded-lg bg-[repeating-linear-gradient(45deg,rgba(245,158,11,0.22),rgba(245,158,11,0.22)_8px,rgba(251,191,36,0.35)_8px,rgba(251,191,36,0.35)_16px)] bg-amber-50 border-2 border-amber-500 text-amber-950 font-bold p-1 flex flex-col justify-between overflow-hidden z-15 shadow-2xs cursor-pointer active:scale-95 transition-all hover:brightness-105"
+                        className="absolute left-0.5 right-0.5 rounded bg-[repeating-linear-gradient(45deg,rgba(245,158,11,0.22),rgba(245,158,11,0.22)_6px,rgba(251,191,36,0.35)_6px,rgba(251,191,36,0.35)_12px)] bg-amber-50 border-2 border-amber-500 text-amber-950 font-bold p-0.5 flex flex-col justify-between overflow-hidden z-15 shadow-2xs cursor-pointer active:scale-95 transition-all hover:brightness-105"
                         style={{
                           top: `${top}px`,
                           height: `${durationPx}px`,
@@ -426,22 +532,24 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                         title={`🔒 Khóa phòng: ${block.reason || "Bảo trì"}\nThời gian: ${formatDateTimeShort(block.blockedFrom)} → ${formatDateTimeShort(block.blockedTo)}${block.note ? `\nGhi chú: ${block.note}` : ""}\n(Chạm để xem chi tiết / mở khóa)`}
                       >
                         {startsBefore && (
-                          <div className="text-[8px] text-amber-800 font-extrabold flex items-center gap-0.5 animate-pulse pb-0.5 truncate">
+                          <div className="text-[7.5px] text-amber-800 font-extrabold flex items-center gap-0.5 animate-pulse pb-0.5 truncate leading-none">
                             <span>▲ Tiếp</span>
                           </div>
                         )}
 
-                        <div className="flex items-center gap-0.5 font-bold text-amber-950 truncate">
-                          <span className="text-[10px]">🔒</span>
-                          <span className="truncate text-[10px]">{block.reason || "Khóa"}</span>
+                        <div className="flex items-center gap-0.5 font-bold text-amber-950 truncate leading-tight">
+                          <span className="text-[9px]">🔒</span>
+                          <span className="truncate text-[8.5px] leading-tight">{block.reason || "Khóa"}</span>
                         </div>
 
-                        <span className="text-[8.5px] text-amber-800 font-mono font-bold truncate">
-                          {formatTimeShort(block.blockedFrom)} - {formatTimeShort(block.blockedTo)}
-                        </span>
+                        {durationPx >= 34 && (
+                          <span className="text-[7.5px] text-amber-800 font-mono font-bold truncate leading-tight">
+                            {formatTimeShort(block.blockedFrom)} - {formatTimeShort(block.blockedTo)}
+                          </span>
+                        )}
 
                         {endsAfter && (
-                          <div className="text-[8px] text-amber-800 font-extrabold flex items-center gap-0.5 animate-pulse pt-0.5 truncate">
+                          <div className="text-[7.5px] text-amber-800 font-extrabold flex items-center gap-0.5 animate-pulse pt-0.5 truncate leading-none">
                             <span>▼ Sau</span>
                           </div>
                         )}
@@ -477,13 +585,13 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
 
                     const top = timeToTimelineY(checkoutMs);
                     const bottom = timeToTimelineY(Math.min(effectiveCleanUntilMs, timelineEndMs));
-                    const durationPx = Math.max(14, bottom - top);
+                    const durationPx = Math.max(12, bottom - top);
                     if (durationPx <= 0) return null;
 
                     return (
                       <div
                         key={`clean-${booking.id}`}
-                        className="absolute left-0.5 right-0.5 rounded-b border-x border-b border-dashed border-amber-400 bg-amber-50/90 text-[8.5px] text-amber-800 font-bold px-0.5 flex items-center justify-center overflow-hidden z-5 pointer-events-none select-none shadow-2xs"
+                        className="absolute left-0.5 right-0.5 rounded-b border-x border-b border-dashed border-amber-400 bg-amber-50/90 text-[8px] text-amber-800 font-bold px-0.5 flex items-center justify-center overflow-hidden z-5 pointer-events-none select-none shadow-2xs"
                         style={{
                           top: `${top}px`,
                           height: `${durationPx}px`,
@@ -496,8 +604,8 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                           minute: "2-digit",
                         })}`}
                       >
-                        <span className="flex items-center gap-0.5 font-bold text-amber-800 truncate">
-                          🧹 {durationPx >= 30 ? "Dọn" : ""}
+                        <span className="flex items-center gap-0.5 font-bold text-amber-800 truncate leading-tight">
+                          🧹 {durationPx >= 18 ? "Dọn" : ""}
                         </span>
                       </div>
                     );
@@ -511,7 +619,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
 
                     const top = timeToTimelineY(checkinMs);
                     const bottom = timeToTimelineY(checkoutMs);
-                    const durationPx = Math.max(36, bottom - top);
+                    const durationPx = Math.max(22, bottom - top);
 
                     const typeConfig = {
                       hourly: {
@@ -551,7 +659,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                       <div
                         key={booking.id}
                         onClick={() => onBookingClick(booking)}
-                        className={`absolute left-0.5 right-0.5 rounded-md border text-white shadow-2xs cursor-pointer transition-all active:scale-[0.98] z-10 p-1 flex flex-col justify-between overflow-hidden ${
+                        className={`absolute left-0.5 right-0.5 rounded border text-white shadow-2xs cursor-pointer transition-all active:scale-[0.98] z-10 p-0.5 px-1 flex flex-col justify-between overflow-hidden ${
                           typeConfig.bg
                         } ${
                           isPending ? "border-dashed border-amber-300 animate-pulse opacity-95" : ""
@@ -562,34 +670,36 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                         }}
                       >
                         {/* Card Top: Guest Name & Tag */}
-                        <div className="flex items-start justify-between gap-0.5">
-                          <div className="flex items-center gap-1 min-w-0">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeConfig.dot}`} />
-                            <span className="font-bold text-[11px] truncate leading-tight text-white drop-shadow-xs">
+                        <div className="flex items-center justify-between gap-0.5 min-w-0">
+                          <div className="flex items-center gap-0.5 min-w-0 flex-1">
+                            <span className={`w-1 h-1 rounded-full shrink-0 ${typeConfig.dot}`} />
+                            <span className="font-bold text-[9px] truncate leading-tight text-white drop-shadow-xs">
                               {booking.guestName}
                             </span>
                           </div>
-                          <span className={`text-[8px] px-1 py-0.2 rounded font-bold shrink-0 ${typeConfig.tagColor}`}>
-                            {typeConfig.tag}
-                          </span>
+                          {durationPx < 36 && (
+                            <span className={`text-[7px] px-0.5 rounded font-bold shrink-0 leading-none ${typeConfig.tagColor}`}>
+                              {typeConfig.tag}
+                            </span>
+                          )}
                         </div>
 
                         {/* Card Middle: Time Span */}
-                        <div className="font-mono text-[9px] text-white/95 font-semibold truncate mt-0.5">
-                          {formatTimeShort(booking.checkinAt)} - {formatTimeShort(booking.checkoutAt)}
-                        </div>
+                        {durationPx >= 36 && (
+                          <div className="font-mono text-[7.5px] text-white/95 font-semibold truncate leading-none">
+                            {formatTimeShort(booking.checkinAt)} - {formatTimeShort(booking.checkoutAt)}
+                          </div>
+                        )}
 
                         {/* Card Bottom: Price (if height permits) */}
-                        {durationPx >= 65 && (
-                          <div className="flex items-center justify-between pt-0.5 border-t border-white/25 text-[9px] mt-0.5">
+                        {durationPx >= 50 && (
+                          <div className="flex items-center justify-between pt-0.5 border-t border-white/25 text-[7.5px] leading-tight">
                             <span className="font-mono font-bold text-amber-200 truncate">
                               {Math.round(Number(booking.totalPrice) / 1000)}k
                             </span>
-                            {isPending && (
-                              <span className="text-[8px] text-amber-200 font-bold bg-amber-900/40 px-1 rounded shrink-0">
-                                Chờ
-                              </span>
-                            )}
+                            <span className={`text-[7px] px-0.5 rounded font-bold shrink-0 ${typeConfig.tagColor}`}>
+                              {typeConfig.tag}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -605,7 +715,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                   style={{ top: `${nowY}px` }}
                 >
                   <div
-                    className="shrink-0 flex items-center justify-center bg-rose-600 text-white font-extrabold text-[9px] font-mono py-0.5 shadow-sm rounded-r z-30"
+                    className="shrink-0 flex items-center justify-center bg-rose-600 text-white font-extrabold text-[8.5px] font-mono py-0.5 shadow-sm rounded-r z-30"
                     style={{ width: `${TIME_COL_WIDTH}px` }}
                   >
                     {nowTimeStr}
@@ -654,8 +764,10 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-500 font-medium">
-            💡 Chạm vào khối để xem chi tiết
+          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+            <span>📅 7 ngày trong tuần = 7 màu phân biệt</span>
+            <span>•</span>
+            <span>💡 Chạm để xem chi tiết</span>
           </div>
         </div>
       </div>
