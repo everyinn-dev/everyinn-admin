@@ -4,10 +4,10 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }) => {
   const pathname = usePathname();
 
-  const navItems = [
+  const baseNavItems = [
     {
       label: "Bảng Phòng (Gantt)",
       href: "/dashboard",
@@ -79,6 +79,18 @@ export const Sidebar: React.FC = () => {
       ),
     },
   ];
+  const financeNavItems = [
+    {
+      label: "Tài Chính",
+      href: "/finance",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+  ];
+  const navItems = isManager ? [...baseNavItems, ...financeNavItems] : baseNavItems;
 
   return (
     <aside className="w-64 border-r border-slate-200 bg-slate-50/90 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 hidden lg:flex">

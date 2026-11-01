@@ -146,7 +146,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <Topbar staff={staff} />
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
+        <Sidebar isManager={staff?.role === "manager"} />
         <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
       </div>
 
@@ -227,6 +227,19 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
           </svg>
           <span>Ưu Đãi</span>
         </Link>
+        {staff?.role === "manager" && (
+          <Link
+            href="/finance"
+            className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
+              pathname.startsWith("/finance") ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Tài Chính</span>
+          </Link>
+        )}
       </nav>
 
       {/* Global Automated Deposit Reminder Popup Modal */}

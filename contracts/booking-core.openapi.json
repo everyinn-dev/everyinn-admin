@@ -1685,6 +1685,59 @@
         }
       }
     },
+    "/internal/v1/finance/revenue-matrix": {
+      "get": {
+        "operationId": "revenueMatrix",
+        "x-callers": ["admin-bff"],
+        "summary": "Room x month revenue pivot (manager role enforced server-side, 403 FORBIDDEN_ROLE otherwise). Revenue = SUM(total_price) of confirmed bookings grouped by the Asia/Ho_Chi_Minh month of checkin_at. Defaults to the current month + 3 preceding; max 24 months.",
+        "parameters": [
+          { "name": "from", "in": "query", "schema": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" } },
+          { "name": "to", "in": "query", "schema": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["from", "to", "months", "basis", "status", "rooms", "columnTotals", "grandTotal", "bookingCount"],
+                  "properties": {
+                    "from": { "type": "string" },
+                    "to": { "type": "string" },
+                    "months": { "type": "array", "items": { "type": "string" } },
+                    "basis": { "type": "string", "enum": ["checkin_at"] },
+                    "status": { "type": "string", "enum": ["confirmed"] },
+                    "rooms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["roomId", "roomNumber", "roomClass", "floor", "values", "total"],
+                        "properties": {
+                          "roomId": { "type": "string" },
+                          "roomNumber": { "type": "string" },
+                          "roomClass": { "type": "string" },
+                          "floor": { "type": "integer" },
+                          "values": { "type": "array", "items": { "type": "integer" } },
+                          "total": { "type": "integer" }
+                        }
+                      }
+                    },
+                    "columnTotals": { "type": "array", "items": { "type": "integer" } },
+                    "grandTotal": { "type": "integer" },
+                    "bookingCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/internal/v1/deposit-reminders": {
       "get": {
         "operationId": "depositReminders",
