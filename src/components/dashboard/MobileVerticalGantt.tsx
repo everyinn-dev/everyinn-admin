@@ -315,7 +315,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
             className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs active:scale-95"
             title="Cuộn tới thời gian hiện tại"
           >
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
             <span>Bây giờ ({nowTimeStr})</span>
           </button>
         )}
@@ -323,10 +323,16 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
 
       {/* Main Gantt Scroll Container */}
       <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        {/* Scrollable Viewport with Sticky Headers */}
+        {/* Scrollable Viewport with Sticky Headers (Tối ưu phần cứng: loại bỏ scroll-smooth trên CSS container để tránh giật lag khi touch) */}
         <div
           ref={containerRef}
-          className="relative overflow-auto max-h-[72vh] min-h-[500px] scroll-smooth overscroll-contain select-none"
+          className="relative overflow-auto max-h-[72vh] min-h-[500px] overscroll-contain select-none"
+          style={{
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-x pan-y",
+            willChange: "scroll-position",
+            transform: "translateZ(0)",
+          }}
         >
           <div
             className="relative"
@@ -336,8 +342,8 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
               height: `${totalTimelineHeight + HEADER_HEIGHT}px`,
             }}
           >
-            {/* ================= STICKY ROOM HEADER ROW ================= */}
-            <div className="sticky top-0 z-30 flex bg-white/95 backdrop-blur-sm border-b border-slate-200 shadow-xs">
+            {/* ================= STICKY ROOM HEADER ROW (Loại bỏ backdrop-blur để cuộn mượt 60fps trên mobile) ================= */}
+            <div className="sticky top-0 z-30 flex bg-white border-b border-slate-200 shadow-xs">
               {/* Corner: Time / Date Header */}
               <div
                 className="sticky left-0 z-40 bg-slate-50 border-r border-slate-200 flex flex-col items-center justify-center px-1 text-center shadow-[2px_0_4px_rgba(0,0,0,0.04)] shrink-0"
@@ -382,8 +388,15 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                 {days.map((day) => {
                   const dayTheme = DAY_OF_WEEK_THEMES[day.dayOfWeek];
                   return (
-                    <div key={day.dateStr} className="flex flex-col">
-                      {/* Day Header Marker in Column (7 ngày 7 màu riêng biệt) */}
+                    <div
+                      key={day.dateStr}
+                      className="flex flex-col"
+                      style={{
+                        contentVisibility: isMonth ? "auto" : "visible",
+                        containIntrinsicSize: isMonth ? `${dayHeight}px` : "auto",
+                      }}
+                    >
+                      {/* Day Header Marker in Column (7 ngày 7 màu riêng biệt, không nhấp nháy) */}
                       {isMonth && (
                         <div
                           id={`mobile-day-${day.dateStr}`}
@@ -396,7 +409,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                           <div className="flex items-center gap-0.5">
                             <span className="uppercase text-[8.5px] font-extrabold">{day.weekday}</span>
                             {day.isToday && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
                             )}
                           </div>
                           <span className="text-[7.5px] font-mono opacity-90">{day.dateFormatted}</span>
@@ -454,12 +467,19 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     height: `${totalTimelineHeight}px`,
                   }}
                 >
-                  {/* Days and Hour Rows Background */}
+                  {/* Days and Hour Rows Background (Tối ưu content-visibility để bỏ qua vẽ DOM ngoài viewport) */}
                   {days.map((day) => {
                     const dayTheme = DAY_OF_WEEK_THEMES[day.dayOfWeek];
                     return (
-                      <div key={day.dateStr} className={`flex flex-col ${dayTheme.daySlotTint}`}>
-                        {/* Day Header divider row (phân chia ngày mới rõ ràng với 7 màu cho 7 ngày) */}
+                      <div
+                        key={day.dateStr}
+                        className={`flex flex-col ${dayTheme.daySlotTint}`}
+                        style={{
+                          contentVisibility: isMonth ? "auto" : "visible",
+                          containIntrinsicSize: isMonth ? `${dayHeight}px` : "auto",
+                        }}
+                      >
+                        {/* Day Header divider row (7 màu, không nhấp nháy) */}
                         {isMonth && (
                           <div
                             className={`h-[32px] border-b flex items-center justify-center px-0.5 text-[8.5px] font-bold ${
@@ -471,8 +491,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                             }`}
                           >
                             {day.isToday ? (
-                              <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[7.5px] font-extrabold uppercase tracking-wider shadow-2xs flex items-center gap-1">
-                                <span className="w-1 h-1 rounded-full bg-white animate-ping" />
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[7.5px] font-extrabold uppercase tracking-wider shadow-2xs">
                                 Nay
                               </span>
                             ) : (
@@ -489,7 +508,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                           return (
                             <div
                               key={slot.id}
-                              className={`border-b relative group ${
+                              className={`border-b relative ${
                                 slot.isNight ? "bg-indigo-50/20 border-slate-200" : "border-slate-100"
                               }`}
                               style={{ height: `${height}px` }}
@@ -497,7 +516,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                               {/* Tap Slot to Book */}
                               <Link
                                 href={`/bookings/new?roomId=${room.id}&date=${day.dateStr}&hour=${slot.hour}`}
-                                className="absolute inset-0 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/10 transition-opacity"
+                                className="absolute inset-0 active:bg-emerald-500/15"
                                 title={`Đặt phòng ${room.roomNumber} lúc ${slot.label}`}
                               />
                             </div>
@@ -507,7 +526,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     );
                   })}
 
-                  {/* Room Blocks (Bảo trì / Khóa phòng - Họa tiết sọc chéo hazard hổ phách trên nền sáng) */}
+                  {/* Room Blocks (Bảo trì / Khóa phòng) */}
                   {room.blocks.map((block) => {
                     const blockStart = new Date(block.blockedFrom).getTime();
                     const blockEnd = new Date(block.blockedTo).getTime();
@@ -532,7 +551,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                         title={`🔒 Khóa phòng: ${block.reason || "Bảo trì"}\nThời gian: ${formatDateTimeShort(block.blockedFrom)} → ${formatDateTimeShort(block.blockedTo)}${block.note ? `\nGhi chú: ${block.note}` : ""}\n(Chạm để xem chi tiết / mở khóa)`}
                       >
                         {startsBefore && (
-                          <div className="text-[7.5px] text-amber-800 font-extrabold flex items-center gap-0.5 animate-pulse pb-0.5 truncate leading-none">
+                          <div className="text-[7.5px] text-amber-800 font-extrabold flex items-center gap-0.5 pb-0.5 truncate leading-none">
                             <span>▲ Tiếp</span>
                           </div>
                         )}
@@ -549,7 +568,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                         )}
 
                         {endsAfter && (
-                          <div className="text-[7.5px] text-amber-800 font-extrabold flex items-center gap-0.5 animate-pulse pt-0.5 truncate leading-none">
+                          <div className="text-[7.5px] text-amber-800 font-extrabold flex items-center gap-0.5 pt-0.5 truncate leading-none">
                             <span>▼ Sau</span>
                           </div>
                         )}
@@ -662,7 +681,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                         className={`absolute left-0.5 right-0.5 rounded border text-white shadow-2xs cursor-pointer transition-all active:scale-[0.98] z-10 p-0.5 px-1 flex flex-col justify-between overflow-hidden ${
                           typeConfig.bg
                         } ${
-                          isPending ? "border-dashed border-amber-300 animate-pulse opacity-95" : ""
+                          isPending ? "border-dashed border-amber-300 opacity-95" : ""
                         }`}
                         style={{
                           top: `${top}px`,
@@ -721,8 +740,8 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                     {nowTimeStr}
                   </div>
 
-                  <div className="flex-1 h-0.5 bg-rose-600 shadow-[0_0_6px_#f43f5e] relative">
-                    <div className="absolute right-0 -top-1 w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                  <div className="flex-1 h-0.5 bg-rose-600 relative">
+                    <div className="absolute right-0 -top-1 w-2 h-2 rounded-full bg-rose-600" />
                   </div>
                 </div>
               )}

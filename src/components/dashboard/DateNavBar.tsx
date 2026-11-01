@@ -165,7 +165,7 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
                 className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
                 title="Hệ thống tự động cuộn đến ngày hôm nay để xem booking nhanh"
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                 <span>📍 Hôm nay ({vnToday.slice(8, 10)}/{vnToday.slice(5, 7)})</span>
               </button>
             </div>

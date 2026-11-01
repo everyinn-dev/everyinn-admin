@@ -70,7 +70,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({
     >
       <div
         className={`w-full h-full rounded-lg border text-white font-medium cursor-pointer transition-all duration-150 flex items-center px-2 overflow-hidden select-none hover:scale-[1.01] hover:z-25 ${styleConfig.bg} ${
-          booking.status === "pending" ? "border-dashed opacity-85 animate-pulse" : ""
+          booking.status === "pending" ? "border-dashed opacity-85" : ""
         }`}
       >
         <div className="flex items-center gap-1.5 truncate text-xs w-full">

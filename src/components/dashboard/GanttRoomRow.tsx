@@ -146,7 +146,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
             >
               {/* Left indicator if continued from yesterday */}
               {startsBefore && (
-                <span className="shrink-0 pl-1 text-[10px] text-amber-700 animate-pulse font-mono font-extrabold">
+                <span className="shrink-0 pl-1 text-[10px] text-amber-700 font-mono font-extrabold">
                   ◀
                 </span>
               )}
@@ -169,7 +169,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
 
               {/* Right indicator if continues to tomorrow */}
               {endsAfter && (
-                <span className="shrink-0 pr-1 text-[10px] text-amber-700 animate-pulse font-mono font-extrabold">
+                <span className="shrink-0 pr-1 text-[10px] text-amber-700 font-mono font-extrabold">
                   ▶
                 </span>
               )}

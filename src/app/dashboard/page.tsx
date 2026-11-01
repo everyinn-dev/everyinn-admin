@@ -208,28 +208,56 @@ function DashboardContent() {
     return { all, haven, signature };
   }, [roomsData]);
 
-  // Statistics calculation according to viewMode (Month vs Day)
+  // Statistics calculation: Đồng bộ chuẩn công thức Báo cáo tài chính (Finance Report) & Đơn hôm nay
   const stats = useMemo(() => {
-    const totalRooms = roomsData.length;
-    let totalBookings = 0;
+    let todayBookingsCount = 0;
     let totalRevenue = 0;
-    let occupiedCount = 0;
-    const now = Date.now();
+    const seenBookingIds = new Set<string>();
+
+    // Target day boundaries (Vietnam time UTC+7)
+    // Nếu ở chế độ xem ngày: theo ngày đang chọn. Nếu ở chế độ xem tháng: theo ngày hôm nay (vnToday)
+    const targetDate = viewMode === "day" ? date : vnToday;
+    const targetDayStartMs = new Date(`${targetDate}T00:00:00+07:00`).getTime();
+    const targetDayEndMs = targetDayStartMs + 24 * 3600 * 1000;
 
     roomsData.forEach((room) => {
-      totalBookings += room.bookings.length;
       room.bookings.forEach((b) => {
-        totalRevenue += b.totalPrice;
-        const start = new Date(b.checkinAt).getTime();
-        const end = new Date(b.checkoutAt).getTime();
-        if (now >= start && now <= end && b.status !== "cancelled") {
-          occupiedCount++;
+        if (seenBookingIds.has(b.id)) return;
+        seenBookingIds.add(b.id);
+
+        // 1. Số booking hôm nay: các booking không hủy, có hoạt động lưu trú trong ngày hôm nay (hoặc ngày đang chọn)
+        if (b.status !== "cancelled") {
+          const start = new Date(b.checkinAt).getTime();
+          const end = new Date(b.checkoutAt).getTime();
+          if (start < targetDayEndMs && end > targetDayStartMs) {
+            todayBookingsCount++;
+          }
+        }
+
+        // 2. Doanh thu theo chuẩn Báo cáo tài chính (Finance Report):
+        // Quy tắc: Chỉ tính đơn có status === 'confirmed'
+        // Tính theo tháng/ngày check-in theo giờ Việt Nam (Asia/Ho_Chi_Minh UTC+7)
+        if (b.status === "confirmed") {
+          const checkinMs = new Date(b.checkinAt).getTime();
+          const vnCheckinIso = new Date(checkinMs + 7 * 3600 * 1000).toISOString();
+          const vnCheckinMonth = vnCheckinIso.slice(0, 7); // YYYY-MM
+          const vnCheckinDate = vnCheckinIso.slice(0, 10); // YYYY-MM-DD
+
+          if (viewMode === "month") {
+            if (vnCheckinMonth === month) {
+              totalRevenue += Number(b.totalPrice) || 0;
+            }
+          } else {
+            if (vnCheckinDate === date) {
+              totalRevenue += Number(b.totalPrice) || 0;
+            }
+          }
         }
       });
     });
 
-    return { totalRooms, totalBookings, totalRevenue, occupiedCount };
-  }, [roomsData]);
+    return { todayBookingsCount, totalRevenue };
+  }, [roomsData, viewMode, month, date, vnToday]);
 
   return (
     <AdminShell>
@@ -247,29 +275,20 @@ function DashboardContent() {
             </p>
           </div>
 
-          {/* Quick Metrics: Shown by Tab (Tháng or Ngày) */}
+          {/* Quick Metrics: Số booking hôm nay & Doanh thu tháng này (khớp chuẩn Finance) */}
           <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto pb-1">
             <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
-                Đang có khách
+                {viewMode === "day" && date !== vnToday ? "Số booking trong ngày" : "Số booking hôm nay"}
               </span>
               <span className="text-base font-extrabold text-amber-700 font-mono">
-                {stats.occupiedCount} / {stats.totalRooms} phòng
+                {stats.todayBookingsCount} đơn
               </span>
             </div>
 
             <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
-                {viewMode === "month" ? "Lịch đặt tháng này" : "Lịch đặt trong ngày"}
-              </span>
-              <span className="text-base font-extrabold text-emerald-700 font-mono">
-                {stats.totalBookings} lượt
-              </span>
-            </div>
-
-            <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs hidden sm:block shadow-2xs shrink-0">
-              <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
-                {viewMode === "month" ? "Doanh thu tháng" : "Doanh thu ngày"}
+                {viewMode === "month" ? "Doanh thu tháng này" : "Doanh thu ngày"}
               </span>
               <span className="text-base font-extrabold text-teal-700 font-mono">
                 {stats.totalRevenue.toLocaleString("vi-VN")} đ
