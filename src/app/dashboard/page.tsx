@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { DateNavBar } from "@/components/dashboard/DateNavBar";
 import { GanttChart } from "@/components/dashboard/GanttChart";
@@ -19,7 +19,6 @@ import { subscribeToSyncEvents } from "@/lib/syncEvents";
 
 
 function DashboardContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const vnToday = useMemo(() => getVnToday(), []);
@@ -54,6 +53,15 @@ function DashboardContent() {
   // ETag tracking to avoid redundant D1 scans and re-renders
   const lastEtagRef = useRef<string | null>(null);
   const lastKeyRef = useRef<string>("");
+  const lastFetchTimeRef = useRef<number>(0);
+
+  // Dynamic backoff polling interval (20s -> 40s -> 60s khi liên tục 304)
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<number>(20000);
+
+  const resetPollingInterval = () => {
+    pollingIntervalRef.current = 20000;
+  };
 
   // Persist dashboard prefs whenever viewMode or roomFilter changes
   useEffect(() => {
@@ -61,9 +69,11 @@ function DashboardContent() {
   }, [viewMode, roomFilter]);
 
   // Fetch Gantt data according to viewMode with ETag and strict cache-busting
-  const fetchData = async (silent = false) => {
+  const fetchData = async (silent = false): Promise<boolean> => {
     try {
       if (!silent) setLoading(true);
+      lastFetchTimeRef.current = Date.now();
+
       const currentKey = viewMode === "month" ? `m-${month}` : `d-${date}`;
       // If user switched month or date, clear ETag to ensure fresh fetch for new view
       if (lastKeyRef.current !== currentKey) {
@@ -92,12 +102,12 @@ function DashboardContent() {
 
       // HTTP 304 Not Modified: Data is identical, zero DOM re-render, zero DB scanning
       if (res.status === 304) {
-        return;
+        return true;
       }
 
       if (!res.ok) {
         if (res.status === 401) {
-          return; // apiFetch already cleans cache and dispatches redirect
+          return false; // apiFetch already cleans cache and dispatches redirect
         }
         throw new Error("Lỗi tải dữ liệu phòng.");
       }
@@ -109,8 +119,10 @@ function DashboardContent() {
 
       const data = (await res.json()) as any;
       setRoomsData(data.rooms || []);
+      return false;
     } catch (err) {
       console.error(err);
+      return false;
     } finally {
       if (!silent) setLoading(false);
     }
@@ -118,69 +130,107 @@ function DashboardContent() {
 
   // Primary fetch when viewMode / month / date changes
   useEffect(() => {
+    resetPollingInterval();
     fetchData();
   }, [viewMode, month, date]);
 
-  // 1. Cross-tab real-time sync (BroadcastChannel)
+  // 1. Cross-tab real-time sync (BroadcastChannel): nhận sự kiện thay đổi từ tab khác
   useEffect(() => {
     const unsubscribe = subscribeToSyncEvents((eventType) => {
       if (eventType === "BOOKINGS_CHANGED" || eventType === "ROOM_BLOCKS_CHANGED") {
+        resetPollingInterval();
         fetchData(true);
       }
     });
     return unsubscribe;
   }, [viewMode, month, date]);
 
-  // 2. Tab focus & visibility change sync (fetches fresh when admin switches back to this tab)
+  // 2. Tab focus & visibility change sync (cooldown 15s, chống gọi lặp đồng thời giữa focus và visibilitychange)
   useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchData(true);
+    const handleActive = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        const now = Date.now();
+        if (now - lastFetchTimeRef.current >= 15000) {
+          resetPollingInterval();
+          fetchData(true);
+        }
       }
     };
-    const onFocus = () => {
-      fetchData(true);
-    };
 
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", handleActive);
+    window.addEventListener("focus", handleActive);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", handleActive);
+      window.removeEventListener("focus", handleActive);
     };
   }, [viewMode, month, date]);
 
-  // 3. 20-second gentle background polling for multi-admin updates (protected by ETag 304)
+  // 3. Adaptive background polling with backoff: 20s -> 40s -> 60s khi 304, reset về 20s khi có thay đổi
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        fetchData(true);
-      }
-    }, 20000);
+    let isCancelled = false;
 
-    return () => clearInterval(interval);
+    const schedulePoll = () => {
+      if (isCancelled) return;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+
+      pollTimerRef.current = setTimeout(async () => {
+        if (isCancelled) return;
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          const is304 = await fetchData(true);
+          if (is304) {
+            // Tăng dần chu kỳ khi dữ liệu không đổi: 20s -> 40s -> 60s
+            if (pollingIntervalRef.current < 40000) {
+              pollingIntervalRef.current = 40000;
+            } else if (pollingIntervalRef.current < 60000) {
+              pollingIntervalRef.current = 60000;
+            }
+          } else {
+            // Có dữ liệu mới: đưa về chu kỳ thăm dò cơ sở 20s
+            pollingIntervalRef.current = 20000;
+          }
+        }
+        schedulePoll();
+      }, pollingIntervalRef.current);
+    };
+
+    schedulePoll();
+
+    return () => {
+      isCancelled = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
   }, [viewMode, month, date]);
 
   const handleViewModeChange = (mode: "month" | "day") => {
+    resetPollingInterval();
     setViewMode(mode);
     const newUrl =
       mode === "month"
         ? `/dashboard?view=month&month=${month}`
         : `/dashboard?view=day&date=${date}`;
-    router.replace(newUrl, { scroll: false });
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", newUrl);
+    }
   };
 
   const handleMonthChange = (newMonth: string) => {
+    resetPollingInterval();
     setMonth(newMonth);
-    router.replace(`/dashboard?view=month&month=${newMonth}`, { scroll: false });
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/dashboard?view=month&month=${newMonth}`);
+    }
   };
 
   const handleDateChange = (newDate: string) => {
+    resetPollingInterval();
     setDate(newDate);
-    router.replace(`/dashboard?view=day&date=${newDate}`, { scroll: false });
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/dashboard?view=day&date=${newDate}`);
+    }
   };
 
   const handleScrollToToday = () => {
+    resetPollingInterval();
     // If in month view, fire scroll trigger to animate to today
     if (viewMode === "month") {
       // If currently in a different month, switch to current month first
@@ -192,6 +242,11 @@ function DashboardContent() {
       // In day view, jump to today
       handleDateChange(vnToday);
     }
+  };
+
+  const handleManualRefresh = () => {
+    resetPollingInterval();
+    fetchData();
   };
 
   // Filter rooms
@@ -308,7 +363,7 @@ function DashboardContent() {
           onScrollToToday={handleScrollToToday}
           roomFilter={roomFilter}
           onFilterChange={setRoomFilter}
-          onRefresh={fetchData}
+          onRefresh={handleManualRefresh}
           isLoading={loading}
           roomCounts={roomCounts}
           onOpenRoomLockModal={() => setIsLockModalOpen(true)}

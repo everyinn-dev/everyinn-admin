@@ -49,6 +49,7 @@ export interface CoreCallOptions {
   ifNoneMatch?: string | null;
   correlationId?: string;
   timeoutMs?: number;
+  maxAttempts?: number;
 }
 
 export interface CoreResponse<T> {
@@ -125,7 +126,7 @@ export async function callCore<T>(
   }
 
   const isIdempotent = method === "GET" || Boolean(opts.idempotencyKey);
-  const maxAttempts = isIdempotent ? 3 : 1;
+  const maxAttempts = opts.maxAttempts ?? (isIdempotent ? 3 : 1);
   const timeoutMs = opts.timeoutMs ?? 8000;
 
   let lastError: unknown = null;

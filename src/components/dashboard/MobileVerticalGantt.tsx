@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import Link from "next/link";
 import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import {
   TIMELINE_SLOTS,
@@ -508,18 +507,11 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                           return (
                             <div
                               key={slot.id}
-                              className={`border-b relative ${
+                              className={`border-b ${
                                 slot.isNight ? "bg-indigo-50/20 border-slate-200" : "border-slate-100"
                               }`}
                               style={{ height: `${height}px` }}
-                            >
-                              {/* Tap Slot to Book */}
-                              <Link
-                                href={`/bookings/new?roomId=${room.id}&date=${day.dateStr}&hour=${slot.hour}`}
-                                className="absolute inset-0 active:bg-emerald-500/15"
-                                title={`Đặt phòng ${room.roomNumber} lúc ${slot.label}`}
-                              />
-                            </div>
+                            />
                           );
                         })}
                       </div>

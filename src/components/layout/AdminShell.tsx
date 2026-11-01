@@ -20,6 +20,9 @@ interface AdminShellProps {
   children: React.ReactNode;
 }
 
+const AUTH_VERIFY_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown for background /api/auth/me checks
+let lastAuthVerifiedMs = 0;
+
 export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
@@ -29,6 +32,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   // 1. Listen for global session expiration (triggered by 401s from any API or watchdog)
   useEffect(() => {
     const unsubscribe = onSessionExpired((reason) => {
+      lastAuthVerifiedMs = 0;
       clearAllCache();
       router.push(`/login?reason=${reason}`);
     });
@@ -73,27 +77,31 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
         setStaff(cached);
         setLoading(false);
 
-        // Silently verify in background to ensure JWT cookie is still valid
-        fetch("/api/auth/me")
-          .then(async (res) => {
-            if (!res.ok) {
-              dispatchSessionExpired("unauthorized");
-            } else {
-              const data = (await res.json()) as any;
-              if (data.authenticated && data.staff) {
-                const refreshedStaff: StaffIdentity = {
-                  id: data.staff.id ?? 0,
-                  phone: data.staff.phone,
-                  fullName: data.staff.fullName,
-                  role: data.staff.role,
-                  expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
-                };
-                setStaff(refreshedStaff);
-                setCachedStaffIdentity(refreshedStaff);
+        // Silently verify in background to ensure JWT cookie is still valid (throttled to 15 mins)
+        const now = Date.now();
+        if (now - lastAuthVerifiedMs >= AUTH_VERIFY_COOLDOWN_MS) {
+          lastAuthVerifiedMs = now;
+          fetch("/api/auth/me")
+            .then(async (res) => {
+              if (!res.ok) {
+                dispatchSessionExpired("unauthorized");
+              } else {
+                const data = (await res.json()) as any;
+                if (data.authenticated && data.staff) {
+                  const refreshedStaff: StaffIdentity = {
+                    id: data.staff.id ?? 0,
+                    phone: data.staff.phone,
+                    fullName: data.staff.fullName,
+                    role: data.staff.role,
+                    expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
+                  };
+                  setStaff(refreshedStaff);
+                  setCachedStaffIdentity(refreshedStaff);
+                }
               }
-            }
-          })
-          .catch(() => {});
+            })
+            .catch(() => {});
+        }
         return;
       }
 
@@ -106,6 +114,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
         }
         const data = (await res.json()) as any;
         if (data.authenticated && data.staff) {
+          lastAuthVerifiedMs = Date.now();
           const freshStaff: StaffIdentity = {
             id: data.staff.id ?? 0,
             phone: data.staff.phone,

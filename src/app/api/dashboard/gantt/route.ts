@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       staff,
       query: month ? { month } : { date },
       ifNoneMatch: req.headers.get("if-none-match"),
+      maxAttempts: 1,
     });
 
     if (res.status === 304) {
