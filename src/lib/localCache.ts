@@ -186,11 +186,23 @@ export const setCachedPricingRulesClient = (rules: PricingRule[]): void =>
   setCache(CACHE_KEY.PRICING_RULES, rules, CACHE_TTL.PRICING_RULES);
 
 // --- Configs ---
-export const getCachedConfigsClient = (): CachedConfigs | null =>
-  getCache<CachedConfigs>(CACHE_KEY.CONFIGS);
+export const getCachedConfigsClient = (): CachedConfigs | null => {
+  const cached = getCache<CachedConfigs>(CACHE_KEY.CONFIGS);
+  if (!cached) return null;
+  // Safety guard: If hourlySlots in cache is missing daytime hours (e.g. stale [21, 22, 23, 24]),
+  // automatically sanitize to full standard 08:00 - 21:00 slots.
+  if (!Array.isArray(cached.hourlySlots) || !cached.hourlySlots.some((h) => h >= 8 && h <= 20)) {
+    cached.hourlySlots = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+  }
+  return cached;
+};
 
-export const setCachedConfigsClient = (configs: CachedConfigs): void =>
+export const setCachedConfigsClient = (configs: CachedConfigs): void => {
+  if (configs && (!Array.isArray(configs.hourlySlots) || !configs.hourlySlots.some((h) => h >= 8 && h <= 20))) {
+    configs.hourlySlots = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+  }
   setCache(CACHE_KEY.CONFIGS, configs, CACHE_TTL.CONFIGS);
+};
 
 // --- Staff Identity (from JWT /api/auth/me) ---
 export const getCachedStaffIdentity = (): StaffIdentity | null =>

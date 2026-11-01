@@ -29,13 +29,31 @@ export const HourlyFields: React.FC<HourlyFieldsProps> = ({
   onChangeHour,
   onChangeDuration,
 }) => {
+  // Business rule safety guard: Hourly check-in is 08:00 – 21:00.
+  // If hourlySlots is missing daytime slots (e.g. legacy corrupted [21, 22, 23, 24]),
+  // fallback to full standard DEFAULT_HOURLY_SLOTS (08:00 -> 21:00).
+  const validSlots = React.useMemo(() => {
+    if (Array.isArray(hourlySlots) && hourlySlots.some((h) => h >= 8 && h <= 20)) {
+      return hourlySlots;
+    }
+    return DEFAULT_HOURLY_SLOTS;
+  }, [hourlySlots]);
+
+  // Auto-correct checkinHour if set to an invalid hour outside validSlots
+  React.useEffect(() => {
+    if (!validSlots.includes(checkinHour)) {
+      const fallback = validSlots.includes(14) ? 14 : validSlots[0];
+      onChangeHour(fallback);
+    }
+  }, [validSlots, checkinHour, onChangeHour]);
+
   const checkoutHour = checkinHour + durationHours;
   const isNextDay = checkoutHour >= 24;
   const displayCheckoutHour = isNextDay ? checkoutHour - 24 : checkoutHour;
 
   return (
     <div className="space-y-4 p-4 rounded-2xl bg-slate-100/80 border border-slate-200/80">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
         <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
           ⏱️ Đặt phòng Theo Giờ (Combo khởi điểm 3 giờ, nhận phòng 08:00 – 21:00)
         </span>
@@ -58,26 +76,51 @@ export const HourlyFields: React.FC<HourlyFieldsProps> = ({
             type="date"
             value={checkinDate}
             onChange={(e) => onChangeDate(e.target.value)}
-            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
           />
         </div>
 
         {/* Check-in Hour (8h -> 21h) */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-            Giờ Check-in (08:00 – 21:00)
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+              Giờ Check-in (08:00 – 21:00)
+            </label>
+            <span className="text-emerald-700 font-mono font-bold text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              {String(checkinHour).padStart(2, "0")}:00
+            </span>
+          </div>
           <select
             value={checkinHour}
             onChange={(e) => onChangeHour(Number(e.target.value))}
-            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
           >
-            {hourlySlots.map((h) => (
+            {validSlots.map((h) => (
               <option key={h} value={h}>
                 {String(h).padStart(2, "0")}:00
               </option>
             ))}
           </select>
+          {/* Quick Slot Chips (1-tap on PC & Mobile) */}
+          <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin">
+            {validSlots.map((h) => {
+              const isSelected = h === checkinHour;
+              return (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => onChangeHour(h)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-emerald-600 text-white font-bold shadow-xs scale-105"
+                      : "bg-white hover:bg-slate-200 text-slate-700 border border-slate-200"
+                  }`}
+                >
+                  {String(h).padStart(2, "0")}h
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Duration (min 3h) */}
@@ -88,7 +131,7 @@ export const HourlyFields: React.FC<HourlyFieldsProps> = ({
           <select
             value={durationHours}
             onChange={(e) => onChangeDuration(Number(e.target.value))}
-            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
+            className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
           >
             {DURATION_OPTIONS.map((d) => (
               <option key={d} value={d}>
