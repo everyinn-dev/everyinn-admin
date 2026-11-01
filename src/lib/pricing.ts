@@ -1,4 +1,4 @@
-import {
+import type {
   BookingType,
   CappingWarning,
   NightlyBreakdownItem,
@@ -125,6 +125,13 @@ function computeExtraGuestFee(
   return Math.round(extraGuests * feePerGuestNight * Math.max(1, nightsCount));
 }
 
+export function matchesBookingType(ruleBookingType: string, targetBookingType: BookingType): boolean {
+  if (ruleBookingType === targetBookingType) return true;
+  if (targetBookingType === "hourly" && (ruleBookingType === "combo3h" || ruleBookingType === "combo6h")) return true;
+  if (targetBookingType === "dayuse" && ruleBookingType === "dayroom") return true;
+  return false;
+}
+
 /**
  * Pure function to calculate room pricing based on Every Inn's business rules v2.0.
  */
@@ -171,7 +178,7 @@ export function calculatePrice(input: PricingCalculationInput): PricingBreakdown
   }
 
   const rule = pricingRules.find(
-    (r) => r.room_class === roomClass && r.booking_type === bookingType
+    (r) => r.room_class === roomClass && matchesBookingType(r.booking_type, bookingType)
   );
 
   if (!rule) {
@@ -206,8 +213,12 @@ export function calculatePrice(input: PricingCalculationInput): PricingBreakdown
     const subtotalBeforeDiscount = rule.base_price + holidaySurcharge + totalExtraFee + extraGuestFee;
 
     // Soft Capping Advisory against Overnight / Dayuse base price
-    const overnightRule = pricingRules.find((r) => r.room_class === roomClass && r.booking_type === "overnight");
-    const dayuseRule = pricingRules.find((r) => r.room_class === roomClass && r.booking_type === "dayuse");
+    const overnightRule = pricingRules.find(
+      (r) => r.room_class === roomClass && matchesBookingType(r.booking_type, "overnight")
+    );
+    const dayuseRule = pricingRules.find(
+      (r) => r.room_class === roomClass && matchesBookingType(r.booking_type, "dayuse")
+    );
     const hourlyTotal = rule.base_price + totalExtraFee;
     let cappingWarning: CappingWarning | null = null;
 

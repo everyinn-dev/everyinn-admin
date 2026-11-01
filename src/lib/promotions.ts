@@ -1,9 +1,9 @@
-import {
+import type {
   Promotion,
   PromotionEvaluationContext,
   PromotionEvaluationResult,
 } from "@/types/promotions";
-import { getLogicalStayDate } from "./pricing";
+import { getLogicalStayDate } from "./pricing.ts";
 
 function formatYmdLocal(d: Date): string {
   const y = d.getFullYear();
@@ -80,23 +80,31 @@ export function evaluatePromotion(
   }
 
   // 5. Check booking type
-  if (
-    promo.applicable_booking_types.length > 0 &&
-    !promo.applicable_booking_types.includes(ctx.bookingType)
-  ) {
-    const typeMap: Record<string, string> = {
-      hourly: "Theo giờ",
-      overnight: "Qua đêm",
-      dayuse: "Theo ngày",
-      custom: "Tuỳ chỉnh",
-    };
-    const allowedLabels = promo.applicable_booking_types.map((t) => typeMap[t] || t).join(", ");
-    return {
-      eligible: false,
-      reason: `Chỉ áp dụng cho hình thức: ${allowedLabels}.`,
-      discountAmount: 0,
-      finalPrice: basePrice,
-    };
+  if (promo.applicable_booking_types.length > 0) {
+    const isMatchingType = promo.applicable_booking_types.some((t) => {
+      if (t === ctx.bookingType) return true;
+      if (ctx.bookingType === "hourly" && ((t as string) === "combo3h" || (t as string) === "combo6h")) return true;
+      if (ctx.bookingType === "dayuse" && (t as string) === "dayroom") return true;
+      return false;
+    });
+    if (!isMatchingType) {
+      const typeMap: Record<string, string> = {
+        hourly: "Theo giờ",
+        overnight: "Qua đêm",
+        dayuse: "Theo ngày",
+        custom: "Tuỳ chỉnh",
+        combo3h: "Theo giờ (3h)",
+        combo6h: "Theo giờ (6h)",
+        dayroom: "Theo ngày",
+      };
+      const allowedLabels = promo.applicable_booking_types.map((t) => typeMap[t] || t).join(", ");
+      return {
+        eligible: false,
+        reason: `Chỉ áp dụng cho hình thức: ${allowedLabels}.`,
+        discountAmount: 0,
+        finalPrice: basePrice,
+      };
+    }
   }
 
   // 6. Check loyalty tier
