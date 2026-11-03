@@ -553,6 +553,72 @@ function FaqTab() {
   );
 }
 
+// ── Meta allowlist (AR-2) ─────────────────────────────────────────────────────────────────────
+const lines = (s: string) => s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+
+function MetaAccessCard({ settings, onSaved }: { settings: AgentSettings; onSaved: (s: AgentSettings) => void }) {
+  const toast = useToast();
+  const err = useErr();
+  const m = settings.metaAccess;
+  const [mode, setMode] = useState(m.mode);
+  const [fbNames, setFbNames] = useState(m.facebook.names.join("\n"));
+  const [igUsers, setIgUsers] = useState(m.instagram.usernames.join("\n"));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setMode(settings.metaAccess.mode);
+    setFbNames(settings.metaAccess.facebook.names.join("\n"));
+    setIgUsers(settings.metaAccess.instagram.usernames.join("\n"));
+  }, [settings]);
+  const save = async () => {
+    if (mode === "open" && !window.confirm("Chế độ MỞ: AI sẽ trả lời MỌI khách nhắn Fanpage/Instagram. Chỉ bật khi đã chốt chuyển đổi (cutover). Tiếp tục?")) return;
+    setSaving(true);
+    try {
+      const body = {
+        expectedVersion: settings.version,
+        metaAccess: { mode, facebook: { names: lines(fbNames), ids: m.facebook.ids }, instagram: { usernames: lines(igUsers), ids: m.instagram.ids } },
+      };
+      const res = await agentApi<{ settings: AgentSettings }>("settings", { method: "PUT", body });
+      if (res.data) onSaved(res.data.settings);
+      toast.success("Đã lưu danh sách Meta.");
+    } catch (e) {
+      err(e, "Không lưu được danh sách Meta.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className={`${card} lg:col-span-2`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-black text-slate-800">📘 Facebook / Instagram — AI trả lời ai?</p>
+        <select className={`${input} w-auto`} value={mode} onChange={(e) => setMode(e.target.value as "allowlist" | "open")}>
+          <option value="allowlist">Chỉ danh sách bên dưới (thử nghiệm)</option>
+          <option value="open">MỞ — mọi khách (chỉ khi cutover)</option>
+        </select>
+      </div>
+      <p className="text-[11px] text-slate-500">
+        Người không có trong danh sách: AI <b>im lặng</b> và hệ thống <b>không lưu</b> tin nhắn của họ (họ vẫn thấy trong hộp thư Meta như bình thường).
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <p className={label}>Tên Facebook (mỗi dòng một tên)</p>
+          <textarea className={`${input} h-20`} value={fbNames} onChange={(e) => setFbNames(e.target.value)} placeholder="Đinh Gia Huy" />
+          {m.facebook.ids.length > 0 && <p className="text-[10px] text-slate-400">+ {m.facebook.ids.length} ID cố định</p>}
+        </div>
+        <div className="space-y-1">
+          <p className={label}>Username Instagram (mỗi dòng một username)</p>
+          <textarea className={`${input} h-20 font-mono`} value={igUsers} onChange={(e) => setIgUsers(e.target.value)} placeholder="huykhongnguu" />
+          {m.instagram.ids.length > 0 && <p className="text-[10px] text-slate-400">+ {m.instagram.ids.length} ID cố định</p>}
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button onClick={save} disabled={saving} className={`${btn} bg-emerald-600 text-white`}>
+          💾 Lưu danh sách Meta
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab 5: tool switches + Telegram staff mapping ───────────────────────────────────────────
 function ToolsTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (s: AgentSettings) => void }) {
   const toast = useToast();
@@ -606,6 +672,7 @@ function ToolsTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (s:
           ＋ Thêm người
         </button>
       </div>
+      <MetaAccessCard settings={settings} onSaved={onSaved} />
       <div className="lg:col-span-2 flex justify-between items-center">
         <Link href="/agent-inbox" className="text-xs font-bold text-emerald-700 underline">
           → Chat thử với AI trong Hộp thư (Sandbox)

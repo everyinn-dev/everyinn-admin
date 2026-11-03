@@ -116,6 +116,12 @@ export interface AgentSettings {
   dailyNeuronBudget: number;
   toolSwitches: Record<string, boolean>;
   telegramStaffMap: Record<string, { staffId: number; role: "manager" | "receptionist"; name: string }>;
+  /** AR-2: who the AI answers on Facebook/Instagram (allowlist = everyone else is ignored and not stored). */
+  metaAccess: {
+    mode: "allowlist" | "open";
+    facebook: { names: string[]; ids: string[] };
+    instagram: { usernames: string[]; ids: string[] };
+  };
   version: number;
 }
 

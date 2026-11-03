@@ -255,6 +255,7 @@ export function AgentInbox() {
                     <p className="text-[10px] font-bold text-slate-500 mb-1">
                       {m.senderType === "guest" ? "Khách" : m.senderType === "ai" ? `🤖 ${settings?.botName ?? "AI"}` : m.senderType === "staff" ? `👤 ${m.staff?.name ?? "Nhân viên"}` : "⚙️ Hệ thống"} · {formatVnTime(m.createdAt)}
                       {draft && " · 📝 Nháp chờ duyệt"}
+                      {m.status === "failed" && <span className="text-rose-700"> · ⚠️ Meta không nhận (ngoài 24h?) — trả lời trong hộp thư Meta</span>}
                     </p>
                     {draft ? (
                       <textarea value={draftEdits[m.id] ?? m.text} onChange={(e) => setDraftEdits({ ...draftEdits, [m.id]: e.target.value })} rows={4} className="w-full min-w-[240px] bg-white rounded-lg border border-amber-200 p-2 text-base sm:text-sm" />

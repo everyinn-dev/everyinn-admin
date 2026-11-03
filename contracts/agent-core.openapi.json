@@ -1959,6 +1959,58 @@
           "telegramStaffMap": {
             "type": "object"
           },
+          "metaAccess": {
+            "type": "object",
+            "description": "AR-2: who the AI answers on Facebook/Instagram. allowlist (default, nobody) ignores every other sender before anything is stored; open = everyone (owner-approved cutover only).",
+            "required": [
+              "mode",
+              "facebook",
+              "instagram"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "allowlist",
+                  "open"
+                ]
+              },
+              "facebook": {
+                "type": "object",
+                "properties": {
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "instagram": {
+                "type": "object",
+                "properties": {
+                  "usernames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "version": {
             "type": "integer"
           },
