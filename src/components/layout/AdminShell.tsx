@@ -221,6 +221,17 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
           <span>Danh Sách</span>
         </Link>
         <Link
+          href="/agent-inbox"
+          className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
+            pathname.startsWith("/agent") ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          <span>AI</span>
+        </Link>
+        <Link
           href="/promotions"
           className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
             pathname.startsWith("/promotions") ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800"

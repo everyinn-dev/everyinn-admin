@@ -1,0 +1,2456 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Every Inn Agent Core — AdminApi (staff API)",
+    "version": "agent-internal-v1",
+    "description": "Provider-owned contract of everyinn-agent-core (ADR-013/014). Reachable ONLY through the Service Binding `{ service: everyinn-agent-core(-dev), entrypoint: AdminApi }` held by everyinn-admin — the public workers.dev URL serves only /health and /webhooks/*. Headers: X-EI-Caller: admin-bff, X-EI-Actor-Id (digits), X-EI-Actor-Role (manager|receptionist), X-EI-Actor-Name (URI-encoded). Door codes are never logged; plaintext only on reveal=1 endpoints. Errors: { error: { code, message, request_id, details? } }. Responses are Cache-Control: private, no-store."
+  },
+  "servers": [
+    {
+      "url": "https://agent-core.internal",
+      "description": "Service Binding (AdminApi entrypoint) — not a public host"
+    }
+  ],
+  "x-callers-legend": {
+    "admin-bff": "Admin BFF (everyinn-admin) — the only caller of AdminApi"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Liveness (also on the public export).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "DB down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Persona, model, quiet/busy hours, rules, tool switches (ETag).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateSettings",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Patch settings (unknown keys rejected). expectedVersion required.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "manager",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/settings/busy": {
+      "post": {
+        "operationId": "setBusy",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Instant busy toggle: exactly one of minutes (15..720), until (≤24h), off.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "minutes": {
+                    "type": "integer"
+                  },
+                  "until": {
+                    "type": "string"
+                  },
+                  "off": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes": {
+      "get": {
+        "operationId": "listDoorCodes",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Gate codes (newest first) + 6 lockboxes; masked unless reveal=1.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorCodes"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "reveal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/door-codes/gate": {
+      "post": {
+        "operationId": "createGateCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "New gate code. Without validUntil it becomes current from validFrom and closes open-ended codes.",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "gateCode"
+                  ],
+                  "properties": {
+                    "gateCode": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9*# ]{3,20}$"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "validFrom": {
+                    "type": "string"
+                  },
+                  "validUntil": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes/gate/{gateCodeId}/deactivate": {
+      "parameters": [
+        {
+          "name": "gateCodeId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^gate_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "deactivateGateCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Deactivate a gate code.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes/lockbox/{roomId}": {
+      "parameters": [
+        {
+          "name": "roomId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z]{3,5}-\\d{3}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "putLockbox",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Set the fixed lockbox code of a room (OD-4).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/bookings/{bookingId}/door-code": {
+      "parameters": [
+        {
+          "name": "bookingId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getBookingDoorCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Resolution (override → vault gate → missing; lockbox) for a stay; plaintext only with reveal=1.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingDoorCode"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkinAt",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkoutAt",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reveal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "putBookingDoorCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Per-booking gate code override.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "gateCode"
+                ],
+                "properties": {
+                  "gateCode": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteBookingDoorCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Remove the override (fall back to the vault).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/inbox/summary": {
+      "get": {
+        "operationId": "inboxSummary",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Nav badge counts (ETag = inbox version).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "pendingEscalations",
+                    "pendingDrafts",
+                    "inboxVersion"
+                  ],
+                  "properties": {
+                    "pendingEscalations": {
+                      "type": "integer"
+                    },
+                    "pendingDrafts": {
+                      "type": "integer"
+                    },
+                    "inboxVersion": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Keyset page (30) by last message; filter all|pending|ai|human (ETag on first page).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversations",
+                    "nextCursor",
+                    "inboxVersion"
+                  ],
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Conversation"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "inboxVersion": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "pending",
+                "ai",
+                "human"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/conversations/{conversationId}": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Detail (phone revealed) + latest 30 messages oldest-first; marks read.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "messages",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/takeover": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "takeoverConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Staff takes over; AI silent for takeover_minutes.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/release": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "releaseConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Hand the conversation back to the AI.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/messages": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "staffReply",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Staff replies directly to the guest (sandbox in AR-1).",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/runs": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listRuns",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "'AI đang nghĩ gì' — latest 10 brain turns (route, tools, RAG chunk ids, tokens, neurons). Never door codes.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "runs"
+                  ],
+                  "properties": {
+                    "runs": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/sandbox/messages": {
+      "post": {
+        "operationId": "sandboxMessage",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Staff chats as a test guest; runs one brain turn synchronously against the env's real Cores (call with a ~25s timeout).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "turn",
+                    "messages"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "turn": {
+                      "$ref": "#/components/schemas/Turn"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "senderName": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/messages/{messageId}/approve": {
+      "parameters": [
+        {
+          "name": "messageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "approveDraft",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Supervised mode: send the AI draft (optionally edited).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 3000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/messages/{messageId}/reject": {
+      "parameters": [
+        {
+          "name": "messageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "rejectDraft",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Discard an AI draft.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/escalations": {
+      "get": {
+        "operationId": "listEscalations",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Owner escalations by status (default pending) or the pending ones of a conversation.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "escalations"
+                  ],
+                  "properties": {
+                    "escalations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Escalation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "resolved",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/escalations/{escalationId}/resolve": {
+      "parameters": [
+        {
+          "name": "escalationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "resolveEscalation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "confirm_deposit|confirm_full (CONFIRM_HOLD_PAYMENT → Booking Core confirm with THIS staff member as actor, idempotent), reject, resolve.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "bookingId": {
+                      "type": "string"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "escalation": {
+                      "$ref": "#/components/schemas/Escalation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "confirm_deposit",
+                      "confirm_full",
+                      "reject",
+                      "resolve"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/checkin-schedules": {
+      "get": {
+        "operationId": "listCheckinSchedules",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "OD-5 delivery schedules by status (default reminded).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schedules"
+                  ],
+                  "properties": {
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Schedule"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "scheduled",
+                "waiting_owner_code",
+                "reminded",
+                "sent",
+                "cancelled",
+                "failed"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/checkin-schedules/{scheduleId}/message": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^chk_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "checkinScheduleMessage",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Ready-to-paste check-in text WITH codes for manual sending (OD-5b). text=null + missing[] when a code is missing.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schedule",
+                    "text",
+                    "missing"
+                  ],
+                  "properties": {
+                    "schedule": {
+                      "$ref": "#/components/schemas/Schedule"
+                    },
+                    "text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "missing": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/checkin-schedules/{scheduleId}/mark-sent": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^chk_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "markCheckinSent",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Owner sent the check-in message manually.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/knowledge/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "RAG documents (metadata).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "documents"
+                  ],
+                  "properties": {
+                    "documents": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Add a .md/.txt knowledge document (422 SECRET_IN_KNOWLEDGE if it looks like it contains a door code).",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "category",
+                  "content"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "category": {
+                    "enum": [
+                      "house_rules",
+                      "checkin_guide",
+                      "room_info",
+                      "local_guide",
+                      "policy",
+                      "general"
+                    ]
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "sourceFilename": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/knowledge/documents/{documentId}": {
+      "parameters": [
+        {
+          "name": "documentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Document incl. raw content.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Edit a document (expectedVersion). Content/title edits reset status to pending.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Delete a document, its chunks and vectors.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/knowledge/documents/{documentId}/index": {
+      "parameters": [
+        {
+          "name": "documentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "indexDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Chunk (~800 chars) + embed (bge-m3) + upsert into Vectorize.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "chunks": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/faqs": {
+      "get": {
+        "operationId": "listFaqs",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Exact FAQ answers used by the pre-router (no LLM).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "faqs"
+                  ],
+                  "properties": {
+                    "faqs": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createFaq",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Add an exact FAQ.",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question",
+                  "answer"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "answer": {
+                    "type": "string"
+                  },
+                  "keywords": {
+                    "type": "string",
+                    "description": "comma-separated"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/faqs/{faqId}": {
+      "parameters": [
+        {
+          "name": "faqId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateFaq",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Edit an FAQ (expectedVersion).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteFaq",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Delete an FAQ.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "request_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "QuietHours": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "start",
+          "end",
+          "holdBufferMinutes"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "start": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}$"
+          },
+          "end": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}$"
+          },
+          "holdBufferMinutes": {
+            "type": "integer"
+          }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "required": [
+          "botName",
+          "personaPrompt",
+          "modelId",
+          "supervisedMode",
+          "busyUntil",
+          "quietHours",
+          "busy",
+          "hotline",
+          "defaultHoldMinutes",
+          "depositPercent",
+          "takeoverMinutes",
+          "autoCheckinWindowHours",
+          "manualReminderLeadHours",
+          "dailyNeuronBudget",
+          "toolSwitches",
+          "version"
+        ],
+        "properties": {
+          "botName": {
+            "type": "string"
+          },
+          "personaPrompt": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "supervisedMode": {
+            "type": "boolean"
+          },
+          "busyUntil": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quietHours": {
+            "$ref": "#/components/schemas/QuietHours"
+          },
+          "busy": {
+            "type": "object",
+            "required": [
+              "active",
+              "reason",
+              "until"
+            ],
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "reason": {
+                "enum": [
+                  "quiet_hours",
+                  "manual",
+                  null
+                ]
+              },
+              "until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "busyAutoReplyTemplate": {
+            "type": "string"
+          },
+          "checkinMessageTemplate": {
+            "type": "string"
+          },
+          "hotline": {
+            "type": "string"
+          },
+          "maxDiscountPercent": {
+            "type": "integer"
+          },
+          "defaultHoldMinutes": {
+            "type": "integer"
+          },
+          "depositPercent": {
+            "type": "integer"
+          },
+          "takeoverMinutes": {
+            "type": "integer"
+          },
+          "autoCheckinWindowHours": {
+            "type": "integer"
+          },
+          "manualReminderLeadHours": {
+            "type": "integer"
+          },
+          "dailyNeuronBudget": {
+            "type": "integer"
+          },
+          "replyRateLimit": {
+            "type": "object",
+            "properties": {
+              "maxReplies": {
+                "type": "integer"
+              },
+              "windowSeconds": {
+                "type": "integer"
+              }
+            }
+          },
+          "toolSwitches": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "telegramStaffMap": {
+            "type": "object"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "updatedByStaffId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "SettingsEnvelope": {
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          }
+        }
+      },
+      "GateCode": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "validFrom",
+          "validUntil",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Masked (•••0#) unless reveal=1"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validFrom": {
+            "type": "string"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "enum": [
+              "current",
+              "scheduled",
+              "expired",
+              "inactive"
+            ]
+          },
+          "source": {
+            "enum": [
+              "admin_ui",
+              "telegram"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "Lockbox": {
+        "type": "object",
+        "required": [
+          "roomId",
+          "roomNumber",
+          "code"
+        ],
+        "properties": {
+          "roomId": {
+            "type": "string"
+          },
+          "roomNumber": {
+            "type": "string"
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DoorCodes": {
+        "type": "object",
+        "required": [
+          "gateCodes",
+          "lockboxes"
+        ],
+        "properties": {
+          "gateCodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GateCode"
+            }
+          },
+          "lockboxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lockbox"
+            }
+          }
+        }
+      },
+      "ResolvedCodes": {
+        "type": "object",
+        "required": [
+          "gate",
+          "lockbox",
+          "missing"
+        ],
+        "properties": {
+          "gate": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "override",
+                      "vault"
+                    ]
+                  },
+                  "gateCodeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source"
+                ]
+              }
+            ]
+          },
+          "lockbox": {
+            "type": "boolean"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "gate",
+                "lockbox"
+              ]
+            }
+          }
+        }
+      },
+      "BookingDoorCode": {
+        "type": "object",
+        "required": [
+          "bookingId",
+          "resolved",
+          "gateCode",
+          "lockboxCode"
+        ],
+        "properties": {
+          "bookingId": {
+            "type": "string"
+          },
+          "resolved": {
+            "$ref": "#/components/schemas/ResolvedCodes"
+          },
+          "gateCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lockboxCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overrideNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "required": [
+          "id",
+          "channel",
+          "senderName",
+          "mode",
+          "unreadCount",
+          "pendingCount",
+          "lastMessageAt",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "sandbox",
+              "facebook",
+              "instagram"
+            ]
+          },
+          "senderName": {
+            "type": "string"
+          },
+          "senderHandle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "loyaltyTier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "AI_ACTIVE",
+              "PENDING_PAYMENT_CONFIRM",
+              "PENDING_OWNER",
+              "HUMAN_TAKEOVER"
+            ]
+          },
+          "takeover": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "activeHoldId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "activeBookingId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unreadCount": {
+            "type": "integer"
+          },
+          "pendingCount": {
+            "type": "integer"
+          },
+          "lastMessagePreview": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastMessageAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversationId",
+          "senderType",
+          "status",
+          "text",
+          "attachments",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "senderType": {
+            "enum": [
+              "guest",
+              "ai",
+              "staff",
+              "system"
+            ]
+          },
+          "staff": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "received",
+              "draft_pending_approval",
+              "sending",
+              "sent",
+              "failed",
+              "rejected"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array"
+          },
+          "aiRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationEnvelope": {
+        "type": "object",
+        "required": [
+          "conversation"
+        ],
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          }
+        }
+      },
+      "Escalation": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "status",
+          "summary",
+          "details",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "enum": [
+              "CONFIRM_HOLD_PAYMENT",
+              "REQUEST_DOOR_CODE",
+              "PRICE_NEGOTIATION",
+              "FACILITY_ISSUE",
+              "GENERAL_HELP",
+              "CHECKIN_REMINDER"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "normal",
+              "high",
+              "critical"
+            ]
+          },
+          "holdId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bookingId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roomId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "description": "Never contains door codes"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "resolved",
+              "expired"
+            ]
+          },
+          "resolvedBy": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "ownerNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "required": [
+          "id",
+          "bookingId",
+          "roomId",
+          "checkinAt",
+          "deliveryMode",
+          "sendAt",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bookingId": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guestName": {
+            "type": "string"
+          },
+          "checkinAt": {
+            "type": "string"
+          },
+          "checkoutAt": {
+            "type": "string"
+          },
+          "deliveryMode": {
+            "enum": [
+              "auto",
+              "manual_reminder"
+            ]
+          },
+          "sendAt": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "scheduled",
+              "waiting_owner_code",
+              "reminded",
+              "sent",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "escalationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sentAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Turn": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "replied",
+              "drafted",
+              "silent_takeover",
+              "rate_limited",
+              "budget_exceeded",
+              "error"
+            ]
+          },
+          "runId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error (4xx/5xx)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotModified": {
+        "description": "ETag matched (If-None-Match)"
+      }
+    }
+  }
+}

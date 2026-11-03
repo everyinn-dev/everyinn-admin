@@ -8,10 +8,11 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { Staff } from "@/types";
 
-export type CoreName = "booking" | "cdp";
+export type CoreName = "booking" | "cdp" | "agent";
 
 /** Service Binding names (wrangler `services[].binding`). */
-const BINDING: Record<CoreName, string> = { booking: "BOOKING_CORE", cdp: "CDP_CORE" };
+/** `agent` = everyinn-agent-core, bound with `"entrypoint": "AdminApi"` (ADR-014 — not reachable from the Internet). */
+const BINDING: Record<CoreName, string> = { booking: "BOOKING_CORE", cdp: "CDP_CORE", agent: "AGENT_CORE" };
 
 export interface CoreErrorBody {
   error?: { code?: string; message?: string; details?: unknown };
@@ -308,6 +309,15 @@ export const cdpCore = {
   patch: <T>(path: string, o: CoreCallOptions) => callCore<T>("cdp", "PATCH", path, o),
   put: <T>(path: string, o: CoreCallOptions) => callCore<T>("cdp", "PUT", path, o),
   delete: <T>(path: string, o: CoreCallOptions) => callCore<T>("cdp", "DELETE", path, o),
+};
+
+/** AI receptionist staff API (everyinn-agent-core AdminApi, contract contracts/agent-core.openapi.json). */
+export const agentCore = {
+  get: <T>(path: string, o: CoreCallOptions) => callCore<T>("agent", "GET", path, o),
+  post: <T>(path: string, o: CoreCallOptions) => callCore<T>("agent", "POST", path, o),
+  patch: <T>(path: string, o: CoreCallOptions) => callCore<T>("agent", "PATCH", path, o),
+  put: <T>(path: string, o: CoreCallOptions) => callCore<T>("agent", "PUT", path, o),
+  delete: <T>(path: string, o: CoreCallOptions) => callCore<T>("agent", "DELETE", path, o),
 };
 
 /** Map a Core error to the `{ error }` JSON shape the existing Admin UI already consumes. */
