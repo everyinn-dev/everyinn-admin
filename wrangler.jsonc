@@ -39,7 +39,9 @@
 	// Production Service Bindings to the Cores (Phase 1.5, P-3 / S6).
 	"services": [
 		{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core" },
-		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" }
+		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" },
+		// AI receptionist staff API (ADR-013/014): named entrypoint, not the public workers.dev surface.
+		{ "binding": "AGENT_CORE", "service": "everyinn-agent-core", "entrypoint": "AdminApi" }
 	],
 	// Owner Telegram Notification Secrets (Phase 2.1):
 	// Set via `npx wrangler secret put TELEGRAM_BOT_TOKEN` & `npx wrangler secret put TELEGRAM_CHAT_ID`
@@ -61,7 +63,8 @@
 			],
 			"services": [
 				{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core-dev" },
-				{ "binding": "CDP_CORE", "service": "everyinn-cdp-core-dev" }
+				{ "binding": "CDP_CORE", "service": "everyinn-cdp-core-dev" },
+				{ "binding": "AGENT_CORE", "service": "everyinn-agent-core-dev", "entrypoint": "AdminApi" }
 			],
 			"observability": { "enabled": true }
 		}

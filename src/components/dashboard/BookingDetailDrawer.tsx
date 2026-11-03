@@ -1,5 +1,6 @@
 "use client";
 
+import { DoorCodeCard } from "@/components/agent/DoorCodeCard";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { GanttBookingItem } from "@/types";
@@ -759,6 +760,11 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Door codes (AI receptionist vault, OD-4) */}
+              {currentBooking.status !== "cancelled" && (
+                <DoorCodeCard bookingId={currentBooking.id} roomId={currentBooking.roomId} checkinAt={currentBooking.checkinAt} checkoutAt={currentBooking.checkoutAt} />
+              )}
 
               {/* Pricing Info */}
               <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/80 via-slate-50 to-white border border-emerald-200 space-y-3 shadow-xs">
