@@ -4,11 +4,14 @@
 > Deploy state, Cloudflare resource IDs, the Admin route migration map (CORE vs LEGACY SQL), the task board and open owner decisions live **only** there.
 > Do not duplicate that information here. Update it before ending any session that changes anything.
 
+> ⚠️ **PARTLY LEGACY (verified 2026-11-03).** Since Phase 1, Admin has **zero business SQL**. Every booking, room, rate, promotion and customer call goes through Booking/CDP Core (`src/lib/cores.ts`). Sections below that describe `cache.ts`, `masterData.ts`, `validators.ts`, `cdp.ts`, `/api/admin/cache/clear`, direct D1 tables or a "dark slate" theme are **pre-Core history**: those files were deleted in A-W7, and the UI is a **light** slate/emerald theme.
+> **Current rules:** [`../everyinn-platform-docs/CONVENTIONS.md`](../everyinn-platform-docs/CONVENTIONS.md) · **Skills:** [`../everyinn-platform-docs/AGENT_INDEX.md`](../everyinn-platform-docs/AGENT_INDEX.md) (`everyinn-admin-feature`, `everyinn-core-client`) · **Quick guide:** [`CLAUDE.md`](./CLAUDE.md).
+
 > **Project Origin**: Every Inn Phan Xch Long (Ph Nhuận, TP. Hồ Ch Minh)  
-> **Master Roadmap & Backlog**: [`docs/project_status_and_backlog.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/docs/project_status_and_backlog.md)  
-> **Original Specs**: [`docs/implementation_plan.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/docs/implementation_plan.md)  
-> **Infrastructure Rules**: [`.agents/rules/cloudflare-free-tier.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/rules/cloudflare-free-tier.md)  
-> **Agent / MCP Index**: [`.agents/README.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/README.md)
+> **Master Roadmap & Backlog**: [`docs/project_status_and_backlog.md`](./docs/project_status_and_backlog.md)  
+> **Original Specs**: [`docs/implementation_plan.md`](./docs/implementation_plan.md)  
+> **Infrastructure Rules**: [`.agents/rules/cloudflare-free-tier.md`](./.agents/rules/cloudflare-free-tier.md)  
+> **Agent / MCP Index**: [`.agents/README.md`](./.agents/README.md)
 
 ---
 

@@ -3,6 +3,7 @@
 This directory is the local index for AI guidance, MCP templates, and project conventions used by `everyinn-admin`.
 
 ## Start here
+0. `../everyinn-platform-docs/AGENT_INDEX.md` — canonical index; skills/rules here are **copies** synced by `everyinn-platform-docs/scripts/sync-skills.mjs` (edit them only in the docs repo).
 1. `AGENTS.md`
 2. `CLAUDE.md`
 3. `.agents/README.md`

@@ -117,6 +117,24 @@ Tài liệu này định nghĩa các nguyên tắc bắt buộc khi thiết kế
 - [ ] 3. Các thao tác ghi đồng thời nhiều bảng đã được bọc trong `db.batch()` chưa?
 - [ ] 4. Không có vòng lặp lồng $O(N^2)$ hay xử lý dữ liệu nặng gây quá 10ms CPU time?
 - [ ] 5. Mật khẩu không dùng salt rounds $> 10$?
-- [ ] 6. Master data ít thay đổi đã được đọc qua `src/lib/cache.ts` chưa?
+- [ ] 6. Master data (phòng, giá, cấu hình) lấy từ Booking Core `GET /internal/v1/catalog` (ETag/304), không tự cache trong module memory? *(`src/lib/cache.ts` đã bị xoá ở task A-W7.)*
 - [ ] 7. Các thao tác fetch ra ngoài (Telegram, VietQR) có giới hạn thời gian chờ (timeout) không?
 - [ ] 8. Giao diện frontend không tạo vòng lặp request / polling dồn dập dưới 30s?
+
+---
+
+## 💳 6. Phụ lục: Worker chạy gói Workers Paid (`everyinn-agent-core`)
+
+> Áp dụng **chỉ** cho `everyinn-agent-core` (AI Lễ Tân). Các Core, Admin, Landing vẫn tuân thủ toàn bộ quy tắc Free-tier ở trên để giữ chi phí gần 0.
+
+| Hạng mục | Quy tắc |
+| :--- | :--- |
+| `limits` trong `wrangler.jsonc` | `{ "cpu_ms": 5000, "subrequests": 150 }` ở **cả** top-level và `env.dev`. Không đặt `subrequests` < 100 (1 lượt chat ≈ 15–30 subrequests). |
+| Chặn chi phí ở tầng ứng dụng | ≤ 3 vòng tool & ≤ 8 tool call / lượt; chỉ 10 tin nhắn gần nhất; `max_tokens` 400; ≤ 6 câu trả lời AI / 5 phút / hội thoại; **ngắt mạch neuron theo ngày** (`daily_neuron_budget`) → chuyển Supervised + báo Telegram. |
+| Workers AI | Luôn gọi qua AI Gateway `everyinn-ai-gateway` (rate limit + cache + log chi phí). Model cấu hình được (`agent_settings.model_id`). Không gọi LLM cho tin chào hỏi / FAQ khớp chính xác. |
+| Vectorize | `bge-m3` 1024 chiều, `topK ≤ 4`, chỉ truy vấn khi câu hỏi cần tra kiến thức. |
+| D1 (`agent-db`) | Giữ nguyên quy tắc mục 2: có Index, không `SELECT *`, `db.batch`, keyset `LIMIT 30`. |
+| Durable Objects | Chưa dùng ở AR-1. Khi dùng (AR-2): Hibernation API (`ctx.acceptWebSocket`), alarm cho debounce/takeover. |
+| Bề mặt public | Chỉ `/webhooks/*` + `/health` trên default export. API cho Admin nằm trong `WorkerEntrypoint` có tên (`AdminApi`) — không truy cập được từ Internet. |
+| Bí mật | `TELEGRAM_*`, `DOOR_CODE_KEY`, `META_*` qua `wrangler secret put`; mã cửa mã hoá AES-GCM, không log. |
+| Cảnh báo ngân sách | Billing alert $10 / $15 trên tài khoản Cloudflare (Runbook H1). |

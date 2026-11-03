@@ -1,51 +1,40 @@
-# Every Inn Admin Panel — Claude Development Guide & Neural Knowledge Base
+# Every Inn Admin Panel — Claude Guide (post-Core, refreshed 2026-11-03)
 
-> **Primary Knowledge Base**: See [`AGENTS.md`](./AGENTS.md) for full neural map, database schema, lib functions, API routes, and component tree.  
-> **Master Backlog & Task Specs**: See [`docs/project_status_and_backlog.md`](./docs/project_status_and_backlog.md) for the 6 Epics & 12 Tasks ready for implementation.  
-> **Cloudflare Infrastructure Rules**: See [`.agents/rules/cloudflare-free-tier.md`](./.agents/rules/cloudflare-free-tier.md).  
-> **Agent / MCP Index**: See [`.agents/README.md`](file:///Users/lap14666/Documents/private/every%20inn/van%20hanh/booking-page/everyinn-admin/.agents/README.md).
+> **Read first:** [`../everyinn-platform-docs/EI_PHASE1_STATUS.md`](../everyinn-platform-docs/EI_PHASE1_STATUS.md) for state and the task board, then
+> [`../everyinn-platform-docs/CONVENTIONS.md`](../everyinn-platform-docs/CONVENTIONS.md) for rules (§7 covers the UI) and
+> [`../everyinn-platform-docs/AGENT_INDEX.md`](../everyinn-platform-docs/AGENT_INDEX.md) for skills.
+> **Main skill for this repo:** `everyinn-admin-feature`. Also `everyinn-core-client` and `everyinn-release-status`.
+> `AGENTS.md` sections on D1 schema, `cache.ts`, `masterData.ts`, `validators.ts` and `cdp.ts` describe the **pre-Core app (retired in A-W7)**. Ignore them.
 
----
-
-## ⚡ Quick Command Cheat-Sheet
+## Commands
 ```bash
-npm run dev                  # Start Next.js local development
-npx tsc --noEmit             # TypeScript validation (MUST PASS WITH 0 ERRORS)
-npm run deploy               # Deploy OpenNext Cloudflare Worker bundle
-npm run db:migrate:local     # Run local D1 migration 001
-npm run db:migrate:012:local # Run latest deposit migration locally
-npm run db:migrate:remote    # Run remote D1 migration 001
-npm run db:migrate:012:remote# Run latest deposit migration on production D1
+npm run dev            # local Next.js (needs .dev.vars + bindings)
+npm run lint           # must have 0 errors
+npx tsc --noEmit       # must have 0 errors
+npm test               # node --test test/**/*.test.mjs (FakeCore harness)
+npm run cf:build       # lint + tsc + OpenNext build (what Workers Builds runs)
+# Deploy = git push (dev → everyinn-admin-dev, main → everyinn-admin). `npm run deploy` exits 1 on purpose.
 ```
 
----
+## Architecture in one breath
+- **Zero business SQL.** Bookings, holds, rooms, rates, promotions and surcharges go through `BOOKING_CORE`; customers and loyalty go through `CDP_CORE`; the AI receptionist (AR-1) goes through `AGENT_CORE` (`entrypoint: "AdminApi"`). All of them are Service Bindings called via `src/lib/cores.ts`.
+- **Admin's own D1** (`DB`) holds only staff and sessions (`db/admin-db/0001_staff.sql`, `src/lib/auth.ts`, `jwt.ts`).
+- **BFF routes** live in `src/app/api/**/route.ts`. They call `getCurrentStaff()`, then a Core client, then map errors with `coreErrorResponse`/`toHttpError`. The Core enforces roles from `x-ei-actor-role`.
+- **Mappers:** `src/lib/coreMappers.ts` turns Core DTOs into the legacy UI shapes. `src/lib/pricing.ts` is a **client preview mirror only**; the Core quote is authoritative.
 
-## 🛡️ Critical Invariant Guardrails (Must Never Violate)
-1. **Cloudflare Worker Constraints (10ms CPU, 128MB RAM, Stateless)**:
-   - NEVER use `setTimeout` or asynchronous timers after returning Response.
-   - bcryptjs salt rounds MUST be `<= 10`.
-   - In-memory cache (`src/lib/cache.ts`) is ONLY for Master Data (TTL 60 min). NEVER use module memory for hold locks or transactions.
-2. **D1 Quota Constraints (5M Reads/day, Zero Unindexed Queries)**:
-   - NEVER run unindexed `SELECT` on `bookings`, `members`, `room_blocks`, or `event_logs`.
-   - Multi-table writes MUST use `await db.batch([stmt1, stmt2, ...])`.
-   - List APIs MUST implement ETag 304 using `SELECT COALESCE(MAX(id), 0) FROM event_logs`.
-3. **Time Standard (30-Minute Step)**:
-   - Always use `TIME_SLOTS_30MIN` from `src/lib/timelineUtils.ts` (48 slots: `00:00` to `23:30`).
-   - Past slots on current date (UTC+7) MUST be disabled.
-4. **Deposit & CDP Accounting**:
-   - Total spent on member profiles accumulates strictly based on **realized cash paid** (`paid_amount`), NOT uncollected total price.
-5. **UI & Notifications**:
-   - Dark Slate palette with Amber/Emerald/Purple accent badges.
-   - NEVER use `window.alert()`. Use `useToast()` hook.
+## Invariants
+1. Workers: no timers after the response, bcrypt rounds ≤ 10, no module-memory state for holds or transactions.
+2. Writes: send `Idempotency-Key` once per user action (reuse it on retry). Mutations send `expectedVersion`; on 409, `toast.warning` and refetch.
+3. Time: 30-minute slots (`TIME_SLOTS_30MIN` in `src/lib/timelineUtils.ts`), past slots disabled; business time is UTC+7.
+4. Polling: ETag/304, adaptive 20→40→60 s, only while the tab is visible (pattern in `src/app/dashboard/page.tsx`). No WebSockets through OpenNext.
+5. UI: **light theme** (slate-50/white, emerald primary, amber warn, rose error, sky = Haven, purple = Signature). Use `useToast()`, never `alert`/`confirm`. Copy is Vietnamese.
+6. Never log raw phones or door codes. `maskPii` lives in `cores.ts`.
 
----
-
-## 🔍 Fast Neural Lookup (Where to Look)
-- **Pricing & Combos**: `src/lib/pricing.ts` (`calculatePrice`)
-- **Cleaning Buffer (1h)**: `src/lib/validators.ts` (`checkBookingOverlapWithBuffer`)
-- **Promotions Engine**: `src/lib/promotions.ts` (`validatePromotionEligibility`, `computePromotionDiscount`)
-- **Timeline & 30-min Slots**: `src/lib/timelineUtils.ts` (`TIME_SLOTS_30MIN`, `roundToNearest30Min`)
-- **Mini CDP & Loyalty**: `src/lib/cdp.ts` (`calculateLoyaltyTier`, `upsertMemberOnBooking`)
-- **Gantt Dashboard**: `src/components/dashboard/GanttChart.tsx`, `GanttBar.tsx`, `BookingDetailDrawer.tsx`
-- **Deposit Tracking**: `src/components/bookings/DepositSection.tsx`, `DepositReminderModal.tsx`
-- **New Booking Form**: `src/components/bookings/BookingForm.tsx`, `PriceSummaryCard.tsx`
+## Where to look
+- **Shell and nav:** `src/components/layout/{AdminShell,Sidebar,Topbar}.tsx`. Nav items go in both the Sidebar and the AdminShell mobile nav.
+- **Gantt and drawer:** `src/app/dashboard/page.tsx`, `src/components/dashboard/{GanttChart,BookingDetailDrawer,BookingEditForm}.tsx`
+- **Booking create and hold wizard:** `src/components/bookings/{BookingForm,BookingWizard}.tsx`, `search/`, `checkout/`, `src/app/api/holds/**`
+- **Telegram notify (send-only):** `src/lib/telegram.ts`
+- **Promotions and surcharges:** `src/app/promotions/page.tsx`, `src/components/promotions/*`
+- **Finance (manager-only):** `src/app/finance/page.tsx`
+- **Tests:** `test/helpers/fakeCore.mjs`, `test/contract.test.mjs`, synced contracts in `contracts/*.openapi.json`

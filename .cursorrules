@@ -1,18 +1,19 @@
-# Every Inn Admin Panel — Cursor IDE Rules
+# Every Inn Admin Panel — Cursor IDE Rules (post-Core, refreshed 2026-11-03)
 
-You are working on the Every Inn Admin Panel (Next.js 16 + Cloudflare Workers + D1 SQLite + Tailwind CSS v4).
+You are working on the Every Inn Admin Panel: Next.js 16 + React 19 + Tailwind 4 on Cloudflare Workers (OpenNext). Admin is a staff UI + thin BFF. All business data comes from Booking/CDP/Agent Core over Service Bindings.
 
-## 🧠 Sơ Đồ Mắc Xích & Single Source of Truth
-Trước khi viết code hay tìm kiếm file, BẮT BUỘC tham khảo:
-1. `AGENTS.md` — Bảng tra cứu hệ nơ-ron toàn bộ Database, Lib, API, và UI Components.
-2. `docs/project_status_and_backlog.md` — Master Backlog chi tiết 6 Epics / 12 Tasks sẵn sàng triển khai.
-3. `.agents/rules/cloudflare-free-tier.md` — Giới hạn hạ tầng Cloudflare Workers & D1.
-4. `.agents/README.md` — Chỉ mục local cho MCP templates, token scopes, skills, và conventions của dự án.
+## Read first
+1. `../everyinn-platform-docs/EI_PHASE1_STATUS.md` — state, task board (update it before ending a session).
+2. `../everyinn-platform-docs/CONVENTIONS.md` — rules every repo follows (§7 is the UI).
+3. `../everyinn-platform-docs/AGENT_INDEX.md` — skills. Use `.agents/skills/everyinn-admin-feature` and `everyinn-core-client`.
+4. `CLAUDE.md` — quick guide. `AGENTS.md` is partly legacy (pre-Core).
 
-## 🛡️ Quy Chuẩn Bất Biến (Rules)
-- **Time Slot**: Dùng 48 slot tiêu chuẩn `TIME_SLOTS_30MIN` (`src/lib/timelineUtils.ts`). Không dùng phút lẻ. Khóa giờ quá khứ.
-- **Cloudflare Worker**: 10ms CPU (bcrypt <= 10, no nested loops). Stateless (Không dùng `setTimeout` chạy ngầm, không lưu lock trong biến module).
-- **D1 Quota**: Mọi câu lệnh `WHERE`/`ORDER BY` trên `bookings`, `members`, `room_blocks` bắt buộc có INDEX. Ghi nhiều bảng phải dùng `await db.batch()`.
-- **Deposit & CDP**: Tiền tích lũy của khách chỉ cộng theo tiền thực thu (`paid_amount`), không cộng tiền chưa thu đủ.
-- **UI & Toast**: Dùng dark theme Slate (`bg-slate-900`, `border-slate-800`). Luôn dùng `useToast()`, cấm dùng `window.alert()`.
-- **TypeScript**: Luôn chạy `npx tsc --noEmit` và đảm bảo 0 lỗi type.
+## Rules
+- **Zero business SQL** in Admin. Call Cores via `src/lib/cores.ts` (`bookingCore`, `cdpCore`, `agentCore`). Admin D1 = staff/auth only.
+- **Writes:** `Idempotency-Key` once per user action. Mutations send `expectedVersion`; handle 409 with a toast and refetch.
+- **Time slots:** `TIME_SLOTS_30MIN` (`src/lib/timelineUtils.ts`), no odd minutes, past slots disabled.
+- **Workers:** no timers after the response, no module-memory locks, bcrypt ≤ 10.
+- **Polling:** ETag/304, adaptive ≥ 20 s, visible tab only. No WebSockets.
+- **UI:** LIGHT theme (`bg-slate-50`/white, `border-slate-200`, emerald primary). `useToast()`, never `window.alert()`/`confirm()`. Vietnamese copy.
+- **TypeScript:** `npx tsc --noEmit` with 0 errors; `npm run lint` with 0 errors; `npm test` green.
+- **Deploy** only by git push (Workers Builds).
