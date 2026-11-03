@@ -1,5 +1,6 @@
 import { getCurrentStaff } from "@/lib/auth";
-import { bookingCore } from "@/lib/cores";
+import { agentCore, bookingCore } from "@/lib/cores";
+import { applyDoorCodes, type DoorCodeResult } from "@/lib/rosterDoorCodes";
 import { toHttpError } from "@/lib/apiError";
 import { getVnToday } from "@/lib/timelineUtils";
 import {
@@ -62,7 +63,19 @@ export async function GET(req: Request) {
       throw new Error("Không nhận được dữ liệu lịch điều phối từ Booking Core.");
     }
 
-    return Response.json(toDailyRosterResponse(coreRes.data), {
+    let roster = toDailyRosterResponse(coreRes.data);
+    // Door codes live in the AI receptionist vault (agent-core). Best effort: the roster works without them.
+    const stays = roster.checkins.slice(0, 20).map((c) => ({ bookingId: c.id, roomId: c.roomId, checkinAt: c.checkinAt, checkoutAt: c.checkoutAt }));
+    if (stays.length) {
+      try {
+        const codes = await agentCore.post<{ results: DoorCodeResult[] }>("/internal/v1/door-codes/resolve-batch", { staff, body: { stays, reveal: true }, timeoutMs: 4000, maxAttempts: 1 });
+        if (codes.data) roster = applyDoorCodes(roster, codes.data.results);
+      } catch (e) {
+        console.warn("daily-roster: door codes unavailable", e instanceof Error ? e.message : e);
+      }
+    }
+
+    return Response.json(roster, {
       headers: {
         ...NO_CACHE_HEADERS,
         ...(coreRes.etag ? { ETag: coreRes.etag } : {}),

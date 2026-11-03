@@ -1701,6 +1701,86 @@
           }
         }
       }
+    },
+    "/internal/v1/door-codes/resolve-batch": {
+      "post": {
+        "operationId": "resolveDoorCodesBatch",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Door-code resolution for up to 20 stays (daily roster). Plaintext only with reveal=true.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "stays"
+                ],
+                "properties": {
+                  "reveal": {
+                    "type": "boolean"
+                  },
+                  "stays": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "bookingId",
+                        "roomId",
+                        "checkinAt",
+                        "checkoutAt"
+                      ],
+                      "properties": {
+                        "bookingId": {
+                          "type": "string"
+                        },
+                        "roomId": {
+                          "type": "string"
+                        },
+                        "checkinAt": {
+                          "type": "string"
+                        },
+                        "checkoutAt": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BookingDoorCode"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
