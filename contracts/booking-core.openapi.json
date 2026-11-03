@@ -3,15 +3,16 @@
   "info": {
     "title": "Every Inn Booking Core — internal API",
     "version": "booking-internal-v1",
-    "description": "Provider-owned contract of everyinn-booking-core (EI-OTA-ARCH-001 Phase 1). Internal-only: reachable exclusively through the Admin BFF Service Binding (no workers.dev, no Preview URLs, no routes). Every operation requires X-EI-Caller: admin-bff plus the staff actor headers forwarded by the BFF after JWT/RBAC. Money is integer VND, instants are UTC ISO-8601, business dates are Asia/Ho_Chi_Minh. Responses are `Cache-Control: private, no-store`. Errors: { error: { code, message, request_id, details? } }."
+    "description": "Provider-owned contract of everyinn-booking-core (EI-OTA-ARCH-001 Phase 1). Internal-only: reachable exclusively through Service Bindings (no workers.dev, no Preview URLs, no routes). Every operation requires an X-EI-Caller listed in its x-callers (admin-bff everywhere; agent-core on a documented subset, ADR-013) plus the staff actor headers (Admin forwards the logged-in staff; agent-core uses bot actor 900001/receptionist, or the approving staff member for confirmations). Money is integer VND, instants are UTC ISO-8601, business dates are Asia/Ho_Chi_Minh. Responses are `Cache-Control: private, no-store`. Errors: { error: { code, message, request_id, details? } }."
   },
   "servers": [{ "url": "https://everyinn-booking-core.internal", "description": "Service Binding (env.BOOKING.fetch) — not a public host" }],
   "x-callers-legend": {
-    "admin-bff": "Admin BFF (everyinn-admin) — the only caller in Phase 1"
+    "admin-bff": "Admin BFF (everyinn-admin) — every operation",
+    "agent-core": "AI receptionist (everyinn-agent-core, ADR-013) — only operations whose x-callers list it; others return 403 FORBIDDEN_CALLER"
   },
   "components": {
     "parameters": {
-      "Caller": { "name": "X-EI-Caller", "in": "header", "required": true, "schema": { "const": "admin-bff" } },
+      "Caller": { "name": "X-EI-Caller", "in": "header", "required": true, "schema": { "enum": ["admin-bff", "agent-core"] } },
       "ActorId": { "name": "X-EI-Actor-Id", "in": "header", "required": true, "schema": { "type": "string", "pattern": "^\\d{1,12}$" } },
       "ActorRole": { "name": "X-EI-Actor-Role", "in": "header", "required": true, "schema": { "enum": ["manager", "receptionist"] } },
       "ActorName": { "name": "X-EI-Actor-Name", "in": "header", "required": false, "schema": { "type": "string", "description": "encodeURIComponent(display name)" } },
@@ -280,7 +281,11 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["hold"],
-        "properties": { "hold": { "$ref": "#/components/schemas/Hold" }, "replayed": { "type": "boolean" } }
+        "properties": {
+          "hold": { "$ref": "#/components/schemas/Hold" },
+          "replayed": { "type": "boolean" },
+          "extended": { "type": "boolean", "description": "Only on POST /holds/{holdId}/extend: false when the requested expiry was not later than the current one (no-op)." }
+        }
       },
       "Room": {
         "type": "object",
@@ -1008,7 +1013,7 @@
     "/internal/v1/catalog": {
       "get": {
         "operationId": "getCatalog",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Master data: property, rooms, rate rules, booking rules, check-in slots, categories, active promotions (ETag = catalog domain version).",
         "responses": {
           "200": { "description": "Catalog", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Catalog" } } } },
@@ -1140,7 +1145,7 @@
     "/internal/v1/promotions/validate": {
       "post": {
         "operationId": "validatePromotion",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Legacy-compatible eligibility check for a raw subtotal (business-date + rate-plan aware, tier via CDP when required).",
         "requestBody": {
           "required": true,
@@ -1233,7 +1238,7 @@
     "/internal/v1/availability/search": {
       "post": {
         "operationId": "searchAvailability",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Every active room (optionally of one class) with availability, human-readable reasons and base price for a stay.",
         "requestBody": {
           "required": true,
@@ -1264,7 +1269,7 @@
     "/internal/v1/quotes": {
       "post": {
         "operationId": "quote",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Server-side quote for one room: base + promotion + ADVISORY loyalty preview (CDP loyalty-context). Degrades to available=false when CDP is down.",
         "requestBody": {
           "required": true,
@@ -1298,7 +1303,7 @@
     "/internal/v1/holds": {
       "post": {
         "operationId": "createHold",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "x-idempotency": "required",
         "summary": "Create a 15-minute room hold locking occupancy and turnover inventory slots.",
         "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
@@ -1335,7 +1340,7 @@
       "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
       "get": {
         "operationId": "getHold",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Get current hold status and remaining seconds.",
         "responses": {
           "200": { "$ref": "#/components/responses/Hold" },
@@ -1344,7 +1349,7 @@
       },
       "patch": {
         "operationId": "updateHoldDraft",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Validate and save guest & payment draft onto the active hold (transitions to awaiting_payment without resetting timer).",
         "requestBody": {
           "required": true,
@@ -1374,11 +1379,41 @@
         }
       }
     },
+    "/internal/v1/holds/{holdId}/extend": {
+      "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
+      "post": {
+        "operationId": "extendHold",
+        "x-callers": ["admin-bff", "agent-core"],
+        "x-idempotency": "required",
+        "summary": "Push a live hold's expiry later (quiet hours, OD-6). Exactly one of ttlSeconds / expiresAt; the new expiry must be in the future, ≤ now + 12h and ≤ checkinAt (else 422 HOLD_EXTEND_LIMIT with details.maxExpiresAt). A target at or before the current expiry is a no-op (extended=false).",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "ttlSeconds": { "type": "integer", "minimum": 60, "maximum": 43200, "description": "Seconds from now." },
+                  "expiresAt": { "type": "string", "description": "ISO-8601 instant with offset or Z." },
+                  "reason": { "type": "string", "maxLength": 200 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Hold" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/internal/v1/holds/{holdId}/release": {
       "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
       "post": {
         "operationId": "releaseHold",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Cancel the room hold and immediately free its inventory slots.",
         "responses": {
           "200": { "$ref": "#/components/responses/Hold" },
@@ -1390,7 +1425,7 @@
       "parameters": [{ "$ref": "#/components/parameters/HoldId" }],
       "post": {
         "operationId": "confirmHold",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "x-idempotency": "required",
         "summary": "Atomically convert an active hold into a confirmed booking with financial ledger entry and CDP accrual.",
         "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
@@ -1404,7 +1439,7 @@
     "/internal/v1/bookings": {
       "get": {
         "operationId": "listBookings",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Legacy filters + paging (pageSize ≤ 50), deterministic order, ETag on the bookings domain version.",
         "parameters": [
           { "name": "roomId", "in": "query", "schema": { "type": "string" } },
@@ -1485,7 +1520,7 @@
       "parameters": [{ "$ref": "#/components/parameters/BookingId" }],
       "get": {
         "operationId": "getBooking",
-        "x-callers": ["admin-bff"],
+        "x-callers": ["admin-bff", "agent-core"],
         "summary": "Booking + ledger + CDP sync state + last 50 audit events (ETag = booking version).",
         "responses": {
           "200": { "description": "Detail", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BookingDetail" } } } },
