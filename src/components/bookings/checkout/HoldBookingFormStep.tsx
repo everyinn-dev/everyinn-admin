@@ -418,6 +418,20 @@ export const HoldBookingFormStep: React.FC<HoldBookingFormStepProps> = ({
               depositAmount={depositAmount}
               remainingAmount={remainingAmount}
               depositDueDate={depositDueDate}
+              guestInfo={{
+                name,
+                phone,
+                instagram,
+                facebook,
+                zalo,
+                memberTier: (foundMember?.loyalty_tier as any) || (foundMember?.loyaltyTier as any),
+              }}
+              stayDetails={{
+                bookingType: hold.bookingType,
+                checkinAt: new Date(hold.checkinAt),
+                checkoutAt: new Date(hold.checkoutAt),
+                closingNote,
+              }}
             />
           )}
 

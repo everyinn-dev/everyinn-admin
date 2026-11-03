@@ -19,6 +19,7 @@ import { HourlyFields } from "./HourlyFields";
 import { OvernightFields } from "./OvernightFields";
 import { DayUseFields } from "./DayUseFields";
 import { CustomFields } from "./CustomFields";
+import { RoomSelectorCards } from "./RoomSelectorCards";
 import { PriceSummaryCard } from "./PriceSummaryCard";
 import { PromotionSelector } from "./PromotionSelector";
 import { DepositSection } from "./DepositSection";
@@ -761,37 +762,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           />
         )}
 
-        {/* Relocated: Room Selection At Bottom of Booking Type Card */}
+        {/* Relocated: Room Selection (Interactive Cards with Distinct Colors) */}
         <div className="pt-3 border-t border-slate-100">
-          <label className="block text-xs font-bold text-slate-800 tracking-wide uppercase mb-1.5 flex items-center gap-1.5">
-            <span>🚪</span>
-            <span>Chọn phòng trống</span>
-            <span className="text-rose-500">*</span>
-          </label>
-          <select
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            className="w-full rounded-xl bg-white border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 font-semibold cursor-pointer shadow-xs"
-          >
-            <optgroup label={`Haven (${initialRooms.filter((r) => r.room_class === "haven").length} Phòng - 22m²)`}>
-              {initialRooms
-                .filter((r) => r.room_class === "haven")
-                .map((r) => (
-                  <option key={r.id} value={r.id}>
-                    Phòng {r.room_number} ({r.name} - Tầng {r.floor})
-                  </option>
-                ))}
-            </optgroup>
-            <optgroup label={`Signature (${initialRooms.filter((r) => r.room_class === "signature").length} Phòng - 28m²)`}>
-              {initialRooms
-                .filter((r) => r.room_class === "signature")
-                .map((r) => (
-                  <option key={r.id} value={r.id}>
-                    Phòng {r.room_number} ({r.name} - Tầng {r.floor})
-                  </option>
-                ))}
-            </optgroup>
-          </select>
+          <RoomSelectorCards
+            rooms={initialRooms}
+            selectedRoomId={roomId}
+            onSelectRoom={setRoomId}
+          />
         </div>
 
         {/* Section: Notes & Final Confirmation */}
@@ -860,7 +837,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         checkinDateStr={calculatedCheckinAt ? calculatedCheckinAt.toISOString().slice(0, 10) : defaultDate}
       />
 
-      {/* 4. Price Summary Card */}
+      {/* 4. Price & Booking Summary Card */}
       {currentPricing && (
         <PriceSummaryCard
           pricing={currentPricing}
@@ -871,6 +848,22 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           depositAmount={depositAmount}
           remainingAmount={Math.max(0, currentPricing.totalPrice - depositAmount)}
           depositDueDate={depositDueDate}
+          guestInfo={{
+            name,
+            phone,
+            instagram,
+            facebook,
+            zalo,
+            memberTier: foundMember?.loyalty_tier || foundMember?.loyaltyTier,
+          }}
+          stayDetails={{
+            bookingType,
+            checkinAt: calculatedCheckinAt,
+            checkoutAt: calculatedCheckoutAt,
+            earlyHours: calculatedEarlyHours,
+            lateHours: calculatedLateHours,
+            closingNote,
+          }}
         />
       )}
 
