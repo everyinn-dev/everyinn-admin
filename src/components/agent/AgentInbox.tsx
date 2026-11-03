@@ -102,7 +102,11 @@ export function AgentInbox() {
   useEffect(() => {
     if (selectedId) void loadThread(selectedId);
   }, [selectedId, loadThread]);
-  useEffect(() => bottomRef.current?.scrollIntoView({ block: "end" }), [messages.length]);
+  // Block body on purpose: Chrome's scrollIntoView() now returns a Promise, and an effect that returns a
+  // non-function crashes React on unmount ("i is not a function" when leaving /agent-inbox).
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
 
   useVisibleInterval(() => void loadList(), 20_000, [loadList]);
   // The AI replies in the background (202 queued) — poll faster while the last message is still the guest's.

@@ -50,7 +50,9 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
   const err = useErr();
   const [f, setF] = useState(settings);
   const [saving, setSaving] = useState(false);
-  useEffect(() => setF(settings), [settings]);
+  useEffect(() => {
+    setF(settings);
+  }, [settings]);
   const num = (k: keyof AgentSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value) });
 
   const save = async () => {
