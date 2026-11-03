@@ -842,7 +842,7 @@
         "x-callers": [
           "admin-bff"
         ],
-        "summary": "Staff chats as a test guest; runs one brain turn synchronously against the env's real Cores (call with a ~25s timeout).",
+        "summary": "Staff chats as a test guest. Default: 202 + turn.status=queued, the brain runs in the background (poll the conversation). wait=true runs synchronously (tests/simulator).",
         "responses": {
           "200": {
             "description": "OK",
@@ -875,6 +875,35 @@
           },
           "default": {
             "$ref": "#/components/responses/Error"
+          },
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "turn",
+                    "messages"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "turn": {
+                      "$ref": "#/components/schemas/Turn"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -897,6 +926,9 @@
                   "senderName": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "wait": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -2419,7 +2451,8 @@
               "silent_takeover",
               "rate_limited",
               "budget_exceeded",
-              "error"
+              "error",
+              "queued"
             ]
           },
           "runId": {

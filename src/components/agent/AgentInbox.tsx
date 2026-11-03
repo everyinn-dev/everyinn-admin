@@ -105,7 +105,9 @@ export function AgentInbox() {
   useEffect(() => bottomRef.current?.scrollIntoView({ block: "end" }), [messages.length]);
 
   useVisibleInterval(() => void loadList(), 20_000, [loadList]);
-  useVisibleInterval(() => selectedId && void loadThread(selectedId), 5_000, [selectedId, loadThread]);
+  // The AI replies in the background (202 queued) — poll faster while the last message is still the guest's.
+  const awaitingAi = !!conv && conv.mode !== "HUMAN_TAKEOVER" && messages.at(-1)?.senderType === "guest" && Date.now() - Date.parse(messages.at(-1)!.createdAt) < 90_000;
+  useVisibleInterval(() => selectedId && void loadThread(selectedId), awaitingAi ? 2_000 : 5_000, [selectedId, loadThread, awaitingAi]);
 
   const refreshAll = async () => {
     etagRef.current = null;
@@ -269,7 +271,7 @@ export function AgentInbox() {
                 </div>
               );
             })}
-            {sending && <p className="text-xs text-slate-500 text-center">AI đang soạn trả lời…</p>}
+            {(sending || awaitingAi) && <p className="text-xs text-slate-500 text-center animate-pulse">🤖 AI đang soạn trả lời…</p>}
             <div ref={bottomRef} />
           </div>
           <div className="p-3 border-t border-slate-200 space-y-2">
