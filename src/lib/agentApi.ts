@@ -79,6 +79,7 @@ export interface AgentCard {
 
 export type AgentAttachment =
   | { type: "image"; url: string; caption?: string }
+  | { type: "video"; url: string }
   | { type: "cards"; cards: AgentCard[] }
   | { type: "quick_replies"; options: string[] };
 

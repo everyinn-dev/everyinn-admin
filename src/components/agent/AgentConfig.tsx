@@ -33,6 +33,9 @@ const TOOL_LABELS: Record<string, string> = {
   ask_owner: "Chuyển quản lí",
   report_issue: "Báo sự cố khẩn",
   send_room_info: "Gửi thẻ ảnh phòng + link web",
+  troubleshoot_issue: "Xử lý sự cố cấp 1 (xem ảnh, hướng dẫn khách)",
+  close_issue: "Đóng sự cố / chuyển quản lí kèm ảnh",
+  note_payment_receipt: "Đọc ảnh bill chuyển khoản để đối chiếu",
 };
 
 const card = "p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3";

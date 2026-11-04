@@ -986,9 +986,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "text"
-                ],
+                "required": [],
                 "properties": {
                   "text": {
                     "type": "string",
@@ -1003,6 +1001,10 @@
                   },
                   "wait": {
                     "type": "boolean"
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "description": "Optional guest photo: https:// link or data:image/(jpeg|png|webp);base64 (≤ 1.5 MB). With a photo, text may be empty."
                   }
                 }
               }
@@ -2533,6 +2535,10 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "visionModelId": {
+            "type": "string",
+            "description": "Workers AI model for turns where the guest sent photos (vision + tools). Default @cf/google/gemma-4-26b-a4b-it."
           }
         }
       },

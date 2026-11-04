@@ -380,6 +380,8 @@ function MessageAttachments({ attachments, onChip }: { attachments: AgentAttachm
               </div>
             ))}
           </div>
+        ) : a.type === "video" ? (
+          <a key={`video-${i}`} href={a.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-sky-700 underline">🎬 Video khách gửi</a>
         ) : a.type === "quick_replies" ? (
           <div key={`qr-${i}`} className="flex flex-wrap gap-1.5">
             {a.options.map((o) =>
