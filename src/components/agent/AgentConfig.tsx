@@ -30,8 +30,9 @@ const TOOL_LABELS: Record<string, string> = {
   get_booking: "Tra cứu đơn của khách",
   update_booking: "Sửa đơn (tắt — chuyển quản lý)",
   get_checkin_guide: "Hướng dẫn nhận phòng",
-  ask_owner: "Chuyển quản lý",
+  ask_owner: "Chuyển quản lí",
   report_issue: "Báo sự cố khẩn",
+  send_room_info: "Gửi thẻ ảnh phòng + link web",
 };
 
 const card = "p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3";

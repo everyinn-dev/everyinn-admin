@@ -601,6 +601,50 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "facebook",
+                "instagram"
+              ]
+            },
+            "description": "Channel tab"
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "Only unread"
+          },
+          {
+            "name": "ads",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "Only conversations that came from an ad / referral"
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Label id"
           }
         ]
       }
@@ -1811,6 +1855,443 @@
           }
         }
       }
+    },
+    "/internal/v1/conversations/{conversationId}/thread": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getThread",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Detail + 30 latest messages + escalations + last AI runs in one call; weak ETag on the inbox version (304 when nothing changed). Marks read.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "messages",
+                    "hasMore",
+                    "escalations",
+                    "runs"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "escalations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/labels": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "setConversationLabels",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Replace the conversation's labels (≤ 10).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "labelIds"
+                ],
+                "properties": {
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "labelIds"
+                  ],
+                  "properties": {
+                    "labelIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/note": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "setConversationNote",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Internal note (≤ 1000 chars); never sent to the guest or the LLM.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "note"
+                  ],
+                  "properties": {
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/search": {
+      "get": {
+        "operationId": "searchInbox",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Accent-insensitive search over guest names / handles / phones and message text (FTS5).",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SearchHit"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/labels": {
+      "get": {
+        "operationId": "listLabels",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Portal labels (OD-12).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "labels"
+                  ],
+                  "properties": {
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Label"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createLabel",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only. 409 LABEL_EXISTS.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "color": {
+                    "enum": [
+                      "slate",
+                      "rose",
+                      "amber",
+                      "emerald",
+                      "sky",
+                      "violet"
+                    ]
+                  },
+                  "sort": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "$ref": "#/components/schemas/Label"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/labels/{labelId}": {
+      "parameters": [
+        {
+          "name": "labelId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateLabel",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "sort": {
+                    "type": "integer"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "$ref": "#/components/schemas/Label"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteLabel",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only; removes it from every conversation.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2349,6 +2830,52 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "lastGuestMessageAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guestSeenAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Guest read our messages up to this time (Meta read receipts)."
+          },
+          "guestDeliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "referral": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "First ad / m.me referral {source,type,ref,adId,adTitle,photoUrl,at}."
+          },
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Internal staff note (detail views only)."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Label ids (OD-12)."
           }
         }
       },
@@ -2419,6 +2946,19 @@
               "null"
             ],
             "description": "Set when the guest unsent the message (text is then empty)."
+          },
+          "reaction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Emoji the guest put on this message."
+          },
+          "editedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -2635,6 +3175,87 @@
             ]
           },
           "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Label": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "sort",
+          "isActive"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "enum": [
+              "slate",
+              "rose",
+              "amber",
+              "emerald",
+              "sky",
+              "violet"
+            ]
+          },
+          "sort": {
+            "type": "integer"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SearchHit": {
+        "type": "object",
+        "required": [
+          "kind",
+          "conversationId",
+          "messageId",
+          "snippet",
+          "createdAt",
+          "channel",
+          "senderName"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "conversation",
+              "message"
+            ]
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "senderName": {
+            "type": "string"
+          },
+          "avatarUrl": {
             "type": [
               "string",
               "null"
