@@ -7,6 +7,7 @@ import {
   AgentApiError,
   formatVnTime,
   MODE_META,
+  type AgentAttachment,
   type AgentConversation,
   type AgentEscalation,
   type AgentMessage,
@@ -167,6 +168,19 @@ export function AgentInbox() {
     }
   };
 
+  const deleteConversation = async () => {
+    if (!conv) return;
+    if (!window.confirm(`Xoá vĩnh viễn hội thoại với ${conv.senderName}? Tin nhắn, lượt AI và phiếu đã xử lý sẽ bị xoá; đơn đặt phòng vẫn giữ nguyên.`)) return;
+    try {
+      await agentApi(`conversations/${conv.id}`, { method: "DELETE" });
+      toast.success("Đã xoá hội thoại.");
+      newSandbox();
+      await refreshAll();
+    } catch (e) {
+      toast.error(e instanceof AgentApiError ? e.message : "Không xoá được.");
+    }
+  };
+
   const newSandbox = () => {
     setSelectedId(null);
     setConv(null);
@@ -233,6 +247,7 @@ export function AgentInbox() {
             </div>
             {conv && (
               <div className="flex gap-1.5">
+                <button onClick={deleteConversation} title="Xoá toàn bộ hội thoại của khách này (khi khách yêu cầu xoá dữ liệu)" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-rose-700 hover:bg-rose-50 border border-slate-200">🗑️ Xoá</button>
                 {conv.mode === "HUMAN_TAKEOVER" ? (
                   <button onClick={() => act(`conversations/${conv.id}/release`, undefined, "Đã giao lại cho AI.")} className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">🤖 Giao lại cho AI</button>
                 ) : (
@@ -257,15 +272,14 @@ export function AgentInbox() {
                       {draft && " · 📝 Nháp chờ duyệt"}
                       {m.status === "failed" && <span className="text-rose-700"> · ⚠️ Meta không nhận (ngoài 24h?) — trả lời trong hộp thư Meta</span>}
                     </p>
-                    {draft ? (
+                    {m.deletedAt ? (
+                      <p className="italic text-slate-400">🚫 Khách đã thu hồi tin nhắn</p>
+                    ) : draft ? (
                       <textarea value={draftEdits[m.id] ?? m.text} onChange={(e) => setDraftEdits({ ...draftEdits, [m.id]: e.target.value })} rows={4} className="w-full min-w-[240px] bg-white rounded-lg border border-amber-200 p-2 text-base sm:text-sm" />
                     ) : (
-                      <p className="text-slate-800">{m.text}</p>
+                      m.text && <p className="text-slate-800">{m.text}</p>
                     )}
-                    {m.attachments.map((a) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={a.url} src={a.url} alt={a.caption ?? "Ảnh đính kèm"} className="mt-2 w-48 rounded-lg border border-slate-200" />
-                    ))}
+                    <MessageAttachments attachments={m.attachments} onChip={!conv || conv.channel === "sandbox" ? (t) => setComposer(t) : undefined} />
                     {draft && (
                       <div className="flex gap-1.5 mt-2">
                         <button onClick={() => act(`messages/${m.id}/approve`, draftEdits[m.id] !== undefined ? { text: draftEdits[m.id] } : {}, "Đã gửi.")} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 text-white">✅ Duyệt & gửi</button>
@@ -329,6 +343,55 @@ export function AgentInbox() {
           </ul>
         </section>
       </div>
+    </div>
+  );
+}
+
+/** Images (grid), room cards (generic template) and quick-reply chips — what the guest saw on Messenger/Instagram. */
+function MessageAttachments({ attachments, onChip }: { attachments: AgentAttachment[]; onChip?: (text: string) => void }) {
+  if (!attachments.length) return null;
+  const images = attachments.filter((a): a is Extract<AgentAttachment, { type: "image" }> => a.type === "image");
+  return (
+    <div className="mt-2 space-y-2">
+      {images.length > 0 && (
+        <div className={`grid gap-1.5 ${images.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+          {images.map((a) => (
+            <a key={a.url} href={a.url} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={a.url} alt={a.caption ?? "Ảnh đính kèm"} className="w-full max-w-48 aspect-square object-cover rounded-lg border border-slate-200" />
+            </a>
+          ))}
+        </div>
+      )}
+      {attachments.map((a, i) =>
+        a.type === "cards" ? (
+          <div key={`cards-${i}`} className="flex gap-2 overflow-x-auto pb-1">
+            {a.cards.map((c) => (
+              <div key={c.title} className="w-44 shrink-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {c.imageUrl && <img src={c.imageUrl} alt={c.title} className="w-full aspect-square object-cover" />}
+                <div className="p-2">
+                  <p className="text-xs font-bold text-slate-900">{c.title}</p>
+                  {c.subtitle && <p className="text-[11px] text-slate-500">{c.subtitle}</p>}
+                  {c.buttons?.map((b) => (
+                    <p key={b.title} className="mt-1 text-center text-[11px] font-bold text-sky-700 border-t border-slate-100 pt-1">{b.title}</p>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : a.type === "quick_replies" ? (
+          <div key={`qr-${i}`} className="flex flex-wrap gap-1.5">
+            {a.options.map((o) =>
+              onChip ? (
+                <button key={o} onClick={() => onChip(o)} className="px-2.5 py-1 rounded-full text-xs font-bold border border-sky-300 text-sky-700 bg-white hover:bg-sky-50">{o}</button>
+              ) : (
+                <span key={o} className="px-2.5 py-1 rounded-full text-xs font-bold border border-sky-200 text-sky-700 bg-white">{o}</span>
+              ),
+            )}
+          </div>
+        ) : null,
+      )}
     </div>
   );
 }

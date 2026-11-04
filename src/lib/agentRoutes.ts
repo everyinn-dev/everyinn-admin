@@ -19,6 +19,7 @@ export const AGENT_ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp; time
   { method: "GET", pattern: /^inbox\/summary$/ },
   { method: "GET", pattern: /^conversations$/ },
   { method: "GET", pattern: new RegExp(`^conversations/${SEG}$`) },
+  { method: "DELETE", pattern: new RegExp(`^conversations/${SEG}$`) },
   { method: "GET", pattern: new RegExp(`^conversations/${SEG}/runs$`) },
   { method: "POST", pattern: new RegExp(`^conversations/${SEG}/(takeover|release|messages)$`) },
   { method: "POST", pattern: /^sandbox\/messages$/, timeoutMs: 28_000 },

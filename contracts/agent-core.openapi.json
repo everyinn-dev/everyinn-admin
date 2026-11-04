@@ -667,6 +667,36 @@
             }
           }
         ]
+      },
+      "delete": {
+        "operationId": "deleteConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only. Erase one guest's conversation (data-deletion request): messages, AI runs, escalations, echo bookkeeping. 409 ESCALATION_PENDING while an escalation is pending.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/internal/v1/conversations/{conversationId}/takeover": {
@@ -2368,7 +2398,11 @@
             "type": "string"
           },
           "attachments": {
-            "type": "array"
+            "type": "array",
+            "description": "{type:'image',url,caption?} | {type:'cards',cards:[{title,subtitle?,imageUrl?,url?,buttons?}]} | {type:'quick_replies',options:string[]}",
+            "items": {
+              "type": "object"
+            }
           },
           "aiRunId": {
             "type": [
@@ -2378,6 +2412,13 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "deletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the guest unsent the message (text is then empty)."
           }
         }
       },

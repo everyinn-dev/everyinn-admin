@@ -62,10 +62,25 @@ export interface AgentMessage {
   staff: { id: number; name: string | null } | null;
   status: "received" | "draft_pending_approval" | "sending" | "sent" | "failed" | "rejected";
   text: string;
-  attachments: Array<{ type: "image"; url: string; caption?: string }>;
+  attachments: AgentAttachment[];
   aiRunId: string | null;
+  /** Guest unsent the message (Meta) — text is empty. */
+  deletedAt?: string | null;
   createdAt: string;
 }
+
+export interface AgentCard {
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  url?: string;
+  buttons?: Array<{ type: "web_url"; title: string; url: string } | { type: "postback"; title: string; payload: string }>;
+}
+
+export type AgentAttachment =
+  | { type: "image"; url: string; caption?: string }
+  | { type: "cards"; cards: AgentCard[] }
+  | { type: "quick_replies"; options: string[] };
 
 export interface AgentEscalation {
   id: string;
