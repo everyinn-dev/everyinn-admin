@@ -18,12 +18,14 @@ import {
 
 interface AdminShellProps {
   children: React.ReactNode;
+  /** Full-screen workspace (e.g. Vận hành AI): keeps the auth guard, hides topbar, sidebar and bottom nav. */
+  bare?: boolean;
 }
 
 const AUTH_VERIFY_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown for background /api/auth/me checks
 let lastAuthVerifiedMs = 0;
 
-export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
+export const AdminShell: React.FC<AdminShellProps> = ({ children, bare = false }) => {
   const pathname = usePathname();
   const router = useRouter();
   const [staff, setStaff] = useState<StaffIdentity | null>(null);
@@ -149,6 +151,10 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
         <p className="text-sm text-slate-600 font-medium">Đang tải Every Inn Admin...</p>
       </div>
     );
+  }
+
+  if (bare) {
+    return <div className="min-h-screen bg-slate-50 text-slate-900">{children}</div>;
   }
 
   return (

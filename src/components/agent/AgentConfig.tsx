@@ -77,6 +77,7 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
           maxDiscountPercent: f.maxDiscountPercent,
           defaultHoldMinutes: f.defaultHoldMinutes,
           depositPercent: f.depositPercent,
+          depositMinLeadDays: f.depositMinLeadDays,
           takeoverMinutes: f.takeoverMinutes,
           autoCheckinWindowHours: f.autoCheckinWindowHours,
           manualReminderLeadHours: f.manualReminderLeadHours,
@@ -163,6 +164,7 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
               [
                 ["defaultHoldMinutes", "Giữ phòng (phút)"],
                 ["depositPercent", "Cọc (%)"],
+                ["depositMinLeadDays", "Chỉ nhận cọc khi đặt trước ≥ (ngày)"],
                 ["maxDiscountPercent", "AI được giảm tối đa (%)"],
                 ["takeoverMinutes", "Tiếp quản (phút)"],
                 ["autoCheckinWindowHours", "Tự gửi mã nếu nhận phòng ≤ (giờ)"],
@@ -707,8 +709,16 @@ export function AgentConfig() {
           <h1 className="text-2xl font-black text-slate-900">⚙️ Cấu hình AI Lễ Tân</h1>
           <p className="text-xs sm:text-sm text-slate-500">Tính cách, giờ bận, kho mã cửa, kiến thức và quyền của AI. Không cần sửa code.</p>
         </div>
-        <div className="w-full sm:w-80">
-          <BusyToggle settings={settings} onChange={setSettings} />
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Link
+            href="/agent-config/van-hanh"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
+          >
+            🧭 Vận hành AI
+          </Link>
+          <div className="w-full sm:w-80">
+            <BusyToggle settings={settings} onChange={setSettings} />
+          </div>
         </div>
       </header>
       <div className="flex items-center bg-slate-200/80 p-1 rounded-xl flex-wrap gap-1">

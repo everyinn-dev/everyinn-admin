@@ -126,6 +126,8 @@ export interface AgentSettings {
   maxDiscountPercent: number;
   defaultHoldMinutes: number;
   depositPercent: number;
+  /** AI-7 OD-25: deposit allowed only when booked at least this many days ahead (else full payment). */
+  depositMinLeadDays: number;
   takeoverMinutes: number;
   autoCheckinWindowHours: number;
   manualReminderLeadHours: number;
