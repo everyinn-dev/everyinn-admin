@@ -39,6 +39,16 @@ export const AGENT_ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp; time
   { method: "POST", pattern: /^faqs$/ },
   { method: "PUT", pattern: new RegExp(`^faqs/${SEG}$`) },
   { method: "DELETE", pattern: new RegExp(`^faqs/${SEG}$`) },
+  // AI-7 W4 master data (Kịch bản, Mẫu tin, Sổ luật, Bảng quyền, Chân dung khách) — registry-driven CRUD
+  { method: "GET", pattern: /^md\/_registry$/ },
+  { method: "POST", pattern: /^md\/templates\/preview$/ },
+  { method: "GET", pattern: /^md\/(scenarios|templates|rules|authority|segments)$/ },
+  { method: "POST", pattern: /^md\/(scenarios|templates|rules|authority|segments)$/ },
+  { method: "PUT", pattern: /^md\/(scenarios|templates|rules|authority|segments)\/[A-Za-z0-9._:-]{1,64}$/ },
+  { method: "DELETE", pattern: /^md\/(scenarios|templates|rules|authority|segments)\/[A-Za-z0-9._:-]{1,64}$/ },
+  { method: "GET", pattern: /^guests$/ },
+  { method: "PUT", pattern: /^guests\/(phone|conv)(:|%3A)[A-Za-z0-9%+._:-]{3,110}$/i },
+  { method: "GET", pattern: /^authority\/decisions$/ },
 ];
 
 export function matchAgentRoute(method: string, path: string) {

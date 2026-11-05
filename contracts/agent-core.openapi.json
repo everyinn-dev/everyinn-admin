@@ -2294,6 +2294,498 @@
           }
         }
       }
+    },
+    "/internal/v1/md/_registry": {
+      "get": {
+        "operationId": "getMasterDataRegistry",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-7 W4: collection schemas (fields, options resolved), capabilities, enums and template sample values — the admin renders lists and forms from it.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schemaVersion",
+                    "collections",
+                    "capabilities"
+                  ],
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer"
+                    },
+                    "collections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "enums": {
+                      "type": "object"
+                    },
+                    "samples": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/md/templates/preview": {
+      "post": {
+        "operationId": "previewTemplate",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Renders template variants with sample (or given) values.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "previews": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "values": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/md/{collection}": {
+      "parameters": [
+        {
+          "name": "collection",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "scenarios",
+              "templates",
+              "rules",
+              "authority",
+              "segments"
+            ]
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Every row of a collection (incl. inactive), sorted.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "rows"
+                  ],
+                  "properties": {
+                    "collection": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MdRow"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Create a custom row (manager). Validated against the registry.",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "row": {
+                      "$ref": "#/components/schemas/MdRow"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sort": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/md/{collection}/{rowId}": {
+      "parameters": [
+        {
+          "name": "collection",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "scenarios",
+              "templates",
+              "rules",
+              "authority",
+              "segments"
+            ]
+          }
+        },
+        {
+          "name": "rowId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,64}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Partial update with expectedVersion (manager). System rows keep their locked fields.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "row": {
+                      "$ref": "#/components/schemas/MdRow"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "object"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sort": {
+                    "type": "integer"
+                  },
+                  "expectedVersion": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Delete a custom row (manager); system rows → 409 SYSTEM_ROW (switch them off).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/guests": {
+      "get": {
+        "operationId": "listGuests",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Guest personas (segment, stats, tags, note), newest first, max 100.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "guests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "segment",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/guests/{guestId}": {
+      "parameters": [
+        {
+          "name": "guestId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateGuest",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Owner tags + note of a guest (expectedVersion); the segment is recomputed on the next message.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "guest": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "expectedVersion": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/authority/decisions": {
+      "get": {
+        "operationId": "listAuthorityDecisions",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Learning view: decisions per capability × segment over N days + delegation suggestions.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "integer"
+                    },
+                    "summary": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2367,6 +2859,7 @@
           "hotline",
           "defaultHoldMinutes",
           "depositPercent",
+          "depositMinLeadDays",
           "takeoverMinutes",
           "autoCheckinWindowHours",
           "manualReminderLeadHours",
@@ -2439,6 +2932,12 @@
           },
           "depositPercent": {
             "type": "integer"
+          },
+          "depositMinLeadDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60,
+            "description": "OD-25: a deposit is offered only when check-in is at least this many days away; otherwise full payment (a guest asking for a deposit → DEPOSIT_EXCEPTION card)."
           },
           "takeoverMinutes": {
             "type": "integer"
@@ -3266,6 +3765,46 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "MdRow": {
+        "type": "object",
+        "required": [
+          "id",
+          "data",
+          "isActive",
+          "isSystem",
+          "sort",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "isSystem": {
+            "type": "boolean"
+          },
+          "sort": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
           }
         }
       }
