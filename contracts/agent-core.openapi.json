@@ -3198,7 +3198,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 180,
-            "description": "Owner 2026-11-06: Home waits this many seconds for more short messages before answering (complete questions, phone numbers, chips and short answers to Home's question are answered at once). 0 = off."
+            "description": "Owner 2026-11-06: Home waits this many seconds (default 30, precise Durable Object alarm) for more short messages before answering; complete questions, phone numbers, chips and short answers to Home's question are answered at once. 0 = off."
           }
         }
       },
