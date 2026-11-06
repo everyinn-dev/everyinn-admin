@@ -49,6 +49,9 @@ export const AGENT_ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp; time
   { method: "GET", pattern: /^guests$/ },
   { method: "PUT", pattern: /^guests\/(phone|conv)(:|%3A)[A-Za-z0-9%+._:-]{3,110}$/i },
   { method: "GET", pattern: /^authority\/decisions$/ },
+  // AI-9 Truy vết AI: brain turns + their step traces
+  { method: "GET", pattern: /^runs$/ },
+  { method: "GET", pattern: /^runs\/run_[A-Za-z0-9-]{8,64}$/ },
 ];
 
 export function matchAgentRoute(method: string, path: string) {

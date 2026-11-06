@@ -910,6 +910,160 @@
         }
       }
     },
+    "/internal/v1/runs": {
+      "get": {
+        "operationId": "listAllRuns",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-9 'Truy vết AI': brain turns newest first (30 per page, keyset `before` = createdAt). Filters: conversationId, route, problem=1 (guard / error / auto hand-off). Guest text redacted (door codes, phones).",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "llm",
+                "faq",
+                "greeting",
+                "guard",
+                "error"
+              ]
+            }
+          },
+          {
+            "name": "problem",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "runs",
+                    "nextBefore"
+                  ],
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunSummary"
+                      }
+                    },
+                    "nextBefore": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/runs/{runId}": {
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^run_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getRun",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-9: one brain turn with its step trace — input / output / ms of every step (stage, scenario, sales, LLM rounds, tools, guard, template, reply). Door codes scrubbed, phones masked, values cut to 2 KB; steps null for turns older than 30 days or before migration 0014.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "run"
+                  ],
+                  "properties": {
+                    "run": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/RunSummary"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "toolCalls",
+                            "ragChunks",
+                            "steps"
+                          ],
+                          "properties": {
+                            "toolCalls": {
+                              "type": "array"
+                            },
+                            "ragChunks": {
+                              "type": "array"
+                            },
+                            "steps": {
+                              "type": [
+                                "array",
+                                "null"
+                              ],
+                              "items": {
+                                "$ref": "#/components/schemas/RunStep"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/internal/v1/sandbox/messages": {
       "post": {
         "operationId": "sandboxMessage",
@@ -3804,6 +3958,165 @@
             ]
           },
           "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "RunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversationId",
+          "senderName",
+          "channel",
+          "guestText",
+          "route",
+          "intent",
+          "scenario",
+          "summary",
+          "modelId",
+          "tokensIn",
+          "tokensOut",
+          "neurons",
+          "latencyMs",
+          "hasProblem",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "senderName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guestText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "route": {
+            "type": "string"
+          },
+          "intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scenario": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokensIn": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tokensOut": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "neurons": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "hasProblem": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "RunStep": {
+        "type": "object",
+        "required": [
+          "i",
+          "kind",
+          "label",
+          "at"
+        ],
+        "properties": {
+          "i": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "input",
+              "stage",
+              "scenario",
+              "memory",
+              "persona",
+              "route",
+              "sales",
+              "prompt",
+              "llm",
+              "tool",
+              "guard",
+              "template",
+              "reply",
+              "error"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "ms": {
+            "type": "integer"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "error"
+            ]
+          },
+          "input": {},
+          "output": {},
+          "note": {
             "type": "string"
           }
         }

@@ -49,6 +49,11 @@ export function AgentInbox() {
   const [filter, setFilter] = useState<Filter>("all");
   const [convs, setConvs] = useState<AgentConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // AI-9: "✕" of Truy vết AI comes back with ?c=<conversationId>
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("c");
+    if (c) setSelectedId(c);
+  }, []);
   const [conv, setConv] = useState<AgentConversation | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [escalations, setEscalations] = useState<AgentEscalation[]>([]);
@@ -200,6 +205,7 @@ export function AgentInbox() {
         </div>
         <div className="flex gap-2">
           <button onClick={newSandbox} className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700">＋ Chat thử (Sandbox)</button>
+          <Link href={selectedId ? `/agent-inbox/truy-vet?conversationId=${encodeURIComponent(selectedId)}` : "/agent-inbox/truy-vet"} className="px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50">🔎 Truy vết AI</Link>
           <Link href="/agent-config" className="px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50">⚙️ Cấu hình AI</Link>
         </div>
       </header>
@@ -337,6 +343,9 @@ export function AgentInbox() {
                   </p>
                 ))}
                 {r.ragChunks.length > 0 && <p className="text-slate-400">RAG: {r.ragChunks.join(", ")}</p>}
+                <Link href={`/agent-inbox/truy-vet?conversationId=${encodeURIComponent(selectedId ?? "")}&run=${encodeURIComponent(r.id)}`} className="inline-block pt-0.5 font-bold text-emerald-700 hover:underline">
+                  Xem từng bước →
+                </Link>
               </li>
             ))}
             {runs.length === 0 && <li className="p-3 text-xs text-slate-500 bg-white rounded-xl border border-slate-200">Chưa có lượt suy luận.</li>}

@@ -13,7 +13,7 @@ test("synced AdminApi contract: every proxied route exists in the provider contr
   assert.equal(doc.info.version, "agent-internal-v1");
   const ops = Object.entries(doc.paths).flatMap(([p, o]) => Object.keys(o).filter((m) => m !== "parameters").map((m) => ({ method: m.toUpperCase(), path: p.replace(/^\/internal\/v1\//, "") })));
   for (const r of AGENT_ROUTES) {
-    const hit = ops.find((o) => o.method === r.method && r.pattern.test(o.path.replace(/\{[A-Za-z]+\}/g, (m) => ({ "{roomId}": "sig-102", "{collection}": "rules", "{guestId}": "conv:abc_123" })[m] ?? "abc_123")));
+    const hit = ops.find((o) => o.method === r.method && r.pattern.test(o.path.replace(/\{[A-Za-z]+\}/g, (m) => ({ "{roomId}": "sig-102", "{collection}": "rules", "{guestId}": "conv:abc_123", "{runId}": "run_abcd-1234" })[m] ?? "abc_123")));
     assert.ok(hit, `${r.method} ${r.pattern} is not in agent-core contract`);
   }
 });
