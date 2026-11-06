@@ -5,6 +5,7 @@ import Link from "next/link";
 import { agentApi, AgentApiError, formatVnTime, ROOMS, type AgentSettings } from "@/lib/agentApi";
 import { useToast } from "@/components/ui/Toast";
 import { BusyToggle } from "./BusyToggle";
+import { RouterCheck } from "./RouterCheck";
 import { apiFetch } from "@/lib/apiClient";
 import { getCachedStaffIdentity } from "@/lib/localCache";
 
@@ -228,6 +229,7 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
                 <input className={input} placeholder={f.modelId} value={f.router.model ?? ""} onChange={(e) => setF({ ...f, router: { ...f.router!, model: e.target.value.trim() || null } })} />
               </label>
             </div>
+            <RouterCheck model={f.router.model} />
           </div>
         )}
         <div className="flex justify-end">

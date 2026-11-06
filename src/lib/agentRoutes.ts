@@ -9,6 +9,7 @@ export const AGENT_ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp; time
   { method: "GET", pattern: /^settings$/ },
   { method: "PUT", pattern: /^settings$/ },
   { method: "POST", pattern: /^settings\/busy$/ },
+  { method: "POST", pattern: /^router\/eval$/ },
   { method: "GET", pattern: /^door-codes$/ },
   { method: "POST", pattern: /^door-codes\/gate$/ },
   { method: "POST", pattern: new RegExp(`^door-codes/gate/${SEG}/deactivate$`) },

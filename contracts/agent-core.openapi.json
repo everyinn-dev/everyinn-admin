@@ -2940,6 +2940,151 @@
           }
         ]
       }
+    },
+    "/internal/v1/router/eval": {
+      "post": {
+        "operationId": "evalRouter",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-11: score the LLM router on the built-in check set (brain/routerCases.ts), ≤ 10 cases per call. Manager only; spends neurons (~30 per case with gemma-4).",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Workers AI model (@cf/…) to try; null = settings.router.model or modelId"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One batch of scored cases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "model",
+                    "total",
+                    "offset",
+                    "next",
+                    "results"
+                  ],
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "next": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "burst",
+                          "expect",
+                          "ok",
+                          "ms",
+                          "neurons"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "burst": {
+                            "type": "string"
+                          },
+                          "expect": {
+                            "type": "object"
+                          },
+                          "got": {
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "ms": {
+                            "type": "integer"
+                          },
+                          "neurons": {
+                            "type": "integer"
+                          },
+                          "ok": {
+                            "type": "object",
+                            "properties": {
+                              "act": {
+                                "type": "boolean"
+                              },
+                              "scenario": {
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "slots": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "hit": {
+                                    "type": "integer"
+                                  },
+                                  "of": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
