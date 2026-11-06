@@ -24,6 +24,17 @@ const ICONS: Record<string, React.ReactNode> = {
   "arrow-left": (<><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></>),
   lock: (<><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>),
   shuffle: (<><path d="m18 14 4 4-4 4" /><path d="m18 2 4 4-4 4" /><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22" /><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2" /><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45" /></>),
+  "message-circle-question": (<><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></>),
+  "bell-ring": (<><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M22 8c0-2.3-.8-4.3-2-6" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /><path d="M4 2C2.8 3.7 2 5.7 2 8" /></>),
+  "rotate-ccw": (<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></>),
+  "corner-down-right": (<><polyline points="15 10 20 15 15 20" /><path d="M4 4v7a4 4 0 0 0 4 4h12" /></>),
+  flag: (<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" x2="4" y1="22" y2="15" /></>),
+  "arrow-up": (<><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>),
+  "arrow-down": (<><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></>),
+  play: (<><polygon points="6 3 20 12 6 21 6 3" /></>),
+  "circle-check": (<><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></>),
+  hourglass: (<><path d="M5 22h14" /><path d="M5 2h14" /><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" /><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" /></>),
+  "external-link": (<><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>),
   gavel: (<><path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" /><path d="m16 16 6-6" /><path d="m8 8 6-6" /><path d="m9 7 8 8" /><path d="m21 11-8-8" /></>),
   bot: (<><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" /></>),
   "user-check": (<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></>),
@@ -117,10 +128,10 @@ export function Seg<T extends string>({ options, value, onChange, disabled, labe
   );
 }
 
-export function Chips({ options, value, onChange, disabled }: { options: Array<[string, string]>; value: string[]; onChange: (v: string[]) => void; disabled?: boolean }) {
+export function Chips({ options, value, onChange, disabled, wrap }: { options: Array<[string, string]>; value: string[]; onChange: (v: string[]) => void; disabled?: boolean; wrap?: boolean }) {
   const min = Math.max(76, Math.max(0, ...options.map(([, l]) => l.length)) * 7.5 + 30);
   return (
-    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(auto-fill,minmax(${min}px,1fr))` }}>
+    <div className={wrap ? "flex flex-wrap gap-1.5" : "grid gap-1.5"} style={wrap ? undefined : { gridTemplateColumns: `repeat(auto-fill,minmax(${min}px,1fr))` }}>
       {options.map(([v, l]) => {
         const on = value.includes(v);
         return (

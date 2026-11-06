@@ -2489,6 +2489,45 @@
                     },
                     "samples": {
                       "type": "object"
+                    },
+                    "actions": {
+                      "type": "array",
+                      "description": "AI-11 kịch bản action library (flow editor): id, label, help, params, outcomes, waits",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "help": {
+                            "type": "string"
+                          },
+                          "params": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "outcomes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "waits": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "outcomeLabels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -3071,6 +3110,67 @@
                                 }
                               }
                             }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/scenarios/stats": {
+      "get": {
+        "operationId": "scenarioStats",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-11: per kịch bản — runs in the last 7 days, runs waiting now (guest / quản lí), last run time.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "since",
+                    "stats"
+                  ],
+                  "properties": {
+                    "since": {
+                      "type": "string"
+                    },
+                    "stats": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "scenario",
+                          "runs7d",
+                          "waiting"
+                        ],
+                        "properties": {
+                          "scenario": {
+                            "type": "string"
+                          },
+                          "runs7d": {
+                            "type": "integer"
+                          },
+                          "waiting": {
+                            "type": "integer"
+                          },
+                          "lastAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         }
                       }

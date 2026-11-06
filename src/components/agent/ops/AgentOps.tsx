@@ -17,6 +17,7 @@ import { OverviewScreen } from "./OverviewScreen";
 import { ListScreen } from "./ListScreen";
 import { AuthorityScreen } from "./AuthorityScreen";
 import { GuestsScreen } from "./GuestsScreen";
+import { ScenarioScreen } from "./flow/ScenarioScreen";
 
 export type ScreenId = "tong-quan" | "so-luat" | "quyen" | "mau-tin" | "kich-ban" | "khach";
 const SCREEN_IDS: ScreenId[] = ["tong-quan", "so-luat", "quyen", "mau-tin", "kich-ban", "khach"];
@@ -215,6 +216,8 @@ export function AgentOps() {
             <AuthorityScreen ctx={ctx} />
           ) : screen === "khach" ? (
             <GuestsScreen ctx={ctx} />
+          ) : screen === "kich-ban" ? (
+            <ScenarioScreen ctx={ctx} />
           ) : (
             <ListScreen key={screen} ctx={ctx} collection={screen === "so-luat" ? "rules" : screen === "mau-tin" ? "templates" : "scenarios"} />
           )}

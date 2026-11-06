@@ -49,6 +49,38 @@ export interface MdRegistry {
   capabilities: Capability[];
   enums: { stages: string[]; layers: string[]; categories: string[]; deciders: Decider[] };
   samples: Record<string, string | number>;
+  /** AI-11: kịch bản action library (flow editor) + names of step outcomes. */
+  actions?: FlowAction[];
+  outcomeLabels?: Record<string, string>;
+}
+
+export interface FlowActionParam {
+  name: string;
+  label: string;
+  type: "string" | "text" | "template" | "scenario" | "lines" | "number" | "boolean";
+  required?: boolean;
+}
+export interface FlowAction {
+  id: string;
+  label: string;
+  help: string;
+  params: FlowActionParam[];
+  outcomes: string[];
+  /** the step stops and waits for the guest / quản lí */
+  waits: boolean;
+}
+export interface FlowStep {
+  id: string;
+  action: string;
+  title?: string;
+  params?: Record<string, unknown>;
+  next?: Record<string, string>;
+}
+export interface ScenarioStat {
+  scenario: string;
+  runs7d: number;
+  waiting: number;
+  lastAt: string | null;
 }
 
 export type MdData = Record<string, unknown>;
@@ -111,6 +143,7 @@ export const opsApi = {
   },
   updateGuest: (id: string, body: { tags?: string[]; note?: string | null; expectedVersion: number }) =>
     agentApi<{ guest: GuestProfile }>(`guests/${encodeURIComponent(id)}`, { method: "PUT", body }).then((r) => r.data!.guest),
+  scenarioStats: () => agentApi<{ since: string; stats: ScenarioStat[] }>("scenarios/stats").then((r) => r.data!.stats),
   decisions: (days = 30) => agentApi<{ days: number; summary: DecisionAgg[]; suggestions: DelegationSuggestion[] }>(`authority/decisions?days=${days}`).then((r) => r.data!),
 };
 
@@ -144,7 +177,7 @@ export const ACT_LABEL: Record<string, string> = {
   special_occasion: "Dịp đặc biệt (sinh nhật, kỷ niệm…)",
   other: "Khác",
 };
-export const PHASE_LABEL: Record<string, string> = { browsing: "Đang hỏi / tư vấn", confirming: "Đang xác nhận đặt", awaiting_payment: "Chờ chuyển khoản", paid: "Đã có booking", lapsed: "Vừa hết giờ giữ" };
+export const PHASE_LABEL: Record<string, string> = { browsing: "Đang tư vấn", confirming: "Đang xác nhận", awaiting_payment: "Chờ chuyển khoản", paid: "Đã có booking", lapsed: "Vừa hết giờ giữ" };
 export const DECIDER_LABEL: Record<Decider, string> = { ai: "Home tự chốt", ai_after_timeout: "Chờ 11′ → Home", manager: "Hỏi quản lí", never: "Không bao giờ" };
 export const DECIDER_SHORT: Record<Decider, string> = { ai: "Home", ai_after_timeout: "Chờ→Home", manager: "Quản lí", never: "Không" };
 export const DAY_LABEL: Record<string, string> = { "1": "T2", "2": "T3", "3": "T4", "4": "T5", "5": "T6", "6": "T7", "0": "CN" };
