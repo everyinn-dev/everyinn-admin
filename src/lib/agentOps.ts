@@ -6,7 +6,7 @@
 import { agentApi } from "./agentApi";
 
 export type CollectionId = "scenarios" | "templates" | "rules" | "authority" | "segments";
-export type FieldType = "string" | "text" | "number" | "boolean" | "enum" | "multi" | "lines" | "time" | "datetime";
+export type FieldType = "string" | "text" | "number" | "boolean" | "enum" | "multi" | "lines" | "time" | "datetime" | "flow";
 
 export interface MdField {
   name: string;
@@ -128,6 +128,23 @@ export const CATEGORY_LABEL: Record<string, string> = {
   other: "Khác",
 };
 export const STAGE_LABEL: Record<string, string> = { new: "Khách mới", returning: "Khách cũ", upcoming: "Sắp đến", in_stay: "Đang ở" };
+/** AI-11 kịch bản "Khi nào": what the guest is doing / where the conversation is. */
+export const ACT_LABEL: Record<string, string> = {
+  rebook: "Muốn đặt lại / thanh toán tiếp",
+  paid: "Báo đã chuyển tiền",
+  lost_item: "Để quên đồ",
+  claim: "Nói về lời hứa / việc trước đây",
+  cancel: "Huỷ",
+  pay_later: "Hẹn chuyển sau",
+  book: "Muốn đặt phòng",
+  ask_price: "Hỏi giá",
+  ask_directions: "Hỏi đường",
+  ask_door: "Hỏi cách mở cửa",
+  in_stay_issue: "Báo sự cố khi đang ở",
+  special_occasion: "Dịp đặc biệt (sinh nhật, kỷ niệm…)",
+  other: "Khác",
+};
+export const PHASE_LABEL: Record<string, string> = { browsing: "Đang hỏi / tư vấn", confirming: "Đang xác nhận đặt", awaiting_payment: "Chờ chuyển khoản", paid: "Đã có booking", lapsed: "Vừa hết giờ giữ" };
 export const DECIDER_LABEL: Record<Decider, string> = { ai: "Home tự chốt", ai_after_timeout: "Chờ 11′ → Home", manager: "Hỏi quản lí", never: "Không bao giờ" };
 export const DECIDER_SHORT: Record<Decider, string> = { ai: "Home", ai_after_timeout: "Chờ→Home", manager: "Quản lí", never: "Không" };
 export const DAY_LABEL: Record<string, string> = { "1": "T2", "2": "T3", "3": "T4", "4": "T5", "5": "T6", "6": "T7", "0": "CN" };

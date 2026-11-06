@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { AgentApiError } from "@/lib/agentApi";
-import { CATEGORY_LABEL, DAY_LABEL, DECIDER_LABEL, LAYER_LABEL, STAGE_LABEL, TIER_LABEL, editorLabel, fmtVn, opsApi, type Capability, type MdCollection, type MdData, type MdField, type MdRow } from "@/lib/agentOps";
+import { ACT_LABEL, CATEGORY_LABEL, DAY_LABEL, PHASE_LABEL, DECIDER_LABEL, LAYER_LABEL, STAGE_LABEL, TIER_LABEL, editorLabel, fmtVn, opsApi, type Capability, type MdCollection, type MdData, type MdField, type MdRow } from "@/lib/agentOps";
 import { useToast } from "@/components/ui/Toast";
 import { Chips, Dropdown, Field, Icon, PanelFooter, PanelHead, Seg, Switch, cls } from "./ui";
 
@@ -25,6 +25,10 @@ export function optionLabel(f: MdField, v: string, ctx: OptionCtx): string {
       return CATEGORY_LABEL[v] ?? v;
     case "stages":
       return STAGE_LABEL[v] ?? v;
+    case "acts":
+      return ACT_LABEL[v] ?? v;
+    case "phases":
+      return PHASE_LABEL[v] ?? v;
     case "deciders":
       return DECIDER_LABEL[v as keyof typeof DECIDER_LABEL] ?? v;
     case "capabilities":
@@ -255,6 +259,26 @@ export function MdForm({ def, row, draft, ctx, canEdit, myStaffId, title, code, 
             onChange={(e) => set(f.name, e.target.value.split("\n").map((x) => x.replace(/^\s+/, "")).filter((x, i, a) => x || i === a.length - 1))}
             onBlur={(e) => set(f.name, e.target.value.split("\n").map((x) => x.trim()).filter(Boolean))}
           />
+        );
+      }
+      case "flow": {
+        // AI-11: read-only list until the flow editor (Đợt 2); saving keeps the steps as they are
+        const steps = Array.isArray(v) ? (v as Array<{ id: string; title?: string; action: string; next?: Record<string, string> }>) : [];
+        if (!steps.length) return <p className="text-xs text-slate-500">Chưa có bước — Home trả lời theo Lời dặn (mục tiêu + các bước chữ).</p>;
+        return (
+          <ol className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            {steps.map((s, i) => (
+              <li key={s.id} className="flex gap-2">
+                <span className="w-5 shrink-0 text-right font-semibold tabular-nums text-slate-400">{i + 1}.</span>
+                <span className="min-w-0">
+                  <span className="font-semibold">{s.title ?? s.action}</span>
+                  {s.next && Object.keys(s.next).length > 0 && (
+                    <span className="text-slate-500"> → {Object.entries(s.next).map(([k, t]) => `${k === "*" ? "còn lại" : k}: ${t === "end" ? "kết thúc" : t === "llm" ? "Home tự trả lời" : t.startsWith("scenario:") ? `kịch bản ${t.slice(9)}` : (steps.find((x) => x.id === t)?.title ?? t)}`).join(" · ")}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
         );
       }
       case "time":
