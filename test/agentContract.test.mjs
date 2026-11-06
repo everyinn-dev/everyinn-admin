@@ -22,7 +22,7 @@ test("UI-consumed DTOs match the contract (settings, escalation, conversation)",
   const settings = {
     botName: "Home", personaPrompt: "x".repeat(60), modelId: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", supervisedMode: true, busyUntil: null,
     quietHours: { enabled: true, start: "01:30", end: "07:15", holdBufferMinutes: 30 }, busy: { active: false, reason: null, until: null },
-    hotline: "0906 314 109", defaultHoldMinutes: 15, depositPercent: 50, depositMinLeadDays: 5, takeoverMinutes: 120, autoCheckinWindowHours: 8, manualReminderLeadHours: 6,
+    hotline: "0906 314 109", defaultHoldMinutes: 15, depositPercent: 50, depositMinLeadDays: 5, burstWaitSeconds: 60, takeoverMinutes: 120, autoCheckinWindowHours: 8, manualReminderLeadHours: 6,
     dailyNeuronBudget: 20000, toolSwitches: { ask_owner: true }, version: 1,
   };
   assert.deepEqual(v.validateSchema("#/components/schemas/Settings", settings), []);

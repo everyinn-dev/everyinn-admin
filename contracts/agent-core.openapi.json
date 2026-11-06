@@ -3014,6 +3014,7 @@
           "defaultHoldMinutes",
           "depositPercent",
           "depositMinLeadDays",
+          "burstWaitSeconds",
           "takeoverMinutes",
           "autoCheckinWindowHours",
           "manualReminderLeadHours",
@@ -3192,6 +3193,12 @@
           "visionModelId": {
             "type": "string",
             "description": "Workers AI model for turns where the guest sent photos (vision + tools). Default @cf/google/gemma-4-26b-a4b-it."
+          },
+          "burstWaitSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 180,
+            "description": "Owner 2026-11-06: Home waits this many seconds for more short messages before answering (complete questions, phone numbers, chips and short answers to Home's question are answered at once). 0 = off."
           }
         }
       },

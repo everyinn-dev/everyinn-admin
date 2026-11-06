@@ -128,6 +128,8 @@ export interface AgentSettings {
   depositPercent: number;
   /** AI-7 OD-25: deposit allowed only when booked at least this many days ahead (else full payment). */
   depositMinLeadDays: number;
+  /** Wait this long for more short messages before Home answers (0 = off); full questions are answered at once. */
+  burstWaitSeconds: number;
   takeoverMinutes: number;
   autoCheckinWindowHours: number;
   manualReminderLeadHours: number;
