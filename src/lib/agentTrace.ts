@@ -4,7 +4,7 @@
  */
 import { agentApi } from "./agentApi";
 
-export type StepKind = "input" | "stage" | "scenario" | "memory" | "persona" | "state" | "intent" | "policy" | "route" | "sales" | "prompt" | "llm" | "tool" | "guard" | "template" | "reply" | "error";
+export type StepKind = "input" | "stage" | "scenario" | "memory" | "persona" | "state" | "intent" | "policy" | "workflow" | "router" | "route" | "sales" | "prompt" | "llm" | "tool" | "guard" | "template" | "reply" | "error";
 
 export interface RunStep {
   i: number;
@@ -67,6 +67,7 @@ export function runKind(r: Pick<RunSummary, "route" | "intent">): string {
   if (r.route === "llm") return "LLM";
   if (r.intent?.startsWith("policy:")) return "Chính sách"; // AI-10: guest act or automatic event (❌ Chưa nhận, hết giờ giữ)
   if (r.intent?.startsWith("sales:")) return "Cố định";
+  if (r.intent?.startsWith("flow:")) return "Kịch bản"; // AI-11: a kịch bản with steps handled the turn
   if (r.route === "error") return "Lỗi";
   if (r.route === "guard") return "Chặn";
   return r.route === "greeting" ? "Chào" : "FAQ";
@@ -74,8 +75,8 @@ export function runKind(r: Pick<RunSummary, "route" | "intent">): string {
 
 /** Flow phases of a turn (node groups of the trace screen). */
 export const PHASES = [
-  { id: "hieu", label: "Hiểu khách", kinds: ["input", "stage", "scenario", "memory", "persona", "state", "intent", "route"] },
-  { id: "quyet", label: "Quyết định", kinds: ["sales", "policy"] },
+  { id: "hieu", label: "Hiểu khách", kinds: ["input", "stage", "scenario", "memory", "persona", "state", "intent", "router", "route"] },
+  { id: "quyet", label: "Quyết định", kinds: ["sales", "policy", "workflow"] },
   { id: "nghi", label: "Suy nghĩ & gọi tool", kinds: ["prompt", "llm", "tool"] },
   { id: "tra", label: "Kiểm tra & trả lời", kinds: ["guard", "template", "reply", "error"] },
 ] as const;
@@ -89,6 +90,8 @@ export const KIND_META: Record<StepKind, { icon: string; name: string }> = {
   state: { icon: "list-tree", name: "Trạng thái hội thoại" },
   intent: { icon: "message-square-text", name: "Ý khách" },
   policy: { icon: "gavel", name: "Chính sách" },
+  workflow: { icon: "list-tree", name: "Kịch bản (bước)" },
+  router: { icon: "split", name: "Điều phối" },
   route: { icon: "split", name: "Định tuyến" },
   sales: { icon: "shopping-bag", name: "Bán hàng cố định" },
   prompt: { icon: "file-text", name: "Prompt" },

@@ -3199,6 +3199,32 @@
             "minimum": 0,
             "maximum": 180,
             "description": "Owner 2026-11-06: Home waits this many seconds (default 30, precise Durable Object alarm) for more short messages before answering; complete questions, phone numbers, chips and short answers to Home's question are answered at once. 0 = off."
+          },
+          "router": {
+            "type": "object",
+            "description": "AI-11 LLM router (same model as replies unless set): reads each guest burst and picks the kịch bản, the guest's act and slots. shadow = runs and is traced next to the rules (Truy vết AI node 'Điều phối'), the conversation still follows the rules; on = its decision is used when confidence ≥ minConfidence; off = rules only.",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "shadow",
+                  "on"
+                ]
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Workers AI model id (@cf/…); null = modelId"
+              },
+              "minConfidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
           }
         }
       },

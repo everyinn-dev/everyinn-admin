@@ -130,6 +130,8 @@ export interface AgentSettings {
   depositMinLeadDays: number;
   /** Wait this long (default 30 s) for more short messages before Home answers (0 = off); full questions are answered at once. */
   burstWaitSeconds: number;
+  /** AI-11 LLM router: off = rules only · shadow = runs + traced, rules still decide · on = used when confident. */
+  router?: { mode: "off" | "shadow" | "on"; model: string | null; minConfidence: number };
   takeoverMinutes: number;
   autoCheckinWindowHours: number;
   manualReminderLeadHours: number;

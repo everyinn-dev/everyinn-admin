@@ -85,6 +85,7 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
           depositPercent: f.depositPercent,
           depositMinLeadDays: f.depositMinLeadDays,
           burstWaitSeconds: f.burstWaitSeconds,
+          ...(f.router ? { router: f.router } : {}),
           takeoverMinutes: f.takeoverMinutes,
           autoCheckinWindowHours: f.autoCheckinWindowHours,
           manualReminderLeadHours: f.manualReminderLeadHours,
@@ -192,6 +193,43 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
             <span className="text-[11px] text-slate-500">Biến: {"{room_name} {room_number} {floor_label} {checkin_time} {checkout_time} {gate_code} {lockbox_code} {maps_url} {hotline} {guest_name}"}</span>
           </label>
         </div>
+        {f.router && (
+          <div className={card}>
+            <p className="text-sm font-black text-slate-800">🧭 Điều phối hội thoại bằng AI</p>
+            <p className="text-xs text-slate-500">AI đọc cả cuộc trò chuyện để chọn đúng kịch bản (kể cả kịch bản bạn tự tạo, theo câu “Khi nào”). Không bao giờ tự báo giá hay tự trả lời khách.</p>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Chế độ điều phối">
+              {(
+                [
+                  ["off", "Tắt", "Chỉ dùng luật"],
+                  ["shadow", "Chạy thử", "Ghi vào Truy vết AI, hội thoại vẫn theo luật"],
+                  ["on", "Bật", "Dùng khi AI đủ chắc"],
+                ] as const
+              ).map(([m, l, d]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={f.router!.mode === m}
+                  onClick={() => setF({ ...f, router: { ...f.router!, mode: m } })}
+                  className={`flex-1 min-w-[140px] rounded-xl border px-3 py-2 text-left transition ${f.router!.mode === m ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  <span className="block text-sm font-bold">{l}</span>
+                  <span className="block text-[11px] text-slate-500">{d}</span>
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className={label}>Độ chắc tối thiểu (%)</span>
+                <input type="number" min={0} max={100} className={input} value={Math.round(f.router.minConfidence * 100)} onChange={(e) => setF({ ...f, router: { ...f.router!, minConfidence: Math.max(0, Math.min(100, Number(e.target.value))) / 100 } })} />
+              </label>
+              <label className="space-y-1">
+                <span className={label}>Model (trống = model trả lời)</span>
+                <input className={input} placeholder={f.modelId} value={f.router.model ?? ""} onChange={(e) => setF({ ...f, router: { ...f.router!, model: e.target.value.trim() || null } })} />
+              </label>
+            </div>
+          </div>
+        )}
         <div className="flex justify-end">
           <button disabled={saving} onClick={save} className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700`}>
             💾 Lưu cấu hình
