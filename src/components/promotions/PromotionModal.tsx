@@ -97,6 +97,7 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
   const [bookingWindowEnd, setBookingWindowEnd] = useState("");
   const [blackoutDatesInput, setBlackoutDatesInput] = useState("");
   const [isStackableWithHoliday, setIsStackableWithHoliday] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
 
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -130,6 +131,7 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
       setBookingWindowEnd(promotion.booking_window_end || "");
       setBlackoutDatesInput((promotion.blackout_dates || []).join(", "));
       setIsStackableWithHoliday(promotion.is_stackable_with_holiday !== 0);
+      setIsPublic(promotion.is_public === 1);
       setIsActive(promotion.is_active === 1);
     } else {
       setName("");
@@ -155,6 +157,7 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
       setBookingWindowEnd("");
       setBlackoutDatesInput("");
       setIsStackableWithHoliday(true);
+      setIsPublic(false);
       setIsActive(true);
     }
   }
@@ -231,6 +234,7 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
           .map((s) => s.trim())
           .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)),
         is_stackable_with_holiday: isStackableWithHoliday ? 1 : 0,
+        is_public: isPublic ? 1 : 0,
         usage_limit: hasUsageLimit && usageLimit !== "" ? Number(usageLimit) : null,
         max_uses_per_guest: maxUsesPerGuest !== "" ? Number(maxUsesPerGuest) : null,
         is_active: isActive ? 1 : 0,
@@ -669,6 +673,21 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
               className="w-4 h-4 rounded text-emerald-600"
             />
             <span>Cho phép áp dụng đồng thời trong ngày có Phụ thu Lễ/Tết (chỉ giảm trên giá cơ bản)</span>
+          </label>
+
+          <label className="flex items-start gap-2 cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-slate-700">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded text-emerald-600"
+            />
+            <span>
+              <span className="font-bold text-emerald-900">🤖 Công khai cho Home (AI lễ tân)</span>
+              <span className="block text-slate-600">
+                Home giới thiệu ưu đãi này khi khách hỏi và hệ thống tự áp (không cần mã) cho khách đủ điều kiện — chọn ưu đãi tốt nhất. Tắt = chỉ áp khi khách đưa mã.
+              </span>
+            </span>
           </label>
         </div>
 

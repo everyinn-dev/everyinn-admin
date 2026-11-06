@@ -133,6 +133,9 @@ export async function PUT(
       const st = body.is_stackable_with_holiday ?? body.isStackableWithHoliday;
       coreBody.isStackableWithHoliday = Boolean(st);
     }
+    if (body.is_public !== undefined || body.isPublic !== undefined) {
+      coreBody.isPublic = Boolean(body.is_public ?? body.isPublic);
+    }
     if (body.usage_limit !== undefined || body.usageLimit !== undefined) {
       const u = body.usage_limit ?? body.usageLimit;
       coreBody.usageLimit = u !== null && u !== "" ? Number(u) : null;

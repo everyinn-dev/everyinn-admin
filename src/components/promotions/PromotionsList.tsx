@@ -247,6 +247,11 @@ export const PromotionsList: React.FC<PromotionsListProps> = ({
                     <h3 className="text-sm font-extrabold text-slate-900 leading-snug line-clamp-2">
                       {p.name}
                     </h3>
+                    {p.is_public === 1 && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800" title="Home (AI lễ tân) giới thiệu và tự áp ưu đãi này">
+                        🤖 Công khai cho Home
+                      </span>
+                    )}
                     {p.code && (
                       <div className="mt-1.5 flex items-center gap-1.5">
                         <span className="font-mono text-xs font-extrabold bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 tracking-wider">

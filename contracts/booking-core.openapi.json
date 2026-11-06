@@ -550,7 +550,7 @@
       "Promotion": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "categoryId", "categoryName", "categoryCode", "categoryIcon", "categoryColor", "name", "code", "description", "discountType", "discountValue", "maxDiscountAmount", "minOrderAmount", "applicableRoomClasses", "applicableBookingTypes", "applicableRatePlanCodes", "applicableLoyaltyTiers", "applicableDaysOfWeek", "startDate", "endDate", "bookingWindowStart", "bookingWindowEnd", "minNights", "blackoutDates", "isStackableWithHoliday", "usageLimit", "maxUsesPerGuest", "usedCount", "isActive", "archivedAt", "version", "createdAt", "updatedAt"],
+        "required": ["id", "categoryId", "categoryName", "categoryCode", "categoryIcon", "categoryColor", "name", "code", "description", "discountType", "discountValue", "maxDiscountAmount", "minOrderAmount", "applicableRoomClasses", "applicableBookingTypes", "applicableRatePlanCodes", "applicableLoyaltyTiers", "applicableDaysOfWeek", "startDate", "endDate", "bookingWindowStart", "bookingWindowEnd", "minNights", "blackoutDates", "isStackableWithHoliday", "isPublic", "usageLimit", "maxUsesPerGuest", "usedCount", "isActive", "archivedAt", "version", "createdAt", "updatedAt"],
         "properties": {
           "id": { "type": "string" },
           "categoryId": { "type": "string" },
@@ -577,6 +577,7 @@
           "minNights": { "type": "integer", "minimum": 1 },
           "blackoutDates": { "type": "array", "items": { "$ref": "#/components/schemas/BusinessDate" } },
           "isStackableWithHoliday": { "type": "boolean" },
+          "isPublic": { "type": "boolean", "description": "AI-8: advertised by the AI receptionist and applied without a code (best eligible discount) when a search/quote asks for applyPublicPromotions." },
           "usageLimit": { "type": ["integer", "null"] },
           "maxUsesPerGuest": { "type": ["integer", "null"] },
           "usedCount": { "type": "integer", "minimum": 0 },
@@ -811,7 +812,15 @@
                     "extraFee": { "$ref": "#/components/schemas/Vnd" },
                     "subtotal": { "$ref": "#/components/schemas/Vnd" },
                     "lines": { "type": "array", "items": { "$ref": "#/components/schemas/PriceLine" } },
-                    "cappingWarning": { "oneOf": [{ "$ref": "#/components/schemas/CappingWarning" }, { "type": "null" }] }
+                    "cappingWarning": { "oneOf": [{ "$ref": "#/components/schemas/CappingWarning" }, { "type": "null" }] },
+                    "promotion": {
+                      "description": "Only with applyPublicPromotions: the public promotion applied (null = none eligible).",
+                      "type": ["object", "null"],
+                      "additionalProperties": false,
+                      "required": ["id", "code", "name", "discount"],
+                      "properties": { "id": { "type": "string" }, "code": { "$ref": "#/components/schemas/NullableString" }, "name": { "type": "string" }, "discount": { "$ref": "#/components/schemas/Vnd" } }
+                    },
+                    "total": { "description": "Only with applyPublicPromotions: subtotal − public promotion discount.", "$ref": "#/components/schemas/Vnd" }
                   }
                 }
               }
@@ -1142,6 +1151,24 @@
         "responses": { "201": { "$ref": "#/components/responses/Promotion" }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
+    "/internal/v1/promotions/public": {
+      "get": {
+        "operationId": "listPublicPromotions",
+        "x-callers": ["admin-bff", "agent-core"],
+        "summary": "AI-8: public promotions that are active and not expired (what the AI receptionist may advertise; it applies them via applyPublicPromotions).",
+        "responses": {
+          "200": {
+            "description": "Public promotions (max 20)",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": false, "required": ["promotions"], "properties": { "promotions": { "type": "array", "items": { "$ref": "#/components/schemas/Promotion" } } } }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/internal/v1/promotions/validate": {
       "post": {
         "operationId": "validatePromotion",
@@ -1254,7 +1281,8 @@
                   "lateCheckoutHours": { "type": "integer" },
                   "numGuests": { "type": "integer" },
                   "customPrice": { "type": "integer" },
-                  "roomClass": { "$ref": "#/components/schemas/RoomClass" }
+                  "roomClass": { "$ref": "#/components/schemas/RoomClass" },
+                  "applyPublicPromotions": { "type": "boolean", "description": "AI-8: add price.promotion + price.total with the best eligible public promotion (tier-restricted ones are skipped — no phone here)." }
                 }
               }
             }
@@ -1288,7 +1316,8 @@
                   "customPrice": { "type": "integer" },
                   "phone": { "type": "string" },
                   "promotionId": { "type": "string" },
-                  "promotionCode": { "type": "string" }
+                  "promotionCode": { "type": "string" },
+                  "applyPublicPromotions": { "type": "boolean", "description": "AI-8: without promotionId/promotionCode, apply the best eligible public promotion (tier from phone)." }
                 }
               }
             }

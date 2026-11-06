@@ -47,6 +47,8 @@ export interface Promotion {
   min_nights?: number;
   blackout_dates?: string[];
   is_stackable_with_holiday?: number;
+  /** AI-8: "Công khai cho Home" — the AI receptionist advertises it and Core applies it without a code. */
+  is_public?: number;
   usage_limit: number | null;
   max_uses_per_guest?: number | null;
   used_count: number;

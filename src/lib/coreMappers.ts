@@ -772,6 +772,7 @@ export interface CorePromotionDto {
   bookingWindowEnd?: string | null;
   minNights?: number;
   blackoutDates?: string[];
+  isPublic?: boolean;
   isStackableWithHoliday?: boolean | number;
   usageLimit: number | null;
   maxUsesPerGuest?: number | null;
@@ -832,6 +833,7 @@ export function toLegacyPromotion(p: CorePromotionDto): Promotion & { version: n
     min_nights: p.minNights ?? 1,
     blackout_dates: p.blackoutDates ?? [],
     is_stackable_with_holiday: typeof p.isStackableWithHoliday === "boolean" ? (p.isStackableWithHoliday ? 1 : 0) : (p.isStackableWithHoliday ?? 1),
+    is_public: p.isPublic ? 1 : 0,
     usage_limit: p.usageLimit ?? null,
     max_uses_per_guest: p.maxUsesPerGuest ?? null,
     used_count: p.usedCount,

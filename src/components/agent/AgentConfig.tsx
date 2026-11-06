@@ -5,10 +5,13 @@ import Link from "next/link";
 import { agentApi, AgentApiError, formatVnTime, ROOMS, type AgentSettings } from "@/lib/agentApi";
 import { useToast } from "@/components/ui/Toast";
 import { BusyToggle } from "./BusyToggle";
+import { apiFetch } from "@/lib/apiClient";
+import { getCachedStaffIdentity } from "@/lib/localCache";
 
-type Tab = "persona" | "codes" | "knowledge" | "faq" | "tools";
+type Tab = "persona" | "offers" | "codes" | "knowledge" | "faq" | "tools";
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "persona", label: "🧑‍💼 Tính cách & Giờ bận" },
+  { key: "offers", label: "🎁 Ưu đãi public" },
   { key: "codes", label: "🔑 Mã cửa" },
   { key: "knowledge", label: "📚 Kiến thức" },
   { key: "faq", label: "❓ FAQ" },
@@ -36,6 +39,9 @@ const TOOL_LABELS: Record<string, string> = {
   troubleshoot_issue: "Xử lý sự cố cấp 1 (xem ảnh, hướng dẫn khách)",
   close_issue: "Đóng sự cố / chuyển quản lí kèm ảnh",
   note_payment_receipt: "Đọc ảnh bill chuyển khoản để đối chiếu",
+  request_deposit_exception: "Xin quản lí cho cọc (booking sát ngày)",
+  request_extension: "Thêm giờ cho khách đang ở (quản lí duyệt)",
+  get_offers: "Đọc ưu đãi public (Booking Core)",
 };
 
 const card = "p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3";
@@ -559,6 +565,149 @@ function FaqTab() {
   );
 }
 
+// ── Ưu đãi public (AI-8) ──────────────────────────────────────────────────────────────────────
+/** Light view of GET /api/promotions (legacy snake_case shape from coreMappers). */
+interface PromoRow {
+  id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  discount_type: "percentage" | "fixed_amount";
+  discount_value: number;
+  max_discount_amount?: number | null;
+  min_order_amount: number;
+  applicable_room_classes: string[];
+  applicable_booking_types: string[];
+  applicable_days_of_week?: number[];
+  applicable_loyalty_tiers: string[];
+  start_date: string | null;
+  end_date: string | null;
+  min_nights?: number;
+  is_public?: number;
+  is_active: number;
+}
+const vnd = (n: number) => `${n.toLocaleString("vi-VN").replace(/,/g, ".")}đ`;
+const DAY_SHORT = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const TYPE_VI: Record<string, string> = { hourly: "theo giờ", overnight: "qua đêm", dayuse: "theo ngày" };
+/** Same wording as agent-core offerLine() — what Home reads from get_offers. */
+function offerText(p: PromoRow): { off: string; cond: string[] } {
+  const off = p.discount_type === "percentage" ? `Giảm ${p.discount_value}%${p.max_discount_amount ? ` (tối đa ${vnd(p.max_discount_amount)})` : ""}` : `Giảm ${vnd(p.discount_value)}`;
+  const cond = [
+    p.applicable_booking_types?.length ? p.applicable_booking_types.map((t) => TYPE_VI[t] ?? t).join(" / ") : "",
+    p.applicable_room_classes?.length ? p.applicable_room_classes.map((c) => (c === "signature" ? "Signature" : "Haven")).join(" / ") : "",
+    p.applicable_days_of_week?.length ? p.applicable_days_of_week.map((d) => DAY_SHORT[d]).join(", ") : "",
+    (p.min_nights ?? 1) > 1 ? `từ ${p.min_nights} đêm` : "",
+    p.min_order_amount > 0 ? `đơn từ ${vnd(p.min_order_amount)}` : "",
+    p.applicable_loyalty_tiers?.length && !p.applicable_loyalty_tiers.includes("not_member") ? `hạng ${p.applicable_loyalty_tiers.join(" / ")}` : "",
+    p.end_date ? `đến ${p.end_date.split("-").reverse().join("/")}` : "",
+  ].filter(Boolean);
+  return { off, cond };
+}
+
+function OffersTab() {
+  const toast = useToast();
+  const [rows, setRows] = useState<PromoRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [isManager, setIsManager] = useState(false);
+  const load = useCallback(async () => {
+    const res = await apiFetch("/api/promotions?status=active");
+    if (!res.ok) throw new Error("load");
+    const data = (await res.json()) as { promotions: PromoRow[] };
+    setRows(data.promotions ?? []);
+  }, []);
+  useEffect(() => {
+    setIsManager(getCachedStaffIdentity()?.role === "manager");
+    load().catch(() => {
+      setRows([]);
+      toast.error("Không tải được danh sách ưu đãi.");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
+  const toggle = async (p: PromoRow, on: boolean) => {
+    setBusy(p.id);
+    setRows((r) => r?.map((x) => (x.id === p.id ? { ...x, is_public: on ? 1 : 0 } : x)) ?? r);
+    try {
+      const res = await apiFetch(`/api/promotions/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_public: on ? 1 : 0 }) });
+      if (!res.ok) throw new Error("patch");
+      toast.success(on ? `Home sẽ giới thiệu và tự áp “${p.name}”.` : `Home không còn tự áp “${p.name}”.`);
+      await load();
+    } catch {
+      toast.error("Không cập nhật được. Chỉ quản lí được bật/tắt ưu đãi.");
+      await load().catch(() => undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const pub = rows?.filter((p) => p.is_public === 1) ?? [];
+  const priv = rows?.filter((p) => p.is_public !== 1) ?? [];
+  const item = (p: PromoRow) => {
+    const t = offerText(p);
+    const on = p.is_public === 1;
+    return (
+      <li key={p.id} className="flex items-start gap-3 px-4 py-3">
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-slate-900">{p.name}</span>
+            {p.code ? <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-slate-700">{p.code}</span> : null}
+          </span>
+          <span className="mt-0.5 block text-sm text-emerald-800">{t.off}</span>
+          <span className="block text-xs text-slate-500">{t.cond.length ? t.cond.join(" · ") : "Mọi khung giờ, mọi phòng"}</span>
+          {p.description ? <span className="mt-1 block text-xs text-slate-600">{p.description}</span> : null}
+        </span>
+        <label className={`flex shrink-0 items-center gap-2 text-xs font-semibold ${isManager ? "cursor-pointer text-slate-700" : "text-slate-400"}`} title={isManager ? "" : "Chỉ quản lí bật/tắt được"}>
+          <input type="checkbox" className="h-4 w-4 rounded text-emerald-600" checked={on} disabled={!isManager || busy === p.id} onChange={(e) => toggle(p, e.target.checked)} />
+          Công khai
+        </label>
+      </li>
+    );
+  };
+  const sample = pub[0] ? offerText(pub[0]) : null;
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500">
+        Ưu đãi <b>công khai</b> được Home giới thiệu khi khách hỏi, và hệ thống <b>tự áp</b> vào giá Home báo (không cần mã) — chọn ưu đãi tốt nhất khách đủ điều kiện. Ưu đãi không công khai chỉ áp khi khách đưa mã. Home không bao giờ tự tính giá: mọi con số lấy từ Booking Core.
+      </p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="space-y-4">
+          <section className={`${card} !p-0 overflow-hidden`}>
+            <h3 className="px-4 pt-4 text-sm font-bold text-slate-900">🤖 Home đang giới thiệu ({pub.length})</h3>
+            {rows === null ? (
+              <p className="px-4 pb-4 text-sm text-slate-500">Đang tải…</p>
+            ) : pub.length ? (
+              <ul className="divide-y divide-slate-100 border-t border-slate-100">{pub.map(item)}</ul>
+            ) : (
+              <p className="px-4 pb-4 text-sm text-slate-500">Chưa có ưu đãi công khai. Khách hỏi khuyến mãi, Home sẽ nói giá đang báo đã là giá tốt nhất.</p>
+            )}
+          </section>
+          {priv.length ? (
+            <section className={`${card} !p-0 overflow-hidden`}>
+              <h3 className="px-4 pt-4 text-sm font-bold text-slate-900">Ưu đãi đang chạy, chưa công khai ({priv.length})</h3>
+              <ul className="divide-y divide-slate-100 border-t border-slate-100">{priv.map(item)}</ul>
+            </section>
+          ) : null}
+          <Link href="/promotions" className="inline-flex text-sm font-semibold text-emerald-800 hover:underline">
+            ＋ Tạo / sửa ưu đãi ở trang Khuyến mãi →
+          </Link>
+        </div>
+        <aside className={`${card} h-fit`}>
+          <p className={label}>Khách hỏi “có khuyến mãi gì không?”</p>
+          <div className="rounded-2xl rounded-tl-sm bg-emerald-50 px-3 py-2 text-sm text-slate-800">
+            {sample ? (
+              <>
+                Dạ bên mình đang có ưu đãi <b>{pub[0]!.name}</b>: {sample.off.toLowerCase()}
+                {sample.cond.length ? `, áp dụng ${sample.cond.join(", ")}` : ""} ạ 😊 Bạn cho Home ngày giờ ở, Home báo giá đã giảm cho mình liền nha.
+              </>
+            ) : (
+              <>Dạ hiện bên mình chưa có chương trình ưu đãi nào ạ. Giá Home báo đã là giá tốt nhất cho khung giờ của bạn nha 😊</>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">Minh hoạ. Home viết theo giọng của mình, nhưng mức giảm và giá sau giảm luôn lấy từ hệ thống.</p>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 // ── Meta allowlist (AR-2) ─────────────────────────────────────────────────────────────────────
 const lines = (s: string) => s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
 
@@ -732,6 +881,8 @@ export function AgentConfig() {
         <p className="text-sm text-slate-500">Đang tải…</p>
       ) : tab === "persona" ? (
         <PersonaTab settings={settings} onSaved={setSettings} />
+      ) : tab === "offers" ? (
+        <OffersTab />
       ) : tab === "codes" ? (
         <CodesTab />
       ) : tab === "knowledge" ? (
