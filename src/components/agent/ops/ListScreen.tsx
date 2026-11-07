@@ -12,7 +12,7 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
-const COPY: Record<"rules" | "templates" | "scenarios", { title: string; desc: string; add: string; search: string; empty: string }> = {
+const COPY: Record<"rules" | "templates" | "scenarios" | "stay_shifts", { title: string; desc: string; add: string; search: string; empty: string }> = {
   rules: {
     title: "Sổ luật",
     desc: "Home chỉ đọc những luật đang bật của kịch bản đang xử lý. Chính sách được nói với khách; quy ước và ngoại lệ là nội bộ.",
@@ -27,6 +27,13 @@ const COPY: Record<"rules" | "templates" | "scenarios", { title: string; desc: s
     search: "Tìm câu hoặc mã mẫu",
     empty: "Chưa có mẫu tin nào. Home sẽ dùng câu mặc định của hệ thống.",
   },
+  stay_shifts: {
+    title: "Khung giờ",
+    desc: "Các ca Home biết và việc Home được tự làm khi khách xin nhận sớm / trả muộn. Qua đêm trong giới hạn: Home tự báo giá. Phòng ngày hoặc ngoài giới hạn: Home hỏi quản lí trước. Giá luôn do hệ thống đặt phòng tính, Home không tự tính.",
+    add: "Thêm ca",
+    search: "Tìm ca",
+    empty: "Chưa có ca nào. Home sẽ dùng 4 ca qua đêm và phòng ngày mặc định.",
+  },
   scenarios: {
     title: "Kịch bản",
     desc: "Mỗi tin khách được xếp vào một kịch bản theo giai đoạn khách và từ khoá; kịch bản quyết định Home đi bước nào, dùng công cụ nào.",
@@ -36,7 +43,7 @@ const COPY: Record<"rules" | "templates" | "scenarios", { title: string; desc: s
   },
 };
 
-export function ListScreen({ ctx, collection }: { ctx: OpsCtx; collection: Extract<CollectionId, "rules" | "templates" | "scenarios"> }) {
+export function ListScreen({ ctx, collection }: { ctx: OpsCtx; collection: Extract<CollectionId, "rules" | "templates" | "scenarios" | "stay_shifts"> }) {
   const def = ctx.registry.collections.find((c) => c.id === collection)!;
   const rows = ctx.rows[collection];
   const copy = COPY[collection];
@@ -82,7 +89,9 @@ export function ListScreen({ ctx, collection }: { ctx: OpsCtx; collection: Extra
       ? { layer: filter !== "all" ? filter : "convention", category: "other", guestVisible: false, appliesTo: [] }
       : collection === "templates"
         ? { lang: "vi", variants: [""], ...(filter !== "all" ? { scenario: filter } : {}) }
-        : { stages: [], tools: [], keywords: [], priority: 100 }
+        : collection === "stay_shifts"
+          ? { bookingType: "overnight", start: "21:00", end: "09:00", approval: "manager", maxEarlyHours: 0, maxLateHours: 0, autoAfterMinutes: 0, autoMaxHours: 0 }
+          : { stages: [], tools: [], keywords: [], priority: 100 }
     : undefined;
 
   const panel =
@@ -217,6 +226,7 @@ function subFor(c: string, r: MdRow): string {
   const d = r.data as D;
   if (c === "rules") return `${LAYER_LABEL[str(d.layer)] ?? d.layer} · ${CATEGORY_LABEL[str(d.category)] ?? d.category}`;
   if (c === "templates") return r.isSystem ? "Mẫu hệ thống · gửi nguyên văn, không qua AI" : "Mẫu tự tạo";
+  if (c === "stay_shifts") return `${d.bookingType === "dayuse" ? "Phòng ngày" : "Qua đêm"} · ${d.approval === "self" ? "Home tự báo giá" : "Hỏi quản lí trước"}`;
   return r.isSystem ? "Kịch bản hệ thống" : "Kịch bản tự tạo";
 }
 
@@ -261,6 +271,29 @@ function RowBody({ collection, r, ctx }: { collection: string; r: MdRow; ctx: Op
             <span className="font-mono">{str(d.key)}</span>
             <span>· {v.length} biến thể</span>
             {d.lang === "en" ? <span>· English</span> : null}
+          </span>
+        </span>
+      </span>
+    );
+  }
+  if (collection === "stay_shifts") {
+    const self = d.approval === "self";
+    const early = Number(d.maxEarlyHours ?? 0);
+    const late = Number(d.maxLateHours ?? 0);
+    const auto = Number(d.autoAfterMinutes ?? 0);
+    return (
+      <span className="flex min-w-0 flex-1 items-start gap-3">
+        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
+          <Icon name="clock" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-slate-900">{str(d.label) || r.id}</span>
+          <span className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+            {self ? `Home tự báo giá: sớm tối đa ${early} giờ, muộn tối đa ${late} giờ` : auto > 0 ? `Hỏi quản lí trước; im lặng ${auto} phút thì Home tự báo giá (mỗi phía ≤ ${Number(d.autoMaxHours ?? 0)} giờ)` : "Luôn hỏi quản lí trước, không tự quyết theo giờ"}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-slate-500">
+            {str(d.start)} → {str(d.end)}
+            {d.bookingType === "overnight" ? " (sáng hôm sau)" : ""}
           </span>
         </span>
       </span>

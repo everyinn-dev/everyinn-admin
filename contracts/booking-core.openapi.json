@@ -1594,6 +1594,210 @@
         }
       }
     },
+    "/internal/v1/bookings/{bookingId}/adjust-quote": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/BookingId"
+        }
+      ],
+      "post": {
+        "operationId": "adjustQuote",
+        "x-callers": [
+          "admin-bff",
+          "agent-core"
+        ],
+        "summary": "AI-12: read-only dry run of an early check-in (side=early) or late check-out (side=late) of 1–6 h on an existing overnight / dayuse booking: availability of the added window incl. the 60′ turnover (previous / next booking, blocks, holds), the table fee, the longest adjustment that fits, and the full booking for the quản lí card. 409 CHECKIN_PASSED when an early check-in is asked after the check-in time; 422 ADJUST_NOT_APPLICABLE for hourly / custom.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "side"
+                ],
+                "properties": {
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "early",
+                      "late"
+                    ]
+                  },
+                  "hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 6
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dry-run result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "bookingId",
+                    "side",
+                    "hours",
+                    "available",
+                    "fee",
+                    "checkinAt",
+                    "checkoutAt",
+                    "newCheckinAt",
+                    "newCheckoutAt",
+                    "maxHours",
+                    "booking"
+                  ],
+                  "properties": {
+                    "bookingId": {
+                      "type": "string"
+                    },
+                    "roomId": {
+                      "type": "string"
+                    },
+                    "roomClass": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "side": {
+                      "type": "string"
+                    },
+                    "hours": {
+                      "type": "integer"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "conflict": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "extraHourFee": {
+                      "type": "integer"
+                    },
+                    "fee": {
+                      "type": "integer"
+                    },
+                    "checkinAt": {
+                      "type": "string"
+                    },
+                    "checkoutAt": {
+                      "type": "string"
+                    },
+                    "newCheckinAt": {
+                      "type": "string"
+                    },
+                    "newCheckoutAt": {
+                      "type": "string"
+                    },
+                    "maxHours": {
+                      "type": "integer"
+                    },
+                    "earliestCheckinAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "latestCheckoutAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "booking": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/bookings/{bookingId}/adjust": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/BookingId"
+        }
+      ],
+      "post": {
+        "operationId": "adjustBooking",
+        "x-callers": [
+          "admin-bff",
+          "agent-core"
+        ],
+        "x-idempotency": "required",
+        "summary": "AI-12: apply an early check-in (checkin_at earlier, early_checkin_hours +) or late check-out of 1–6 h: fee from the rate rule unless `feeOverride` (the price the quản lí approved, 0 = free), claims occupancy + turnover slots, recomputes the totals, audit BOOKING_ADJUSTED. Requires a HUMAN staff actor (the quản lí who approved on Telegram); the AI bot actor (900001) gets 403 HUMAN_APPROVAL_REQUIRED.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion",
+                  "side"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "early",
+                      "late"
+                    ]
+                  },
+                  "hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 6
+                  },
+                  "feeOverride": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 20000000
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Booking"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/internal/v1/bookings/{bookingId}/confirm": {
       "parameters": [{ "$ref": "#/components/parameters/BookingId" }],
       "post": {

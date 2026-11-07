@@ -45,6 +45,8 @@ export function optionLabel(f: MdField, v: string, ctx: OptionCtx): string {
   }
   if (f.name === "days") return DAY_LABEL[v] ?? v;
   if (f.name === "tiers") return TIER_LABEL[v] ?? v;
+  if (f.name === "bookingType") return v === "overnight" ? "Qua đêm" : v === "dayuse" ? "Phòng ngày" : v;
+  if (f.name === "approval") return v === "self" ? "Home tự báo giá (trong giới hạn)" : v === "manager" ? "Luôn hỏi quản lí trước" : v;
   if (f.name === "lang") return v === "vi" ? "Tiếng Việt" : v === "en" ? "English" : v;
   return v;
 }

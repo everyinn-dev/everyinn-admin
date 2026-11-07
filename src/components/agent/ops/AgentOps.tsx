@@ -19,8 +19,8 @@ import { AuthorityScreen } from "./AuthorityScreen";
 import { GuestsScreen } from "./GuestsScreen";
 import { ScenarioScreen } from "./flow/ScenarioScreen";
 
-export type ScreenId = "tong-quan" | "so-luat" | "quyen" | "mau-tin" | "kich-ban" | "khach";
-const SCREEN_IDS: ScreenId[] = ["tong-quan", "so-luat", "quyen", "mau-tin", "kich-ban", "khach"];
+export type ScreenId = "tong-quan" | "so-luat" | "quyen" | "mau-tin" | "kich-ban" | "khung-gio" | "khach";
+const SCREEN_IDS: ScreenId[] = ["tong-quan", "so-luat", "quyen", "mau-tin", "kich-ban", "khung-gio", "khach"];
 
 export type Rows = Record<CollectionId, MdRow[]>;
 
@@ -43,7 +43,7 @@ export interface OpsCtx {
   setGuests: (g: GuestProfile[] | null) => void;
 }
 
-const EMPTY_ROWS: Rows = { scenarios: [], templates: [], rules: [], authority: [], segments: [] };
+const EMPTY_ROWS: Rows = { scenarios: [], templates: [], rules: [], authority: [], segments: [], stay_shifts: [] };
 
 export function AgentOps() {
   const toast = useToast();
@@ -73,9 +73,9 @@ export function AgentOps() {
   const load = useCallback(async () => {
     setState("loading");
     try {
-      const [reg, ...lists] = await Promise.all([opsApi.registry(), ...(["scenarios", "templates", "rules", "authority", "segments"] as const).map((c) => opsApi.list(c))]);
+      const [reg, ...lists] = await Promise.all([opsApi.registry(), ...(["scenarios", "templates", "rules", "authority", "segments", "stay_shifts"] as const).map((c) => opsApi.list(c))]);
       setRegistry(reg);
-      setRows({ scenarios: lists[0], templates: lists[1], rules: lists[2], authority: lists[3], segments: lists[4] });
+      setRows({ scenarios: lists[0], templates: lists[1], rules: lists[2], authority: lists[3], segments: lists[4], stay_shifts: lists[5] });
       setState("ready");
     } catch {
       setState("error");
@@ -126,6 +126,7 @@ export function AgentOps() {
     { id: "quyen", label: "Bảng quyền", icon: "shield-check", count: rows.authority.filter((r) => r.isActive).length },
     { id: "mau-tin", label: "Mẫu tin", icon: "message-square-text", count: rows.templates.length },
     { id: "kich-ban", label: "Kịch bản", icon: "route", count: rows.scenarios.length },
+    { id: "khung-gio", label: "Khung giờ", icon: "clock", count: rows.stay_shifts.length },
     { id: "khach", label: "Chân dung khách", icon: "users", count: guests?.length },
   ];
 
@@ -219,7 +220,7 @@ export function AgentOps() {
           ) : screen === "kich-ban" ? (
             <ScenarioScreen ctx={ctx} />
           ) : (
-            <ListScreen key={screen} ctx={ctx} collection={screen === "so-luat" ? "rules" : screen === "mau-tin" ? "templates" : "scenarios"} />
+            <ListScreen key={screen} ctx={ctx} collection={screen === "so-luat" ? "rules" : screen === "mau-tin" ? "templates" : screen === "khung-gio" ? "stay_shifts" : "scenarios"} />
           )}
         </div>
       </div>

@@ -5,7 +5,7 @@
  */
 import { agentApi } from "./agentApi";
 
-export type CollectionId = "scenarios" | "templates" | "rules" | "authority" | "segments";
+export type CollectionId = "scenarios" | "templates" | "rules" | "authority" | "segments" | "stay_shifts";
 export type FieldType = "string" | "text" | "number" | "boolean" | "enum" | "multi" | "lines" | "time" | "datetime" | "flow";
 
 export interface MdField {

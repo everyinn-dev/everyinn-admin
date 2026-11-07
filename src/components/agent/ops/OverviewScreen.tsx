@@ -9,7 +9,7 @@ import { Icon, ScreenHead, Tag, btn, cls } from "./ui";
 import type { OpsCtx, ScreenId } from "./AgentOps";
 
 const CAP_SHORT: Record<string, string> = { extend_stay: "Thêm giờ", deposit_exception: "Cọc sát ngày", discount: "Giảm giá", early_checkin: "Nhận sớm", late_checkout_free: "Trả muộn", refund_cancel: "Hoàn tiền" };
-const SCREEN_OF: Record<CollectionId, ScreenId> = { rules: "so-luat", templates: "mau-tin", scenarios: "kich-ban", authority: "quyen", segments: "khach" };
+const SCREEN_OF: Record<CollectionId, ScreenId> = { rules: "so-luat", templates: "mau-tin", scenarios: "kich-ban", authority: "quyen", segments: "khach", stay_shifts: "khung-gio" };
 
 export function OverviewScreen({ ctx }: { ctx: OpsCtx }) {
   const toast = useToast();
