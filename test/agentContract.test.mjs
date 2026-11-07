@@ -31,3 +31,12 @@ test("UI-consumed DTOs match the contract (settings, escalation, conversation)",
   const conv = { id: "c1", channel: "sandbox", senderName: "A", mode: "AI_ACTIVE", unreadCount: 0, pendingCount: 0, lastMessageAt: "2026-11-03T00:00:00.000Z", version: 1 };
   assert.deepEqual(v.validateSchema("#/components/schemas/Conversation", conv), []);
 });
+
+// AI-12 incident: a collection the BFF did not allow (stay_shifts) made the whole "Vận hành AI" screen fail to load.
+test("BFF allows every master-data collection the Vận hành AI screen loads", async () => {
+  const { matchAgentRoute } = await import("../src/lib/agentRoutes.ts");
+  for (const c of ["scenarios", "templates", "rules", "authority", "segments", "stay_shifts"]) {
+    assert.ok(matchAgentRoute("GET", `md/${c}`), `GET md/${c}`);
+    assert.ok(matchAgentRoute("PUT", `md/${c}/some-id`), `PUT md/${c}`);
+  }
+});
