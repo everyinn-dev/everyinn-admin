@@ -42,6 +42,7 @@ const TOOL_LABELS: Record<string, string> = {
   note_payment_receipt: "Đọc ảnh bill chuyển khoản để đối chiếu",
   request_deposit_exception: "Xin quản lí cho cọc (booking sát ngày)",
   request_extension: "Thêm giờ cho khách đang ở (quản lí duyệt)",
+  request_stay_change: "Khách có đơn xin nhận sớm / trả muộn (quản lí duyệt)",
   get_offers: "Đọc ưu đãi public (Booking Core)",
 };
 
@@ -228,6 +229,33 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
                 <span className={label}>Model (trống = model trả lời)</span>
                 <input className={input} placeholder={f.modelId} value={f.router.model ?? ""} onChange={(e) => setF({ ...f, router: { ...f.router!, model: e.target.value.trim() || null } })} />
               </label>
+            </div>
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <p className="text-sm font-bold text-slate-800">Hiểu ý khách và viết câu tự nhiên</p>
+              <p className="text-xs text-slate-500">AI đọc ý khách ở mỗi bước đặt phòng (chọn hạng hay số phòng, phản đối, muốn gặp quản lí) rồi viết lại câu của hệ thống cho tự nhiên. Giá, danh sách phòng và thông tin chuyển khoản luôn giữ nguyên từ hệ thống; câu viết lại sai số là gửi câu mẫu.</p>
+              {(
+                [
+                  ["understand", "Hiểu ý khách bằng AI", [["on", "Bật"], ["off", "Tắt (chỉ dùng luật)"]]],
+                  ["writer", "Viết lại câu bán hàng", [["on", "Bật"], ["off", "Tắt (gửi đúng mẫu tin)"]]],
+                  ["thinking", "Đọc kỹ lượt khó", [["auto", "Tự đọc lại có suy nghĩ khi khách phản đối, mặc cả, bực, hỏi nhiều ý hoặc AI chưa chắc"], ["off", "Tắt"]]],
+                ] as const
+              ).map(([key, title, opts]) => (
+                <label key={key} className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2">
+                  <span className="text-sm text-slate-700">{title}</span>
+                  <select
+                    className={input}
+                    value={(f.router![key] as string | undefined) ?? opts[0][0]}
+                    onChange={(e) => setF({ ...f, router: { ...f.router!, [key]: e.target.value } })}
+                  >
+                    {opts.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <p className="text-[11px] text-slate-500">Đọc kỹ chỉ chạy ở lượt khó: câu trả lời lượt đó chậm thêm khoảng 5–45 giây và tốn thêm khoảng 30–80 neuron. Lượt bình thường không đổi.</p>
             </div>
             <RouterCheck model={f.router.model} />
           </div>

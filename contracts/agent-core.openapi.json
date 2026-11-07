@@ -3468,6 +3468,30 @@
                 "type": "number",
                 "minimum": 0,
                 "maximum": 1
+              },
+              "understand": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "description": "AI-13: the same call reads the guest for the sales steps (room vs class, objection, wants a human, hard turn); runs even when mode = off. Default on."
+              },
+              "writer": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "description": "AI-13: Home rewrites the fixed sales lines naturally; price lines and payment blocks stay verbatim, otherwise the template is sent. Default on."
+              },
+              "thinking": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "off"
+                ],
+                "description": "AI-13: auto = a hard or unsure turn is read again by the Hiểu step with thinking (≤ 4 000 tokens, +5–45 s, ~3–6× neurons on that turn); the writer never thinks. Default auto."
               }
             }
           }

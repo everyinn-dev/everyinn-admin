@@ -4,7 +4,7 @@
  */
 import { agentApi } from "./agentApi";
 
-export type StepKind = "input" | "stage" | "scenario" | "memory" | "persona" | "state" | "intent" | "policy" | "workflow" | "router" | "route" | "sales" | "prompt" | "llm" | "tool" | "guard" | "template" | "reply" | "error";
+export type StepKind = "input" | "stage" | "scenario" | "memory" | "persona" | "state" | "intent" | "policy" | "workflow" | "router" | "route" | "sales" | "writer" | "prompt" | "llm" | "tool" | "guard" | "template" | "reply" | "error";
 
 export interface RunStep {
   i: number;
@@ -78,7 +78,7 @@ export const PHASES = [
   { id: "hieu", label: "Hiểu khách", kinds: ["input", "stage", "scenario", "memory", "persona", "state", "intent", "router", "route"] },
   { id: "quyet", label: "Quyết định", kinds: ["sales", "policy", "workflow"] },
   { id: "nghi", label: "Suy nghĩ & gọi tool", kinds: ["prompt", "llm", "tool"] },
-  { id: "tra", label: "Kiểm tra & trả lời", kinds: ["guard", "template", "reply", "error"] },
+  { id: "tra", label: "Kiểm tra & trả lời", kinds: ["guard", "template", "writer", "reply", "error"] },
 ] as const;
 
 export const KIND_META: Record<StepKind, { icon: string; name: string }> = {
@@ -94,6 +94,7 @@ export const KIND_META: Record<StepKind, { icon: string; name: string }> = {
   router: { icon: "split", name: "Điều phối" },
   route: { icon: "split", name: "Định tuyến" },
   sales: { icon: "shopping-bag", name: "Bán hàng cố định" },
+  writer: { icon: "pen-line", name: "Viết lại" },
   prompt: { icon: "file-text", name: "Prompt" },
   llm: { icon: "sparkles", name: "LLM" },
   tool: { icon: "wrench", name: "Tool" },
