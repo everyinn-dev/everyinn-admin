@@ -5,7 +5,6 @@ import { Input } from "../ui/Input";
 import {
   TIME_SLOTS_30MIN,
   getVnToday,
-  isPastTimeSlot,
   roundToNearest30Min,
   timeStrToMinutes,
 } from "@/lib/timelineUtils";
@@ -111,23 +110,13 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
                 onChange={(e) => onChangeCheckinTime(e.target.value)}
                 className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 font-mono font-semibold focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
               >
-                {TIME_SLOTS_30MIN.map((slot) => {
-                  const isPast = isPastTimeSlot(checkinDate, slot);
-                  return (
-                    <option
-                      key={slot}
-                      value={slot}
-                      disabled={isPast}
-                      className={
-                        isPast
-                          ? "text-slate-400 bg-slate-100 font-normal"
-                          : "text-slate-900 bg-white font-semibold"
-                      }
-                    >
-                      {slot} {isPast ? "(Đã qua)" : ""}
-                    </option>
-                  );
-                })}
+                {/* Owner 2026-11-07: this is the receptionist's screen — past hours stay selectable (back-dated and
+                    walk-in bookings); Booking Core has never blocked them. */}
+                {TIME_SLOTS_30MIN.map((slot) => (
+                  <option key={slot} value={slot} className="text-slate-900 bg-white font-semibold">
+                    {slot}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -161,24 +150,23 @@ export const CustomFields: React.FC<CustomFieldsProps> = ({
                 className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-sm text-slate-800 font-mono font-semibold focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 shadow-xs"
               >
                 {TIME_SLOTS_30MIN.map((slot) => {
-                  const isPast = isPastTimeSlot(checkoutDate, slot);
+                  // only the logical rule stays: on the same day the stay must end after it starts
                   const isBeforeOrEqualIn =
                     checkoutDate === checkinDate &&
                     timeStrToMinutes(slot) <= timeStrToMinutes(normalizedCheckinTime);
-                  const isSlotDisabled = isPast || isBeforeOrEqualIn;
 
                   return (
                     <option
                       key={slot}
                       value={slot}
-                      disabled={isSlotDisabled}
+                      disabled={isBeforeOrEqualIn}
                       className={
-                        isSlotDisabled
+                        isBeforeOrEqualIn
                           ? "text-slate-400 bg-slate-100 font-normal"
                           : "text-slate-900 bg-white font-semibold"
                       }
                     >
-                      {slot} {isPast ? "(Đã qua)" : isBeforeOrEqualIn ? "(Trước giờ nhận)" : ""}
+                      {slot} {isBeforeOrEqualIn ? "(Trước giờ nhận)" : ""}
                     </option>
                   );
                 })}
