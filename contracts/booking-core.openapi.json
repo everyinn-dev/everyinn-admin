@@ -92,7 +92,7 @@
         "additionalProperties": false,
         "required": ["code", "label", "amount"],
         "properties": {
-          "code": { "enum": ["base", "holiday_surcharge", "extra_guest", "extra_hours", "promotion", "loyalty_reward"] },
+          "code": { "enum": ["base", "holiday_surcharge", "extra_guest", "extra_hours", "incidental", "promotion", "loyalty_reward"] },
           "label": { "type": "string" },
           "amount": { "$ref": "#/components/schemas/Vnd" },
           "quantity": { "type": "integer" },
@@ -356,6 +356,8 @@
               "holidaySurcharge": { "$ref": "#/components/schemas/Vnd" },
               "extraGuestFee": { "$ref": "#/components/schemas/Vnd" },
               "extraFee": { "$ref": "#/components/schemas/Vnd" },
+              "incidentalFee": { "$ref": "#/components/schemas/Vnd" },
+              "incidentalReason": { "$ref": "#/components/schemas/NullableString" },
               "subtotal": { "$ref": "#/components/schemas/Vnd" },
               "promotionDiscount": { "$ref": "#/components/schemas/Vnd" },
               "loyaltyDiscount": { "$ref": "#/components/schemas/Vnd" },
