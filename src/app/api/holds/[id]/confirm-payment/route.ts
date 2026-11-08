@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/auth";
-import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
+import { bookingCore, coreErrorResponse } from "@/lib/cores";
+import { clientIdemKey, sessionIdForHold, sessions } from "@/lib/sessions";
 import { toLegacyBookingRow, type CoreBookingEnvelope } from "@/lib/coreMappers";
-import { sendTelegramBookingNotification, type TelegramSendResult } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -39,34 +38,29 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const paymentMethod = String(body.paymentMethod ?? "bank_transfer").trim() || "bank_transfer";
-    const paymentReference = body.paymentReference ? String(body.paymentReference).trim() : undefined;
 
-    const headerKey = req.headers.get("idempotency-key")?.trim();
-    const idempotencyKey =
-      headerKey && IDEMPOTENCY_KEY_RE.test(headerKey) ? headerKey : newIdempotencyKey("hold-confirm");
-
-    const res = await bookingCore.post<CoreBookingEnvelope>(
-      `/internal/v1/holds/${encodeURIComponent(holdId)}/confirm`,
-      {
-        staff,
-        idempotencyKey,
-        body: {
-          paymentMethod,
-          ...(paymentReference ? { paymentReference } : {}),
-        },
-      }
-    );
-
+    // LSB-5: money received by this receptionist → booking-session engine (records the payment with its method,
+    // confirms in Booking Core with THIS staff actor, door-code reminder + compact Telegram card by agent-core).
+    const idempotencyKey = clientIdemKey(req);
+    const sessionId = await sessionIdForHold(staff, holdId);
+    const amount = body.amount !== undefined ? Math.round(Number(body.amount) || 0) : undefined;
+    // already confirmed elsewhere (guest paid through the shared link + ✅ on Telegram / another tab) → just read it
+    const current = (await sessions.get(staff, sessionId)).data!.session;
+    const s =
+      current.bookingId && !amount
+        ? current
+        : (await sessions.action(staff, sessionId, amount ? "payments" : "confirm", amount ? { amount, method: paymentMethod } : { method: paymentMethod }, idempotencyKey)).data!.session;
+    if (!s.bookingId) {
+      return NextResponse.json({ success: false, session: s, error: s.status === "underpaid" ? `Đã ghi nhận ${s.paidAmount.toLocaleString("vi-VN")}đ — còn thiếu ${s.remaining.toLocaleString("vi-VN")}đ.` : "Chưa xác nhận được đơn." }, { status: 202, headers: { "Cache-Control": "no-store" } });
+    }
+    const res = await bookingCore.get<CoreBookingEnvelope>(`/internal/v1/bookings/${encodeURIComponent(s.bookingId)}`, { staff });
     const coreBooking = res.data!.booking;
-    const replayed = res.data!.replayed ?? false;
+    const replayed = false;
     const row = toLegacyBookingRow(coreBooking);
     const loyalty = coreBooking.loyalty;
 
-    // Send Telegram notification to Owner on fresh booking confirmation (not on idempotent replays)
-    let telegramResult: TelegramSendResult = { sent: false, reason: "REPLAYED" };
-    if (!replayed) {
-      telegramResult = await sendTelegramBookingNotification(coreBooking, staff, { holdId });
-    }
+    // Telegram: agent-core's session engine posts the (compact) card for admin bookings — no second message here.
+    const telegramResult = { sent: true, reason: "SESSION_ENGINE" };
 
     return NextResponse.json(
       {

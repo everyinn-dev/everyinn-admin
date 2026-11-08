@@ -36,10 +36,13 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	// LSB-5: "Gửi link thanh toán cho khách" builds <landing>/dat-phong/<token>
+	"vars": { "LANDING_BASE_URL": "https://everyinn.vn" },
 	// Production Service Bindings to the Cores (Phase 1.5, P-3 / S6).
 	"services": [
 		{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core" },
-		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" }
+		{ "binding": "CDP_CORE", "service": "everyinn-cdp-core" },
+		{ "binding": "AGENT_CORE", "service": "everyinn-agent-core", "entrypoint": "AdminApi" }
 	],
 	// Owner Telegram Notification Secrets (Phase 2.1):
 	// Set via `npx wrangler secret put TELEGRAM_BOT_TOKEN` & `npx wrangler secret put TELEGRAM_CHAT_ID`
@@ -49,6 +52,7 @@
 			"name": "everyinn-admin-dev",
 			"main": ".open-next/worker.js",
 			"preview_urls": false,
+			"vars": { "LANDING_BASE_URL": "https://saigonliving-dev.hi-everyinn.workers.dev" },
 			"assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
 			// Staff-only DB (auth + Admin audit). No booking/member data here.
 			"d1_databases": [
@@ -61,7 +65,8 @@
 			],
 			"services": [
 				{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core-dev" },
-				{ "binding": "CDP_CORE", "service": "everyinn-cdp-core-dev" }
+				{ "binding": "CDP_CORE", "service": "everyinn-cdp-core-dev" },
+				{ "binding": "AGENT_CORE", "service": "everyinn-agent-core-dev", "entrypoint": "AdminApi" }
 			],
 			"observability": { "enabled": true }
 		}

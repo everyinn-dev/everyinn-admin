@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttHoldItem, GanttRoomData } from "@/types";
+import { GanttHoldBar } from "./GanttHoldBar";
 import { Badge } from "../ui/Badge";
 import { GanttBar } from "./GanttBar";
 import {
@@ -32,6 +33,7 @@ interface GanttRoomRowProps {
   isMonthView: boolean;
   onBookingClick: (booking: GanttBookingItem) => void;
   onBlockClick?: (block: GanttBlockItem, room: GanttRoomData) => void;
+  onHoldClick?: (hold: GanttHoldItem, room: GanttRoomData) => void;
 }
 
 export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
@@ -46,6 +48,7 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
   isMonthView,
   onBookingClick,
   onBlockClick,
+  onHoldClick,
 }) => {
   // Convert any timeMs to X pixel coordinate on the timeline
   const timeToTimelineX = (timeMs: number): number => {
@@ -119,6 +122,16 @@ export const GanttRoomRow: React.FC<GanttRoomRowProps> = ({
             </div>
           ))}
         </div>
+
+        {/* LSB-5: live holds (web guest / receptionist mid-checkout) */}
+        {(room.holds ?? []).map((h) => {
+          const s = Date.parse(h.checkinAt);
+          const e = Date.parse(h.checkoutAt);
+          if (e < timelineStartMs || s > timelineEndMs) return null;
+          const left = timeToTimelineX(s);
+          const width = Math.max(28, timeToTimelineX(e) - left);
+          return <GanttHoldBar key={h.id} hold={h} left={left} width={width} onClick={(x) => onHoldClick?.(x, room)} />;
+        })}
 
         {/* Room Blocks (Bảo trì / Khóa phòng - Thanh kéo dài nổi bật theo giờ khóa) */}
         {room.blocks.map((block) => {

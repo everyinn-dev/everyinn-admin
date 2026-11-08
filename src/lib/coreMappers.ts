@@ -17,6 +17,7 @@ import type {
   DepositStatus,
   GanttBlockItem,
   GanttBookingItem,
+  GanttHoldItem,
   GanttRoomData,
   LoyaltyTier,
   Member,
@@ -68,6 +69,9 @@ export interface CoreBlock {
 }
 
 export interface CoreGanttBooking {
+  /** LSB-5: booking-session channel (web | admin | chat); null for legacy bookings */
+  channel?: string | null;
+  voucherCode?: string | null;
   id: string;
   roomId: string;
   guestName: string;
@@ -114,7 +118,7 @@ export interface CoreGantt {
   daysInMonth?: number;
   range: { from: string; to: string };
   bookingsVersion: number;
-  rooms: Array<CoreRoom & { bookings: CoreGanttBooking[]; blocks: CoreBlock[] }>;
+  rooms: Array<CoreRoom & { bookings: CoreGanttBooking[]; blocks: CoreBlock[]; holds?: GanttHoldItem[] }>;
 }
 
 export interface CoreRateRule {
@@ -338,6 +342,8 @@ export function toGanttBooking(b: CoreGanttBooking): GanttBookingItem & {
     depositPaidAt: nz(b.depositPaidAt),
     depositReminderSentAt: nz(b.depositReminderSentAt),
     remainingPaidAt: nz(b.remainingPaidAt),
+    channel: b.channel ?? null,
+    voucherCode: b.voucherCode ?? null,
     modNo: b.modNo,
     version: b.version,
     ratePlanCode: b.ratePlanCode,
@@ -390,10 +396,11 @@ export function toGanttRoom(r: CoreGantt["rooms"][number], includeDetail: boolea
     bookings: r.bookings.map((b) => {
       const item = toGanttBooking(b);
       if (includeDetail) return item;
-      const { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } = item;
-      return { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode } as GanttBookingItem;
+      const { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode, channel } = item;
+      return { id, roomId, guestName, phone, instagram, facebook, zalo, closingNote, bookingType, checkinAt, checkoutAt, totalPrice, status, note, version, occupiedUntil, loyaltySyncStatus, ratePlanCode, channel } as GanttBookingItem;
     }),
     blocks: r.blocks.map(toGanttBlock),
+    holds: (r.holds ?? []).map(({ id, bookingType, checkinAt, checkoutAt, status, expiresAt, payableAmount, channel, sessionId, guestNameMasked }) => ({ id, bookingType, checkinAt, checkoutAt, status, expiresAt, payableAmount, channel, sessionId, guestNameMasked })),
   };
 }
 

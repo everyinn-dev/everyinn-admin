@@ -109,6 +109,10 @@ const sampleBookingCanonical = {
     updatedBy: { id: 1, name: "Manager" },
   },
   reconciliationStatus: "ok",
+  // LSB-5: booking-session channel + stamp voucher (null for legacy / admin bookings without a session)
+  channel: null,
+  sessionId: null,
+  voucher: null,
 };
 
 test("Consumer contract: Booking Core Envelope matches schema and maps cleanly to legacy UI", () => {
@@ -233,6 +237,7 @@ test("Consumer contract: Promotions & Categories match schema and map cleanly", 
     minNights: 1,
     blackoutDates: [],
     isStackableWithHoliday: true,
+    isPublic: false,
     usageLimit: 100,
     maxUsesPerGuest: null,
     usedCount: 5,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttHoldItem, GanttRoomData } from "@/types";
 import { GanttRoomRow, DayInfo } from "./GanttRoomRow";
 import {
   TIMELINE_SLOTS,
@@ -23,6 +23,7 @@ interface GanttChartProps {
   rooms: GanttRoomData[];
   onBookingClick: (booking: GanttBookingItem) => void;
   onBlockClick?: (block: GanttBlockItem, room: GanttRoomData) => void;
+  onHoldClick?: (hold: GanttHoldItem, room: GanttRoomData) => void;
   scrollTrigger?: number; // increments when user clicks "Hôm nay"
 }
 
@@ -33,6 +34,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
   rooms,
   onBookingClick,
   onBlockClick,
+  onHoldClick,
   scrollTrigger = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -299,6 +301,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                   isMonthView={isMonth}
                   onBookingClick={onBookingClick}
                   onBlockClick={onBlockClick}
+                  onHoldClick={onHoldClick}
                 />
               ))
             )}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/auth";
-import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
-import type { CoreHoldEnvelope } from "@/lib/coreMappers";
+import { coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
+import { holdOf, sessions } from "@/lib/sessions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,27 +41,25 @@ export async function POST(req: NextRequest) {
     const headerKey = req.headers.get("idempotency-key")?.trim();
     const idempotencyKey = headerKey && IDEMPOTENCY_KEY_RE.test(headerKey) ? headerKey : newIdempotencyKey("hold-create");
 
-    const res = await bookingCore.post<CoreHoldEnvelope>("/internal/v1/holds", {
-      staff,
-      idempotencyKey,
-      body: {
-        roomId,
-        bookingType,
-        checkinAt: checkin.toISOString(),
-        checkoutAt: checkout.toISOString(),
-        earlyCheckinHours,
-        lateCheckoutHours,
-        numGuests,
-      },
+    // LSB-5: one engine for every channel — the receptionist's hold is an "admin" booking session (agent-core);
+    // the guest-facing token lets the receptionist send a payment link (/dat-phong/<token>).
+    const created = await sessions.create(staff, {
+      roomId,
+      bookingType,
+      checkinAt: checkin.toISOString(),
+      checkoutAt: checkout.toISOString(),
+      earlyCheckinHours,
+      lateCheckoutHours,
+      numGuests,
+      ...(typeof body.shift === "string" ? { shift: body.shift } : {}),
+      clientNonce: idempotencyKey.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64),
     });
+    const detail = created.data!;
+    const hold = await holdOf(staff, detail.session.holdId);
 
     return NextResponse.json(
-      {
-        success: true,
-        replayed: res.data?.replayed ?? false,
-        hold: res.data!.hold,
-      },
-      { status: res.status === 201 ? 201 : 200, headers: { "Cache-Control": "no-store" } }
+      { success: true, replayed: false, hold, sessionId: detail.session.id, shareToken: detail.token ?? null, session: detail.session },
+      { status: 201, headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     console.error("POST /api/holds error:", error);

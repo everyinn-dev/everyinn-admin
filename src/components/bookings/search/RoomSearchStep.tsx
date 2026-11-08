@@ -6,6 +6,7 @@ import { HourlyFields } from "../HourlyFields";
 import { OvernightFields } from "../OvernightFields";
 import { DayUseFields } from "../DayUseFields";
 import { AvailableRoomCard, type AvailableRoomCardItem } from "./AvailableRoomCard";
+import type { SearchResult } from "@/shared/booking-kit/types";
 import { Spinner } from "../../ui/Spinner";
 
 export type StandardSearchBookingType = "hourly" | "overnight" | "dayuse";
@@ -87,6 +88,9 @@ export const RoomSearchStep: React.FC<RoomSearchStepProps> = ({
 
   // Search results state
   const [roomsResult, setRoomsResult] = useState<AvailableRoomCardItem[]>([]);
+  // LSB-5: "còn N phòng" per overnight shift + Booking Core warnings (admin may book outside the web window)
+  const [shiftSummary, setShiftSummary] = useState<NonNullable<SearchResult["shiftSummary"]>>([]);
+  const [warnings, setWarnings] = useState<NonNullable<SearchResult["warnings"]>>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [lastSearchedAt, setLastSearchedAt] = useState<string | null>(null);
@@ -194,6 +198,8 @@ export const RoomSearchStep: React.FC<RoomSearchStepProps> = ({
       }
 
       setRoomsResult(data.rooms || []);
+      setShiftSummary(Array.isArray(data.shiftSummary) ? data.shiftSummary : []);
+      setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
       setLastSearchedAt(data.searchedAt || new Date().toISOString());
     } catch (err) {
       console.error("Search availability error:", err);
@@ -312,6 +318,43 @@ export const RoomSearchStep: React.FC<RoomSearchStepProps> = ({
               onChangeEarlyCheckin={setOvernightEarlyHours}
               onChangeLateCheckout={setOvernightLateHours}
             />
+          )}
+
+          {bookingType === "overnight" && shiftSummary.length > 0 && (
+            <div className="flex flex-wrap gap-2" aria-label="Số phòng còn trống theo ca">
+              {shiftSummary.map((sh) => {
+                const start = Number(sh.code.split("-")[0]);
+                const on = start === overnightStartHour;
+                return (
+                  <button
+                    key={sh.code}
+                    type="button"
+                    disabled={sh.past}
+                    onClick={() => {
+                      setOvernightStartHour(start);
+                      setOvernightEarlyHours(0);
+                      setOvernightLateHours(0);
+                    }}
+                    className={`min-h-10 px-3 rounded-xl border text-xs font-bold text-left ${
+                      on ? "bg-emerald-50 border-emerald-400 text-emerald-900" : "bg-white border-slate-200 text-slate-700 hover:border-emerald-300"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {sh.label}
+                    <span className={`block text-[11px] font-semibold ${sh.availableRooms === 0 ? "text-rose-600" : "text-slate-500"}`}>
+                      {sh.past ? "Đã qua" : sh.availableRooms === 0 ? "Hết phòng" : `Còn ${sh.availableRooms} phòng`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {warnings.length > 0 && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs space-y-0.5">
+              {warnings.map((w) => (
+                <p key={w.code}>⚠️ {w.message} <span className="text-amber-600">(khách web không đặt được khung này)</span></p>
+              ))}
+            </div>
           )}
 
           {bookingType === "dayuse" && (
@@ -444,6 +487,13 @@ export const RoomSearchStep: React.FC<RoomSearchStepProps> = ({
                   numGuests={currentCriteria.numGuests}
                   holdingRoomId={holdingRoomId}
                   onSelectRoom={(selected) => onSelectRoomAndHold(selected, currentCriteria)}
+                  earlyHours={bookingType === "overnight" ? overnightEarlyHours : 0}
+                  lateHours={bookingType === "overnight" ? overnightLateHours : 0}
+                  onPickAddon={
+                    bookingType === "overnight"
+                      ? (type, hours) => (type === "early_checkin" ? setOvernightEarlyHours(hours) : setOvernightLateHours(hours))
+                      : undefined
+                  }
                 />
               ))}
             </div>

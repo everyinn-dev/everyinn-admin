@@ -285,6 +285,9 @@ export interface EventLog {
 // Gantt response types
 export interface GanttBookingItem {
   id: string;
+  /** LSB-5: "web" = the guest booked on the landing page by themself */
+  channel?: string | null;
+  voucherCode?: string | null;
   roomId: string;
   guestName: string;
   phone: string;
@@ -358,6 +361,21 @@ export interface GanttRoomData {
   floor: number;
   bookings: GanttBookingItem[];
   blocks: GanttBlockItem[];
+  /** LSB-5: live holds (web guest / receptionist mid-checkout) — hatched bars with a countdown */
+  holds?: GanttHoldItem[];
+}
+
+export interface GanttHoldItem {
+  id: string;
+  bookingType: string;
+  checkinAt: string;
+  checkoutAt: string;
+  status: "active" | "awaiting_payment";
+  expiresAt: string;
+  payableAmount: number | null;
+  channel: "web" | "admin" | "chat" | string;
+  sessionId: string | null;
+  guestNameMasked: string | null;
 }
 
 export interface GanttDataResponse {

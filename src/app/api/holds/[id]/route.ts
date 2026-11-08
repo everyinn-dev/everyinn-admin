@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/auth";
+import { sessionIdForHold, holdOf, sessions } from "@/lib/sessions";
 import { bookingCore, coreErrorResponse } from "@/lib/cores";
 import type { CoreHoldEnvelope } from "@/lib/coreMappers";
 
@@ -87,34 +88,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Vui lòng nhập số tiền đặt cọc lớn hơn 0." }, { status: 400 });
     }
 
-    const res = await bookingCore.patch<CoreHoldEnvelope>(`/internal/v1/holds/${encodeURIComponent(holdId)}`, {
-      staff,
-      body: {
-        guest: {
-          name,
-          phone,
-          instagram: instagram || undefined,
-          facebook: facebook || undefined,
-          zalo: zalo || undefined,
-        },
-        closingNote,
-        note,
-        promotionId,
-        promotionCode,
-        isDeposit,
-        depositAmount: isDeposit ? depositAmount : 0,
-        depositDueDate: isDeposit ? depositDueDate : undefined,
-        paymentMethod,
-      },
+    // LSB-5: session-managed hold → the guest info goes through the booking-session engine (agent-core)
+    const sessionId = await sessionIdForHold(staff, holdId);
+    const saved = await sessions.save(staff, sessionId, {
+      guest: { name, phone, instagram: instagram || undefined, facebook: facebook || undefined, zalo: zalo || undefined, note },
+      closingNote,
+      ...(promotionCode ? { promotionCode } : {}),
+      ...(typeof body.voucherId === "string" && body.voucherId ? { voucherId: body.voucherId } : {}),
+      ...(body.noVoucher === true ? { noVoucher: true } : {}),
+      isDeposit,
+      ...(isDeposit ? { depositAmount } : {}),
     });
-
-    return NextResponse.json(
-      {
-        success: true,
-        hold: res.data!.hold,
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    void promotionId;
+    void depositDueDate;
+    void paymentMethod;
+    const hold = await holdOf(staff, saved.data!.session.holdId);
+    return NextResponse.json({ success: true, hold, sessionId, session: saved.data!.session }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("PATCH /api/holds/[id] error:", error);
     return coreErrorResponse(error);
@@ -145,21 +134,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       // Optional body on DELETE
     }
 
-    const res = await bookingCore.post<CoreHoldEnvelope>(
-      `/internal/v1/holds/${encodeURIComponent(holdId)}/release`,
-      {
-        staff,
-        body: { reason },
-      }
-    );
-
-    return NextResponse.json(
-      {
-        success: true,
-        hold: res.data!.hold,
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    // LSB-5: release through the engine (audited, Telegram card updated, guest link shows "Đơn đã huỷ")
+    const sessionId = await sessionIdForHold(staff, holdId);
+    const out = await sessions.action(staff, sessionId, "revoke", { reason });
+    return NextResponse.json({ success: true, session: out.data!.session, hold: await holdOf(staff, holdId) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("DELETE /api/holds/[id] error:", error);
     return coreErrorResponse(error);
