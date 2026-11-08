@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Booking, BookingType, PricingRule, Room } from "@/types";
+import { Booking, BookingType, PricingRule, Room, SurchargeRule } from "@/types";
+import { Promotion } from "@/types/promotions";
 import { calculatePrice } from "@/lib/pricing";
 import { roundToNearest30Min } from "@/lib/timelineUtils";
 import { BookingTypeTabs } from "../bookings/BookingTypeTabs";
@@ -29,6 +30,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
+  const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [booking, setBooking] = useState<Booking | null>(null);
 
   // Form Fields
@@ -36,6 +39,11 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [bookingType, setBookingType] = useState<BookingType>("hourly");
   const [note, setNote] = useState("");
   const [closingNote, setClosingNote] = useState("");
+
+  // Incidental charges state ("Thêm phát sinh")
+  const [showIncidental, setShowIncidental] = useState(false);
+  const [incidentalFee, setIncidentalFee] = useState(0);
+  const [incidentalReason, setIncidentalReason] = useState("");
 
   // Hourly fields
   const [hourlyDate, setHourlyDate] = useState("");
@@ -63,31 +71,43 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Fetch initial booking details, rooms, and pricing rules
+  // Fetch initial booking details, rooms, pricing rules, surcharges & promotions
   const loadData = React.useCallback(async () => {
     try {
       setLoadingInitial(true);
-      const [bookingRes, roomsRes, pricingRes] = await Promise.all([
+      const [bookingRes, roomsRes, pricingRes, surchargeRes, promoRes] = await Promise.all([
         fetch(`/api/bookings/${bookingId}`),
         fetch("/api/rooms"),
         fetch("/api/pricing-rules"),
+        fetch("/api/surcharges"),
+        fetch("/api/promotions"),
       ]);
 
       if (!bookingRes.ok) throw new Error("Không thể tải thông tin đặt phòng.");
       const bookingData = (await bookingRes.json()) as any;
       const roomsData = roomsRes.ok ? (((await roomsRes.json()) as any)) : { rooms: [] };
       const pricingData = pricingRes.ok ? (((await pricingRes.json()) as any)) : { pricingRules: [] };
+      const surchargeData = surchargeRes.ok ? (((await surchargeRes.json()) as any)) : { surchargeRules: [] };
+      const promoData = promoRes.ok ? (((await promoRes.json()) as any)) : { promotions: [] };
 
       const b: Booking = bookingData.booking;
       setBooking(b);
       setRooms(roomsData.rooms || []);
       setPricingRules(pricingData.pricingRules || []);
+      setSurchargeRules(surchargeData.surchargeRules || []);
+      setPromotions(promoData.promotions || []);
 
       setRoomId(b.room_id);
       const type = (b.booking_type as BookingType) || "hourly";
       setBookingType(type);
       setNote(b.note || "");
       setClosingNote(b.closing_note || "");
+
+      // Initialize Incidental fee if existing on booking
+      const existingIncidental = b.incidental_fee || 0;
+      setIncidentalFee(existingIncidental);
+      setIncidentalReason(b.incidental_reason || "");
+      setShowIncidental(existingIncidental > 0);
 
       const inDate = new Date(b.checkin_at);
       const outDate = new Date(b.checkout_at);
@@ -119,7 +139,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       setCustomCheckinTime(inTimeStr);
       setCustomCheckoutDate(outDateStr);
       setCustomCheckoutTime(outTimeStr);
-      setCustomPrice(b.total_price || 0);
+      setCustomPrice(b.base_price || b.total_price || 0);
     } catch (err: any) {
       setErrorMessage(err.message || "Lỗi tải dữ liệu đặt phòng.");
     } finally {
@@ -182,30 +202,78 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
     customCheckoutTime,
   ]);
 
-  // Live Pricing Calculation
+  // Live Pricing Calculation (with promo discount and incidental fee added)
   const currentPricing = useMemo(() => {
     if (!selectedRoom || pricingRules.length === 0) return null;
     try {
-      return calculatePrice({
+      const raw = calculatePrice({
         bookingType,
         roomClass: selectedRoom.room_class,
         checkinAt: calculatedCheckinAt,
         checkoutAt: calculatedCheckoutAt,
+        earlyCheckinHours: 0,
         lateCheckoutHours: calculatedLateHours,
+        numGuests: booking?.num_guests || 2,
         pricingRules,
+        surchargeRules,
         customPrice,
+        discountAmount: 0,
       });
+
+      // Calculate promotion discount for preview if booking has a promotion
+      let promoDiscount = 0;
+      if (booking?.promotion_name || booking?.promotion_id || (booking?.discount_amount && booking.discount_amount > 0)) {
+        const promo = promotions.find(
+          (p) =>
+            p.id === booking.promotion_id ||
+            (booking.promotion_code && p.code?.toUpperCase() === booking.promotion_code.toUpperCase())
+        );
+
+        if (promo) {
+          if (promo.discount_type === "percentage") {
+            const rawDiscount = Math.round(raw.basePrice * (promo.discount_value / 100));
+            promoDiscount = promo.max_discount_amount
+              ? Math.min(rawDiscount, promo.max_discount_amount, raw.basePrice)
+              : Math.min(rawDiscount, raw.basePrice);
+          } else {
+            promoDiscount = Math.min(promo.discount_value, raw.basePrice);
+          }
+        } else if (booking.base_price > 0 && booking.discount_amount > 0) {
+          const ratio = booking.discount_amount / booking.base_price;
+          promoDiscount = Math.min(raw.basePrice, Math.round(raw.basePrice * ratio));
+        } else {
+          promoDiscount = Math.min(raw.basePrice, booking.discount_amount || 0);
+        }
+      }
+
+      const activeIncidental = showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0;
+      const totalBeforeIncidental = Math.max(
+        0,
+        raw.basePrice + raw.holidaySurcharge + raw.totalExtraFee + raw.extraGuestFee - promoDiscount
+      );
+      const finalTotal = totalBeforeIncidental + activeIncidental;
+
+      return {
+        ...raw,
+        discountAmount: promoDiscount,
+        totalPrice: finalTotal,
+      };
     } catch {
       return null;
     }
   }, [
     selectedRoom,
     pricingRules,
+    surchargeRules,
+    booking,
+    promotions,
     bookingType,
     calculatedCheckinAt,
     calculatedCheckoutAt,
     calculatedLateHours,
     customPrice,
+    showIncidental,
+    incidentalFee,
   ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -249,6 +317,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           customPrice: bookingType === "custom" ? customPrice : 0,
           note,
           closingNote,
+          incidentalFee: showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0,
+          incidentalReason: showIncidental && incidentalReason ? incidentalReason.trim() : null,
         }),
       });
 
@@ -256,7 +326,10 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       if (!res.ok) {
         const errorText = data.error || "Không thể cập nhật đặt phòng.";
         if (res.status === 409) {
-          toast.warning("Dữ liệu hoặc lịch phòng đã bị thay đổi bởi người khác. Đang tải lại dữ liệu mới nhất...", "Xung đột lịch & Giờ dọn phòng (409)");
+          toast.warning(
+            "Dữ liệu hoặc lịch phòng đã bị thay đổi bởi người khác. Đang tải lại dữ liệu mới nhất...",
+            "Xung đột lịch & Giờ dọn phòng (409)"
+          );
           await loadData();
           return;
         }
@@ -360,9 +433,107 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         />
       )}
 
+      {/* Promotion Applied Notice & Tag */}
+      {booking?.promotion_name && (
+        <div className="p-3.5 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 flex items-center justify-between text-xs shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-lg shrink-0">🎁</span>
+            <div>
+              <div className="font-extrabold text-rose-950 flex items-center gap-1.5">
+                <span>Ưu đãi đang áp dụng:</span>
+                <span className="text-rose-700 underline decoration-rose-300">
+                  {booking.promotion_name} {booking.promotion_code ? `(${booking.promotion_code})` : ""}
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-800/90 mt-0.5">
+                Hệ thống tự động bảo lưu và tính lại chiết khấu ưu đãi này khi lưu cập nhật.
+              </p>
+            </div>
+          </div>
+          <span className="font-mono font-extrabold text-rose-900 bg-white/90 px-2.5 py-1 rounded-lg border border-rose-200 shadow-2xs shrink-0">
+            -{(currentPricing?.discountAmount || booking.discount_amount || 0).toLocaleString("vi-VN")} đ
+          </span>
+        </div>
+      )}
+
+      {/* Incidental / Surcharge Section (Nút Thêm Phát Sinh) */}
+      {!showIncidental ? (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowIncidental(true)}
+            className="w-full py-2.5 px-3.5 rounded-xl border border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/50 hover:bg-purple-50 text-purple-900 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+          >
+            <span>➕</span>
+            <span>Thêm phát sinh</span>
+            <span className="text-[11px] font-normal text-purple-700">(Đền bù, bán thêm dịch vụ, tips...)</span>
+          </button>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50/80 to-indigo-50/60 border border-purple-200 space-y-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-purple-950 uppercase tracking-wide flex items-center gap-1.5">
+              <span>⚡</span> Chi phí phát sinh cộng thêm
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setShowIncidental(false);
+                setIncidentalFee(0);
+                setIncidentalReason("");
+              }}
+              className="text-xs text-slate-400 hover:text-rose-600 font-semibold cursor-pointer"
+            >
+              ✕ Xóa phát sinh
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-purple-900">
+                Số tiền phát sinh (VNĐ) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={incidentalFee || ""}
+                onChange={(e) => setIncidentalFee(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="VD: 150000"
+                className="w-full rounded-lg bg-white border border-purple-300 px-3 py-1.5 text-sm font-mono font-bold text-purple-950 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-purple-900">
+                Lý do / Nội dung phát sinh
+              </label>
+              <input
+                type="text"
+                value={incidentalReason}
+                onChange={(e) => setIncidentalReason(e.target.value)}
+                placeholder="VD: Đền bù vỡ ly, minibar 2 lon nước, giặt ủi..."
+                className="w-full rounded-lg bg-white border border-purple-300 px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
+              />
+            </div>
+          </div>
+
+          <p className="text-[11px] text-purple-800/90 italic">
+            💡 Số tiền phát sinh được cộng thẳng vào tổng thanh toán cuối cùng của đơn (không áp dụng chiết khấu mã khuyến mãi).
+          </p>
+        </div>
+      )}
+
       {/* Live Price Summary Preview */}
       {currentPricing && (
-        <PriceSummaryCard pricing={currentPricing} selectedRoom={selectedRoom} />
+        <PriceSummaryCard
+          pricing={currentPricing}
+          selectedRoom={selectedRoom}
+          numGuests={booking?.num_guests || 2}
+          promotionName={booking?.promotion_name || undefined}
+          incidentalFee={showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0}
+          incidentalReason={showIncidental && incidentalReason ? incidentalReason : undefined}
+        />
       )}
 
       {/* Closing Note / Agreement with Guest */}

@@ -208,6 +208,8 @@ export interface Booking extends ControlFields {
   holiday_surcharge?: number;
   extra_guest_fee?: number;
   extra_fee: number;
+  incidental_fee?: number;
+  incidental_reason?: string | null;
   discount_amount: number;
   total_price: number;
 
@@ -299,6 +301,8 @@ export interface GanttBookingItem {
   holidaySurcharge?: number;
   extraGuestFee?: number;
   extraFee?: number;
+  incidentalFee?: number;
+  incidentalReason?: string | null;
   discountAmount?: number;
   promotionName?: string | null;
   totalPrice: number;

@@ -227,6 +227,8 @@ export async function PATCH(
       if (body.note !== undefined) updatePayload.note = body.note || null;
       if (body.closingNote !== undefined) updatePayload.closingNote = body.closingNote || null;
       if (body.customPrice !== undefined) updatePayload.customPrice = Number(body.customPrice);
+      if (body.incidentalFee !== undefined) updatePayload.incidentalFee = Number(body.incidentalFee);
+      if (body.incidentalReason !== undefined) updatePayload.incidentalReason = body.incidentalReason ? String(body.incidentalReason).trim() : null;
 
       const coreRes = await bookingCore.patch<CoreBookingEnvelope>(`/internal/v1/bookings/${id}`, {
         staff,

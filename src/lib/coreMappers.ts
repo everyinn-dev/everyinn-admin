@@ -88,6 +88,8 @@ export interface CoreGanttBooking {
   holidaySurcharge?: number;
   extraGuestFee?: number;
   extraFee?: number;
+  incidentalFee?: number;
+  incidentalReason?: string | null;
   discountAmount?: number;
   promotionName?: string | null;
   totalPrice: number;
@@ -321,6 +323,8 @@ export function toGanttBooking(b: CoreGanttBooking): GanttBookingItem & {
     holidaySurcharge: b.holidaySurcharge,
     extraGuestFee: b.extraGuestFee,
     extraFee: b.extraFee,
+    incidentalFee: b.incidentalFee ?? (b as any).incidental_fee ?? 0,
+    incidentalReason: b.incidentalReason ?? (b as any).incidental_reason ?? null,
     discountAmount: b.discountAmount,
     promotionName: b.promotionName,
     totalPrice: b.totalPrice,
@@ -475,6 +479,8 @@ export interface CoreBookingDto {
     extraFee: number;
     holidaySurcharge?: number;
     extraGuestFee?: number;
+    incidentalFee?: number;
+    incidentalReason?: string | null;
     promotionDiscount: number;
     loyaltyDiscount: number;
     discountAmount: number;
@@ -583,6 +589,8 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     holiday_surcharge: p.holidaySurcharge,
     extra_guest_fee: p.extraGuestFee,
     extra_fee: p.extraFee,
+    incidental_fee: p.incidentalFee ?? (p as any).incidental_fee ?? 0,
+    incidental_reason: p.incidentalReason ?? (p as any).incidental_reason ?? null,
     discount_amount: p.discountAmount,
     total_price: p.totalPrice,
     original_price: u(p.originalPrice),
