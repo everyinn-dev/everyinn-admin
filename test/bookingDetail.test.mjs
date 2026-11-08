@@ -216,3 +216,19 @@ test("bookingCore.post handles cancel action", async () => {
     setTestFetcher(null);
   }
 });
+
+test("toLegacyBookingRow maps incidentalFee and incidentalReason correctly", () => {
+  const dtoWithIncidental = {
+    ...sampleBookingDto,
+    pricing: {
+      ...sampleBookingDto.pricing,
+      incidentalFee: 150000,
+      incidentalReason: "Đền bù vỡ ly",
+      totalPrice: 450000,
+    },
+  };
+  const mapped = toLegacyBookingRow(dtoWithIncidental);
+  assert.equal(mapped.incidental_fee, 150000);
+  assert.equal(mapped.incidental_reason, "Đền bù vỡ ly");
+  assert.equal(mapped.total_price, 450000);
+});

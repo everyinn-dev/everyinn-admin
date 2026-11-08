@@ -28,6 +28,8 @@ interface PriceSummaryCardProps {
   selectedRoom?: Room | null;
   numGuests?: number;
   promotionName?: string;
+  incidentalFee?: number;
+  incidentalReason?: string;
   isDeposit?: boolean;
   depositAmount?: number;
   remainingAmount?: number;
@@ -75,6 +77,8 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
   selectedRoom,
   numGuests = 2,
   promotionName,
+  incidentalFee,
+  incidentalReason,
   isDeposit,
   depositAmount = 0,
   remainingAmount = 0,
@@ -379,6 +383,18 @@ export const PriceSummaryCard: React.FC<PriceSummaryCardProps> = ({
             </span>
             <span className="font-mono font-bold text-indigo-900">
               +{pricing.extraGuestFee.toLocaleString("vi-VN")} đ
+            </span>
+          </div>
+        )}
+
+        {/* 4c. Incidental Fee */}
+        {incidentalFee !== undefined && incidentalFee > 0 && (
+          <div className="flex justify-between text-purple-800 font-semibold bg-purple-50/60 p-1.5 px-2.5 rounded-lg border border-purple-100">
+            <span>
+              Phát sinh {incidentalReason ? `(${incidentalReason})` : ""}:
+            </span>
+            <span className="font-mono font-bold text-purple-900">
+              +{incidentalFee.toLocaleString("vi-VN")} đ
             </span>
           </div>
         )}

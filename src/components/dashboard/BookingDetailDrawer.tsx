@@ -116,6 +116,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
             modNo: data.booking.mod_no ?? data.booking.version ?? currentBooking.modNo,
             version: data.booking.version ?? data.booking.mod_no ?? currentBooking.version,
             loyaltySyncStatus: data.booking.loyalty_sync_status ?? currentBooking.loyaltySyncStatus,
+            incidentalFee: data.booking.incidental_fee ?? (data.booking as any).incidentalFee ?? currentBooking.incidentalFee,
+            incidentalReason: data.booking.incidental_reason ?? (data.booking as any).incidentalReason ?? currentBooking.incidentalReason,
           };
           setCurrentBooking(fresh);
           onBookingUpdated?.(fresh);
@@ -213,9 +215,21 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       checkinAt: updatedData.checkin_at || currentBooking.checkinAt,
       checkoutAt: updatedData.checkout_at || currentBooking.checkoutAt,
       totalPrice: updatedData.total_price ?? currentBooking.totalPrice,
+      basePrice: updatedData.base_price ?? currentBooking.basePrice,
+      discountAmount: updatedData.discount_amount ?? currentBooking.discountAmount,
+      promotionName: updatedData.promotion_name !== undefined ? updatedData.promotion_name : currentBooking.promotionName,
+      holidaySurcharge: updatedData.holiday_surcharge ?? currentBooking.holidaySurcharge,
+      extraGuestFee: updatedData.extra_guest_fee ?? currentBooking.extraGuestFee,
+      extraFee: updatedData.extra_fee ?? currentBooking.extraFee,
+      incidentalFee: updatedData.incidental_fee ?? (updatedData as any).incidentalFee ?? currentBooking.incidentalFee,
+      incidentalReason: updatedData.incidental_reason ?? (updatedData as any).incidentalReason ?? currentBooking.incidentalReason,
+      remainingAmount: updatedData.remaining_amount ?? currentBooking.remainingAmount,
+      depositStatus: updatedData.deposit_status ?? currentBooking.depositStatus,
+      paidAmount: updatedData.paid_amount ?? currentBooking.paidAmount,
       note: updatedData.note !== undefined ? updatedData.note : currentBooking.note,
       closingNote: updatedData.closing_note !== undefined ? updatedData.closing_note : currentBooking.closingNote,
       modNo: updatedData.mod_no !== undefined ? updatedData.mod_no : (currentBooking.modNo || 0) + 1,
+      version: updatedData.version ?? updatedData.mod_no ?? currentBooking.version,
       updatedAt: updatedData.updated_at || new Date().toISOString(),
       updatedByStaffName: updatedData.updated_by_staff_name || currentBooking.updatedByStaffName,
     };
@@ -826,6 +840,16 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                         <span>Phụ thu khách thứ 3+:</span>
                         <span className="font-mono font-bold">
                           +{Number(currentBooking.extraGuestFee).toLocaleString("vi-VN")} đ
+                        </span>
+                      </div>
+                    )}
+                    {((currentBooking.incidentalFee || (currentBooking as any).incidental_fee) || 0) > 0 && (
+                      <div className="flex justify-between text-purple-800 font-semibold">
+                        <span>
+                          Phát sinh {(currentBooking.incidentalReason || (currentBooking as any).incidental_reason) ? `(${(currentBooking.incidentalReason || (currentBooking as any).incidental_reason)})` : ""}:
+                        </span>
+                        <span className="font-mono font-bold">
+                          +{Number(currentBooking.incidentalFee || (currentBooking as any).incidental_fee).toLocaleString("vi-VN")} đ
                         </span>
                       </div>
                     )}
