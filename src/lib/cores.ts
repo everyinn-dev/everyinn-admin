@@ -328,4 +328,3 @@ export function coreErrorResponse(err: unknown): Response {
   console.error("Unexpected BFF error:", err);
   return Response.json({ error: "Internal server error" }, { status: 500 });
 }
-

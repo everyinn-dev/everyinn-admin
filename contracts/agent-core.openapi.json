@@ -3185,6 +3185,253 @@
           }
         }
       }
+    },
+    "/internal/v1/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "x-callers": ["admin-bff"],
+        "summary": "LSB-5: booking sessions (status=live|<status>, channel=web|admin) — ETag = inbox version",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["sessions"], "properties": { "sessions": { "type": "array", "items": { "type": "object" } } } } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      },
+      "post": {
+        "operationId": "createSession",
+        "x-callers": ["admin-bff"],
+        "summary": "LSB-5: admin wizard holds a room through the session engine (channel admin); returns the share token once",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["roomId", "bookingType", "checkinAt", "checkoutAt", "numGuests", "clientNonce"],
+                "properties": {
+                  "roomId": { "type": "string" },
+                  "bookingType": { "enum": ["hourly", "overnight", "dayuse", "custom"] },
+                  "checkinAt": { "type": "string" },
+                  "checkoutAt": { "type": "string" },
+                  "earlyCheckinHours": { "type": "integer" },
+                  "lateCheckoutHours": { "type": "integer" },
+                  "numGuests": { "type": "integer" },
+                  "shift": { "type": "string" },
+                  "clientNonce": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/by-hold/{holdId}": {
+      "get": {
+        "operationId": "sessionByHold",
+        "x-callers": ["admin-bff"],
+        "summary": "Deep link for 409 SESSION_MANAGED: hold → session",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "required": ["sessionId"], "properties": { "sessionId": { "type": "string" }, "channel": { "type": "string" }, "status": { "type": "string" } } }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}": {
+      "get": {
+        "operationId": "getSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Session + full audit timeline + payments (ETag = session version)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      },
+      "patch": {
+        "operationId": "saveSessionGuest",
+        "x-callers": ["admin-bff"],
+        "summary": "Guest info (+ admin closing note / deposit) → Core hold draft",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["guest"],
+                "properties": {
+                  "guest": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "phone": { "type": "string" },
+                      "zalo": { "type": "string" },
+                      "instagram": { "type": "string" },
+                      "facebook": { "type": "string" },
+                      "note": { "type": "string" }
+                    }
+                  },
+                  "promotionCode": { "type": "string" },
+                  "voucherId": { "type": "string" },
+                  "noVoucher": { "type": "boolean" },
+                  "closingNote": { "type": "string" },
+                  "isDeposit": { "type": "boolean" },
+                  "depositAmount": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/live": {
+      "get": {
+        "operationId": "waitSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Long-poll (≤ 25 s) for the next change of the session (Durable Object)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/preview": {
+      "post": {
+        "operationId": "previewSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Price preview: phone → tier + voucher wallet, promotion code",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object" } } } }, "default": { "$ref": "#/components/responses/Error" } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "phone": { "type": "string" }, "promotionCode": { "type": "string" }, "voucherId": { "type": "string" }, "noVoucher": { "type": "boolean" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/payments": {
+      "post": {
+        "operationId": "recordSessionPayment",
+        "x-callers": ["admin-bff"],
+        "summary": "Money received by this staff member (cash / card / transfer…): enough → booking, short → underpaid",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["amount"], "properties": { "amount": { "type": "integer" }, "method": { "enum": ["bank_transfer", "cash", "card", "ewallet", "other"] } } }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/confirm": {
+      "post": {
+        "operationId": "confirmSession",
+        "x-callers": ["admin-bff"],
+        "summary": "✅ the remaining amount arrived → Booking Core confirm with THIS staff member",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "amount": { "type": "integer" }, "method": { "type": "string" } } } } } }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/reject": {
+      "post": {
+        "operationId": "rejectSession",
+        "x-callers": ["admin-bff"],
+        "summary": "❌ money not received (1st → back to awaiting payment, 2nd → cancelled)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/revoke": {
+      "post": {
+        "operationId": "revokeSession",
+        "x-callers": ["admin-bff"],
+        "summary": "🗑 release the room now (guest page shows cancelled)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/accept-short": {
+      "post": {
+        "operationId": "acceptShortSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Underpaid → confirm as a deposit of the amount received",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/request-topup": {
+      "post": {
+        "operationId": "requestTopupSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Underpaid → ask the guest for the rest (new QR)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/restore": {
+      "post": {
+        "operationId": "restoreSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Late transfer → re-hold the same slot and confirm (or conflict)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/share-link": {
+      "post": {
+        "operationId": "shareSessionLink",
+        "x-callers": ["admin-bff"],
+        "summary": "Rotates the guest token and returns /dat-phong/<token> (send it to the guest to pay on their phone)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["token", "path"], "properties": { "token": { "type": "string" }, "path": { "type": "string" } } } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
     }
   },
   "components": {
@@ -4421,6 +4668,48 @@
           "note": {
             "type": "string"
           }
+        }
+      },
+      "SessionView": {
+        "type": "object",
+        "description": "LSB-2 booking session as the guest (or staff) sees it",
+        "required": ["ref", "channel", "status", "statusLabel", "room", "bookingType", "checkinAt", "checkoutAt", "numGuests", "expiresAt", "serverNow", "remainingSeconds", "amountDue", "paidAmount", "remaining", "version", "timeline", "can"],
+        "properties": {
+          "ref": { "type": "string" },
+          "channel": { "enum": ["web", "admin", "chat"] },
+          "status": { "type": "string" },
+          "statusLabel": { "type": "string" },
+          "room": { "type": "object" },
+          "bookingType": { "type": "string" },
+          "shift": { "type": ["string", "null"] },
+          "checkinAt": { "type": "string" },
+          "checkoutAt": { "type": "string" },
+          "earlyHours": { "type": "integer" },
+          "lateHours": { "type": "integer" },
+          "numGuests": { "type": "integer" },
+          "expiresAt": { "type": "string" },
+          "serverNow": { "type": "string" },
+          "remainingSeconds": { "type": "integer" },
+          "amountDue": { "type": "integer" },
+          "paidAmount": { "type": "integer" },
+          "remaining": { "type": "integer" },
+          "pricing": { "type": ["object", "null"] },
+          "guest": { "type": ["object", "null"] },
+          "payment": { "type": ["object", "null"] },
+          "bookingId": { "type": ["string", "null"] },
+          "can": { "type": "object" },
+          "timeline": { "type": "array", "items": { "type": "object" } },
+          "version": { "type": "integer" }
+        }
+      },
+      "SessionDetail": {
+        "type": "object",
+        "required": ["session", "events", "payments"],
+        "properties": {
+          "token": { "type": "string", "description": "only on create" },
+          "session": { "$ref": "#/components/schemas/SessionView" },
+          "events": { "type": "array", "items": { "type": "object" } },
+          "payments": { "type": "array", "items": { "type": "object" } }
         }
       }
     },

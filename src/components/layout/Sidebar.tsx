@@ -65,6 +65,16 @@ export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }
       ),
     },
     {
+      // LSB-6: OTA calendar — everyone views, managers change prices / close rooms
+      label: "Lịch Giá & Phòng",
+      href: "/calendar",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
       label: "Quản Lý Ưu Đãi",
       href: "/promotions",
       icon: (

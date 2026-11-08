@@ -10,8 +10,9 @@ import { MobileVerticalGantt } from "@/components/dashboard/MobileVerticalGantt"
 import { BookingDetailDrawer } from "@/components/dashboard/BookingDetailDrawer";
 import { RoomLockModal } from "@/components/dashboard/RoomLockModal";
 import { RoomLockDetailDrawer } from "@/components/dashboard/RoomLockDetailDrawer";
+import { HoldSessionDrawer } from "@/components/dashboard/HoldSessionDrawer";
 import { Spinner } from "@/components/ui/Spinner";
-import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttHoldItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
 import { getDashboardPrefs, setDashboardPrefs } from "@/lib/localCache";
 import { apiFetch } from "@/lib/apiClient";
@@ -45,6 +46,7 @@ function DashboardContent() {
   const [selectedBooking, setSelectedBooking] = useState<GanttBookingItem | null>(null);
   const [mobileView, setMobileView] = useState<"gantt" | "cards">("gantt");
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
+  const [selectedHold, setSelectedHold] = useState<{ hold: GanttHoldItem; room: GanttRoomData } | null>(null);
   const [selectedBlockData, setSelectedBlockData] = useState<{
     block: GanttBlockItem;
     room: GanttRoomData;
@@ -58,6 +60,7 @@ function DashboardContent() {
   // Dynamic backoff polling interval (20s -> 40s -> 60s khi liên tục 304)
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pollingIntervalRef = useRef<number>(20000);
+  const liveHoldsUntilRef = useRef(0);
 
   const resetPollingInterval = () => {
     pollingIntervalRef.current = 20000;
@@ -119,6 +122,9 @@ function DashboardContent() {
 
       const data = (await res.json()) as any;
       setRoomsData(data.rooms || []);
+      // LSB-5 poll hint (same rule as Booking Core's x-ei-poll-hint): someone is mid-checkout → refresh every 5 s
+      liveHoldsUntilRef.current = Math.max(0, ...(data.rooms || []).flatMap((r: GanttRoomData) => (r.holds ?? []).map((h) => Date.parse(h.expiresAt) || 0)));
+      if (liveHoldsUntilRef.current > Date.now()) pollingIntervalRef.current = 5000;
       return false;
     } catch (err) {
       console.error(err);
@@ -177,7 +183,9 @@ function DashboardContent() {
         if (isCancelled) return;
         if (typeof document !== "undefined" && document.visibilityState === "visible") {
           const is304 = await fetchData(true);
-          if (is304) {
+          if (liveHoldsUntilRef.current > Date.now()) {
+            pollingIntervalRef.current = 5000;
+          } else if (is304) {
             // Tăng dần chu kỳ khi dữ liệu không đổi: 20s -> 40s -> 60s
             if (pollingIntervalRef.current < 40000) {
               pollingIntervalRef.current = 40000;
@@ -387,6 +395,7 @@ function DashboardContent() {
                 scrollTrigger={scrollTrigger}
                 onBookingClick={(booking) => setSelectedBooking(booking)}
                 onBlockClick={(block, room) => setSelectedBlockData({ block, room })}
+                onHoldClick={(hold, room) => setSelectedHold({ hold, room })}
               />
             </div>
 
@@ -439,6 +448,7 @@ function DashboardContent() {
                   scrollTrigger={scrollTrigger}
                   onBookingClick={(booking) => setSelectedBooking(booking)}
                   onBlockClick={(block, room) => setSelectedBlockData({ block, room })}
+                  onHoldClick={(hold, room) => setSelectedHold({ hold, room })}
                 />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -477,6 +487,16 @@ function DashboardContent() {
           onSuccess={() => fetchData()}
           rooms={roomsData}
         />
+
+        {/* LSB-5: live hold (web guest / receptionist) → same commands as the Telegram card */}
+        {selectedHold && (
+          <HoldSessionDrawer
+            hold={selectedHold.hold}
+            room={selectedHold.room}
+            onClose={() => setSelectedHold(null)}
+            onChanged={() => fetchData(true)}
+          />
+        )}
 
         {/* Room Lock Detail Drawer */}
         {selectedBlockData && (

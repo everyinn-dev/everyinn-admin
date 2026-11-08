@@ -8,7 +8,7 @@ import { HoldCountdownBanner } from "./HoldCountdownBanner";
 import { RoomSearchStep, type SearchStayCriteria } from "./search/RoomSearchStep";
 import type { AvailableRoomCardItem } from "./search/AvailableRoomCard";
 import { HoldBookingFormStep } from "./checkout/HoldBookingFormStep";
-import { MockPaymentStep } from "./checkout/MockPaymentStep";
+import { SessionPaymentPanel } from "./checkout/SessionPaymentPanel";
 import { useToast } from "../ui/Toast";
 import { notifyDataChanged } from "@/lib/syncEvents";
 
@@ -34,6 +34,8 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
   const [step, setStep] = useState<WizardStep>("search");
   const [activeHold, setActiveHold] = useState<CoreHoldDto | null>(null);
+  // LSB-5: the booking session (agent-core) behind the hold — same engine as the guest landing page
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [holdingRoomId, setHoldingRoomId] = useState<string | null>(null);
   const [releasingHold, setReleasingHold] = useState<boolean>(false);
   const [completedResult, setCompletedResult] = useState<{
@@ -132,6 +134,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
       const hold: CoreHoldDto = data.hold;
       expiredHandledRef.current = null;
       setActiveHold(hold);
+      setSessionId(data.sessionId ?? null);
       setStep("fill_info");
       try {
         sessionStorage.setItem(SESSION_HOLD_KEY, hold.id);
@@ -303,9 +306,10 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
       {/* STEP 3: Mock Payment Screen */}
       {step === "payment" && activeHold && selectedRoomObj && (
-        <MockPaymentStep
+        <SessionPaymentPanel
           hold={activeHold}
           room={selectedRoomObj}
+          sessionId={sessionId}
           releasing={releasingHold}
           onBackToEditInfo={() => setStep("fill_info")}
           onExitAndReselect={handleExitAndReselect}

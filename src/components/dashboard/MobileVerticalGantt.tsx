@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttHoldItem, GanttRoomData } from "@/types";
+import { holdCountdown } from "./GanttHoldBar";
 import {
   TIMELINE_SLOTS,
   MOBILE_SLOT_HEIGHT_NORMAL,
@@ -21,6 +22,7 @@ interface MobileVerticalGanttProps {
   rooms: GanttRoomData[];
   onBookingClick: (booking: GanttBookingItem) => void;
   onBlockClick?: (block: GanttBlockItem, room: GanttRoomData) => void;
+  onHoldClick?: (hold: GanttHoldItem, room: GanttRoomData) => void;
   scrollTrigger?: number;
 }
 
@@ -135,6 +137,7 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
   rooms,
   onBookingClick,
   onBlockClick,
+  onHoldClick,
   scrollTrigger = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -515,6 +518,32 @@ export const MobileVerticalGantt: React.FC<MobileVerticalGanttProps> = ({
                           );
                         })}
                       </div>
+                    );
+                  })}
+
+                  {/* LSB-5: live holds — hatched, countdown refreshed by the 5 s poll */}
+                  {(room.holds ?? []).map((h) => {
+                    const s = Date.parse(h.checkinAt);
+                    const e = Date.parse(h.checkoutAt);
+                    if (e < timelineStartMs || s > timelineEndMs || Date.parse(h.expiresAt) <= Date.now()) return null;
+                    const top = timeToTimelineY(s);
+                    const durationPx = Math.max(20, timeToTimelineY(e) - top);
+                    const web = h.channel === "web";
+                    return (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => onHoldClick?.(h, room)}
+                        className={`absolute left-0.5 right-0.5 rounded border-2 border-dashed p-0.5 text-left overflow-hidden z-10 text-[8.5px] font-bold leading-tight ${
+                          web
+                            ? "border-sky-500 text-sky-950 bg-[repeating-linear-gradient(45deg,rgba(14,165,233,0.12),rgba(14,165,233,0.12)_6px,rgba(14,165,233,0.25)_6px,rgba(14,165,233,0.25)_12px)]"
+                            : "border-slate-400 text-slate-800 bg-[repeating-linear-gradient(45deg,rgba(100,116,139,0.10),rgba(100,116,139,0.10)_6px,rgba(100,116,139,0.22)_6px,rgba(100,116,139,0.22)_12px)]"
+                        }`}
+                        style={{ top: `${top}px`, height: `${durationPx}px` }}
+                      >
+                        <span className="block truncate">{web ? "🌐 Web giữ" : "⏳ Đang giữ"}</span>
+                        <span className="block font-mono tabular-nums">{holdCountdown(h.expiresAt)}</span>
+                      </button>
                     );
                   })}
 

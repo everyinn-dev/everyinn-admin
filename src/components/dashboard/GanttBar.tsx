@@ -87,6 +87,9 @@ export const GanttBar: React.FC<GanttBarProps> = ({
               🪙 {booking.depositStatus === "fully_paid" ? "Đủ" : "Cọc"}
             </span>
           )}
+          {booking.channel === "web" && (
+            <span className="shrink-0 text-[10px]" title="Khách tự đặt trên web">🌐</span>
+          )}
           <span className="font-bold truncate text-[11px] leading-tight text-white drop-shadow-xs">{booking.guestName}</span>
           {widthPx >= 140 && (
             <span className="text-[10px] text-white/95 font-mono shrink-0 pl-1">

@@ -435,6 +435,12 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                 #{currentBooking.id}
               </span>
               <Badge status={currentBooking.status} size="sm" />
+              {currentBooking.channel === "web" && (
+                <span className="text-[11px] font-bold text-sky-800 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">🌐 Khách tự đặt web</span>
+              )}
+              {currentBooking.voucherCode && (
+                <span className="text-[11px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">🎟 {currentBooking.voucherCode}</span>
+              )}
             </div>
             <h3 className="text-base font-bold text-slate-900 mt-1">
               {mode === "edit" ? "Chỉnh sửa Đặt Phòng" : "Chi tiết Đặt Phòng"}

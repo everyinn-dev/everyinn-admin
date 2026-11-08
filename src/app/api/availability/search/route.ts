@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
         lateCheckoutHours,
         numGuests,
         ...(roomClass ? { roomClass } : {}),
+        // LSB-5: same view as the guest's — public promotion price, overnight add-on chips, "còn N phòng" per shift
+        applyPublicPromotions: true,
+        ...(bookingType === "overnight" ? { includeAddons: true, includeShiftSummary: true } : {}),
       },
     });
 
@@ -65,7 +68,10 @@ export async function POST(req: NextRequest) {
           reasons: item.reasons,
           conflicts: item.conflicts,
           price: item.price,
+          overnightAddons: (item as { overnightAddons?: unknown }).overnightAddons ?? null,
         })),
+        shiftSummary: (data as { shiftSummary?: unknown }).shiftSummary ?? null,
+        warnings: (data as { warnings?: unknown }).warnings ?? [],
       },
       { headers: { "Cache-Control": "no-store" } }
     );

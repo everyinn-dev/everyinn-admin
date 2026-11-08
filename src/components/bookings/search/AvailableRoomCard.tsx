@@ -3,12 +3,15 @@
 import React from "react";
 import type { Room } from "@/types";
 import type { CoreAvailabilityPriceDto } from "@/lib/coreMappers";
+import type { AddonOption, SearchRoom } from "@/shared/booking-kit/types";
 
 export interface AvailableRoomCardItem {
   room: Room;
   available: boolean;
   reasons: Array<{ code: string; message: string }>;
   price: CoreAvailabilityPriceDto | null;
+  /** LSB-5: the same overnight add-on chips the guest sees (contiguity + turnover checked by Booking Core) */
+  overnightAddons?: SearchRoom["overnightAddons"];
 }
 
 interface AvailableRoomCardProps {
@@ -18,7 +21,43 @@ interface AvailableRoomCardProps {
   numGuests: number;
   holdingRoomId: string | null;
   onSelectRoom: (item: AvailableRoomCardItem) => void;
+  /** chip tapped → the search switches to that early/late value (same as the guest's chips) */
+  onPickAddon?: (type: AddonOption["type"], hours: number) => void;
+  earlyHours?: number;
+  lateHours?: number;
 }
+
+const AddonChips: React.FC<{ title: string; options: AddonOption[]; selected: number; onPick?: (hours: number) => void }> = ({ title, options, selected, onPick }) => {
+  if (!options.length) return null;
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] font-bold text-slate-500">{title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => {
+          const on = selected === o.hours;
+          return (
+            <button
+              key={o.hours}
+              type="button"
+              disabled={!o.available || !onPick}
+              title={o.available ? o.label : "Vướng lịch / giờ dọn phòng"}
+              onClick={() => onPick?.(on ? 0 : o.hours)}
+              className={`min-h-9 px-2.5 rounded-lg border text-[11px] font-bold tabular-nums transition-colors ${
+                on
+                  ? "bg-emerald-50 border-emerald-400 text-emerald-800"
+                  : o.available
+                    ? "bg-white border-slate-200 text-slate-700 hover:border-emerald-300"
+                    : "bg-slate-50 border-slate-200 text-slate-400 line-through cursor-not-allowed"
+              }`}
+            >
+              {o.shortLabel} · +{(o.surchargeVnd / 1000).toLocaleString("vi-VN")}k
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 function formatShortTime(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -32,7 +71,11 @@ export const AvailableRoomCard: React.FC<AvailableRoomCardProps> = ({
   numGuests,
   holdingRoomId,
   onSelectRoom,
+  onPickAddon,
+  earlyHours = 0,
+  lateHours = 0,
 }) => {
+  const addons = item.overnightAddons;
   const { room, price } = item;
   const isSignature = room.room_class === "signature";
   const isHoldingThis = holdingRoomId === room.id;
@@ -98,6 +141,12 @@ export const AvailableRoomCard: React.FC<AvailableRoomCardProps> = ({
       {/* Price Breakdown Body */}
       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
         <div className="space-y-2">
+          {addons && (addons.earlyCheckinOptions.length > 0 || addons.lateCheckoutOptions.length > 0) ? (
+            <div className="space-y-2 pb-1">
+              <AddonChips title="Nhận sớm" options={addons.earlyCheckinOptions} selected={earlyHours} onPick={onPickAddon ? (h) => onPickAddon("early_checkin", h) : undefined} />
+              <AddonChips title="Trả muộn" options={addons.lateCheckoutOptions} selected={lateHours} onPick={onPickAddon ? (h) => onPickAddon("late_checkout", h) : undefined} />
+            </div>
+          ) : null}
           <div className="text-xs text-slate-600 flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/70">
             <span className="font-medium text-slate-500">Khung giờ:</span>
             <span className="font-mono font-bold text-slate-800 text-[11px]">
