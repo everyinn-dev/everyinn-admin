@@ -147,23 +147,68 @@ export function timeStrToMinutes(timeStr: string): number {
 }
 
 /**
- * Round any time string (HH:mm) or Date to the nearest 30-minute slot ("00" or "30")
+ * Format a Date or ISO string into Vietnam local date input format: YYYY-MM-DD
+ */
+export function toVnDateInput(dateInput: Date | string): string {
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+/**
+ * Format a Date or ISO string into Vietnam local time input format: HH:mm
+ */
+export function toVnTimeInput(dateInput: Date | string): string {
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+/**
+ * Get hour (0-23) in Vietnam timezone
+ */
+export function getVnHour(dateInput: Date | string): number {
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return 0;
+  const hourStr = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    hour12: false,
+  }).format(d);
+  return parseInt(hourStr, 10) || 0;
+}
+
+/**
+ * Round any time string (HH:mm) or Date to the nearest 30-minute slot ("00" or "30") in Vietnam timezone
  */
 export function roundToNearest30Min(timeInput?: string | Date): string {
   let h = 0;
   let m = 0;
 
   if (timeInput instanceof Date) {
-    h = timeInput.getHours();
-    m = timeInput.getMinutes();
+    const timeStr = toVnTimeInput(timeInput);
+    const parts = timeStr.split(":");
+    h = parseInt(parts[0], 10) || 0;
+    m = parseInt(parts[1], 10) || 0;
   } else if (typeof timeInput === "string" && timeInput.includes(":")) {
     const parts = timeInput.split(":");
     h = parseInt(parts[0], 10) || 0;
     m = parseInt(parts[1], 10) || 0;
   } else {
-    const now = new Date();
-    h = now.getHours();
-    m = now.getMinutes();
+    const timeStr = toVnTimeInput(new Date());
+    const parts = timeStr.split(":");
+    h = parseInt(parts[0], 10) || 0;
+    m = parseInt(parts[1], 10) || 0;
   }
 
   // Snap to 00 or 30

@@ -428,7 +428,8 @@ export const BookingsListClient: React.FC = () => {
           onBookingCancelled={() => {
             fetchBookings();
           }}
-          onBookingUpdated={() => {
+          onBookingUpdated={(updated) => {
+            setSelectedBooking(updated);
             fetchBookings();
           }}
         />
