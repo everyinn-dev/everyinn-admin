@@ -61,25 +61,38 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
 
   // Synchronize prop updates
   useEffect(() => {
-    setCurrentBooking(booking);
-    setMode("view");
-    setExtendError("");
-    setExtendSuccess("");
-    setShowConfirmCancel(false);
-    setShowConfirmNoShow(false);
-    setHasRefund(false);
-    setRefundAmount(0);
-    setNoShowError("");
-    setShowPaymentForm(false);
-    setPaymentError("");
-    setPaymentNote("");
-    if (booking) {
-      const remaining = booking.remainingAmount !== undefined
-        ? booking.remainingAmount
-        : Math.max(0, booking.totalPrice - (booking.paidAmount || booking.depositAmount || 0));
-      setPaymentAmount(remaining);
+    if (!booking) {
+      setCurrentBooking(null);
+      return;
     }
-  }, [booking]);
+    // Don't overwrite if currentBooking is already newer for the same booking ID
+    if (
+      currentBooking &&
+      currentBooking.id === booking.id &&
+      (currentBooking.version || currentBooking.modNo || 0) > (booking.version || booking.modNo || 0)
+    ) {
+      return;
+    }
+    const isNewBooking = !currentBooking || currentBooking.id !== booking.id;
+    setCurrentBooking(booking);
+    if (isNewBooking) {
+      setMode("view");
+      setExtendError("");
+      setExtendSuccess("");
+      setShowConfirmCancel(false);
+      setShowConfirmNoShow(false);
+      setHasRefund(false);
+      setRefundAmount(0);
+      setNoShowError("");
+      setShowPaymentForm(false);
+      setPaymentError("");
+      setPaymentNote("");
+    }
+    const remaining = booking.remainingAmount !== undefined
+      ? booking.remainingAmount
+      : Math.max(0, booking.totalPrice - (booking.paidAmount || booking.depositAmount || 0));
+    setPaymentAmount(remaining);
+  }, [booking, currentBooking]);
 
   if (!currentBooking) return null;
 
@@ -189,8 +202,18 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
 
       const updated: GanttBookingItem = {
         ...currentBooking,
-        checkoutAt: data.booking.checkout_at,
-        totalPrice: data.booking.total_price,
+        checkoutAt: data.booking.checkout_at || currentBooking.checkoutAt,
+        totalPrice: data.booking.total_price ?? currentBooking.totalPrice,
+        basePrice: data.booking.base_price ?? currentBooking.basePrice,
+        extraFee: data.booking.extra_fee ?? currentBooking.extraFee,
+        lateCheckoutHours: data.booking.late_checkout_hours ?? currentBooking.lateCheckoutHours,
+        remainingAmount: data.booking.remaining_amount ?? currentBooking.remainingAmount,
+        paidAmount: data.booking.paid_amount ?? currentBooking.paidAmount,
+        depositStatus: data.booking.deposit_status ?? currentBooking.depositStatus,
+        discountAmount: data.booking.discount_amount ?? currentBooking.discountAmount,
+        promotionName: data.booking.promotion_name !== undefined ? data.booking.promotion_name : currentBooking.promotionName,
+        incidentalFee: data.booking.incidental_fee ?? (data.booking as any).incidentalFee ?? currentBooking.incidentalFee,
+        incidentalReason: data.booking.incidental_reason ?? (data.booking as any).incidentalReason ?? currentBooking.incidentalReason,
         modNo: data.booking.mod_no !== undefined ? data.booking.mod_no : (currentBooking.modNo || 0) + 1,
         version: data.booking.version ?? data.booking.mod_no ?? (currentBooking.version || 0) + 1,
         updatedAt: data.booking.updated_at || new Date().toISOString(),
@@ -452,6 +475,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
           {mode === "edit" ? (
             <BookingEditForm
               bookingId={currentBooking.id}
+              initialBooking={currentBooking}
               onSuccess={handleEditSuccess}
               onCancel={() => setMode("view")}
             />
