@@ -1,0 +1,4928 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Every Inn Agent Core — AdminApi (staff API)",
+    "version": "agent-internal-v1",
+    "description": "Provider-owned contract of everyinn-agent-core (ADR-013/014). Reachable ONLY through the Service Binding `{ service: everyinn-agent-core(-dev), entrypoint: AdminApi }` held by everyinn-admin — the public workers.dev URL serves only /health and /webhooks/*. Headers: X-EI-Caller: admin-bff, X-EI-Actor-Id (digits), X-EI-Actor-Role (manager|receptionist), X-EI-Actor-Name (URI-encoded). Door codes are never logged; plaintext only on reveal=1 endpoints. Errors: { error: { code, message, request_id, details? } }. Responses are Cache-Control: private, no-store."
+  },
+  "servers": [
+    {
+      "url": "https://agent-core.internal",
+      "description": "Service Binding (AdminApi entrypoint) — not a public host"
+    }
+  ],
+  "x-callers-legend": {
+    "admin-bff": "Admin BFF (everyinn-admin) — the only caller of AdminApi"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Liveness (also on the public export).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "DB down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Persona, model, quiet/busy hours, rules, tool switches (ETag).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateSettings",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Patch settings (unknown keys rejected). expectedVersion required.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "manager",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/settings/busy": {
+      "post": {
+        "operationId": "setBusy",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Instant busy toggle: exactly one of minutes (15..720), until (≤24h), off.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "minutes": {
+                    "type": "integer"
+                  },
+                  "until": {
+                    "type": "string"
+                  },
+                  "off": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes": {
+      "get": {
+        "operationId": "listDoorCodes",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Gate codes (newest first) + 6 lockboxes; masked unless reveal=1.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorCodes"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "reveal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/door-codes/audit": {
+      "get": {
+        "operationId": "listDoorCodeAudit",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Secret-safe append-only door-code audit log (manager-only; masked codes only).",
+        "parameters": [
+          {
+            "name": "targetType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "gate",
+                "lockbox",
+                "booking_override"
+              ]
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "logs"
+                  ],
+                  "properties": {
+                    "logs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DoorCodeAuditLog"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes/gate": {
+      "post": {
+        "operationId": "createGateCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "New gate code. Without validUntil it becomes current from validFrom and closes open-ended codes.",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "gateCode"
+                  ],
+                  "properties": {
+                    "gateCode": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9*# ]{3,20}$"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "validFrom": {
+                    "type": "string"
+                  },
+                  "validUntil": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes/gate/{gateCodeId}/deactivate": {
+      "parameters": [
+        {
+          "name": "gateCodeId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^gate_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "deactivateGateCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Deactivate a gate code.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes/lockbox/{roomId}": {
+      "parameters": [
+        {
+          "name": "roomId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z]{3,5}-\\d{3}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "putLockbox",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Set the fixed lockbox code of a room (OD-4).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/bookings/{bookingId}/door-code": {
+      "parameters": [
+        {
+          "name": "bookingId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getBookingDoorCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Resolution (override → vault gate → missing; lockbox) for a stay; plaintext only with reveal=1.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingDoorCode"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkinAt",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkoutAt",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reveal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "putBookingDoorCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Per-booking gate code override.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "gateCode"
+                ],
+                "properties": {
+                  "gateCode": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteBookingDoorCode",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Remove the override (fall back to the vault).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/inbox/summary": {
+      "get": {
+        "operationId": "inboxSummary",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Nav badge counts (ETag = inbox version).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "pendingEscalations",
+                    "pendingDrafts",
+                    "inboxVersion"
+                  ],
+                  "properties": {
+                    "pendingEscalations": {
+                      "type": "integer"
+                    },
+                    "pendingDrafts": {
+                      "type": "integer"
+                    },
+                    "inboxVersion": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Keyset page (30) by last message; filter all|pending|ai|human (ETag on first page).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversations",
+                    "nextCursor",
+                    "inboxVersion"
+                  ],
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Conversation"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "inboxVersion": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "pending",
+                "ai",
+                "human"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "facebook",
+                "instagram"
+              ]
+            },
+            "description": "Channel tab"
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "Only unread"
+          },
+          {
+            "name": "ads",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "Only conversations that came from an ad / referral"
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Label id"
+          }
+        ]
+      }
+    },
+    "/internal/v1/conversations/{conversationId}": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Detail (phone revealed) + latest 30 messages oldest-first; marks read.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "messages",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only. Erase one guest's conversation (data-deletion request): messages, AI runs, escalations, echo bookkeeping. 409 ESCALATION_PENDING while an escalation is pending.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/takeover": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "takeoverConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Staff takes over; AI silent for takeover_minutes.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/release": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "releaseConversation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Hand the conversation back to the AI.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/messages": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "staffReply",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Staff replies directly to the guest (sandbox in AR-1).",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/runs": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listRuns",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "'AI đang nghĩ gì' — latest 10 brain turns (route, tools, RAG chunk ids, tokens, neurons). Never door codes.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "runs"
+                  ],
+                  "properties": {
+                    "runs": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/runs": {
+      "get": {
+        "operationId": "listAllRuns",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-9 'Truy vết AI': brain turns newest first (30 per page, keyset `before` = createdAt). Filters: conversationId, route, problem=1 (guard / error / auto hand-off). Guest text redacted (door codes, phones).",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "llm",
+                "faq",
+                "greeting",
+                "guard",
+                "error"
+              ]
+            }
+          },
+          {
+            "name": "problem",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "runs",
+                    "nextBefore"
+                  ],
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunSummary"
+                      }
+                    },
+                    "nextBefore": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/runs/{runId}": {
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^run_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getRun",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-9: one brain turn with its step trace — input / output / ms of every step (stage, scenario, sales, LLM rounds, tools, guard, template, reply). Door codes scrubbed, phones masked, values cut to 2 KB; steps null for turns older than 30 days or before migration 0014.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "run"
+                  ],
+                  "properties": {
+                    "run": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/RunSummary"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "toolCalls",
+                            "ragChunks",
+                            "steps"
+                          ],
+                          "properties": {
+                            "toolCalls": {
+                              "type": "array"
+                            },
+                            "ragChunks": {
+                              "type": "array"
+                            },
+                            "steps": {
+                              "type": [
+                                "array",
+                                "null"
+                              ],
+                              "items": {
+                                "$ref": "#/components/schemas/RunStep"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/sandbox/messages": {
+      "post": {
+        "operationId": "sandboxMessage",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Staff chats as a test guest. Default: 202 + turn.status=queued, the brain runs in the background (poll the conversation). wait=true runs synchronously (tests/simulator).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "turn",
+                    "messages"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "turn": {
+                      "$ref": "#/components/schemas/Turn"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "turn",
+                    "messages"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "turn": {
+                      "$ref": "#/components/schemas/Turn"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "senderName": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "wait": {
+                    "type": "boolean"
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "description": "Optional guest photo: https:// link or data:image/(jpeg|png|webp);base64 (≤ 1.5 MB). With a photo, text may be empty."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/messages/{messageId}/approve": {
+      "parameters": [
+        {
+          "name": "messageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "approveDraft",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Supervised mode: send the AI draft (optionally edited).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 3000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/messages/{messageId}/reject": {
+      "parameters": [
+        {
+          "name": "messageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "rejectDraft",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Discard an AI draft.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/escalations": {
+      "get": {
+        "operationId": "listEscalations",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Owner escalations by status (default pending) or the pending ones of a conversation.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "escalations"
+                  ],
+                  "properties": {
+                    "escalations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Escalation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "resolved",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/escalations/{escalationId}/resolve": {
+      "parameters": [
+        {
+          "name": "escalationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "resolveEscalation",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "confirm_deposit|confirm_full (CONFIRM_HOLD_PAYMENT → Booking Core confirm with THIS staff member as actor, idempotent), reject, resolve.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "bookingId": {
+                      "type": "string"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "escalation": {
+                      "$ref": "#/components/schemas/Escalation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "confirm_deposit",
+                      "confirm_full",
+                      "reject",
+                      "resolve"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/checkin-schedules": {
+      "get": {
+        "operationId": "listCheckinSchedules",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "OD-5 delivery schedules by status (default reminded).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schedules"
+                  ],
+                  "properties": {
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Schedule"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "scheduled",
+                "waiting_owner_code",
+                "reminded",
+                "sent",
+                "cancelled",
+                "failed"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/checkin-schedules/{scheduleId}/message": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^chk_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "checkinScheduleMessage",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Ready-to-paste check-in text WITH codes for manual sending (OD-5b). text=null + missing[] when a code is missing.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schedule",
+                    "text",
+                    "missing"
+                  ],
+                  "properties": {
+                    "schedule": {
+                      "$ref": "#/components/schemas/Schedule"
+                    },
+                    "text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "missing": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/checkin-schedules/{scheduleId}/mark-sent": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^chk_[A-Za-z0-9-]{8,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "markCheckinSent",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Owner sent the check-in message manually.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/knowledge/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "RAG documents (metadata).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "documents"
+                  ],
+                  "properties": {
+                    "documents": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Add a .md/.txt knowledge document (422 SECRET_IN_KNOWLEDGE if it looks like it contains a door code).",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "category",
+                  "content"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "category": {
+                    "enum": [
+                      "house_rules",
+                      "checkin_guide",
+                      "room_info",
+                      "local_guide",
+                      "policy",
+                      "general"
+                    ]
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "sourceFilename": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/knowledge/documents/{documentId}": {
+      "parameters": [
+        {
+          "name": "documentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Document incl. raw content.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Edit a document (expectedVersion). Content/title edits reset status to pending.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Delete a document, its chunks and vectors.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/knowledge/documents/{documentId}/index": {
+      "parameters": [
+        {
+          "name": "documentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "indexDocument",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Chunk (~800 chars) + embed (bge-m3) + upsert into Vectorize.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "chunks": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/faqs": {
+      "get": {
+        "operationId": "listFaqs",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Exact FAQ answers used by the pre-router (no LLM).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "faqs"
+                  ],
+                  "properties": {
+                    "faqs": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createFaq",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Add an exact FAQ.",
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question",
+                  "answer"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "answer": {
+                    "type": "string"
+                  },
+                  "keywords": {
+                    "type": "string",
+                    "description": "comma-separated"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/faqs/{faqId}": {
+      "parameters": [
+        {
+          "name": "faqId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{3,80}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateFaq",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Edit an FAQ (expectedVersion).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteFaq",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Delete an FAQ.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/door-codes/resolve-batch": {
+      "post": {
+        "operationId": "resolveDoorCodesBatch",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Door-code resolution for up to 20 stays (daily roster). Plaintext only with reveal=true.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "stays"
+                ],
+                "properties": {
+                  "reveal": {
+                    "type": "boolean"
+                  },
+                  "stays": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "bookingId",
+                        "roomId",
+                        "checkinAt",
+                        "checkoutAt"
+                      ],
+                      "properties": {
+                        "bookingId": {
+                          "type": "string"
+                        },
+                        "roomId": {
+                          "type": "string"
+                        },
+                        "checkinAt": {
+                          "type": "string"
+                        },
+                        "checkoutAt": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BookingDoorCode"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/thread": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getThread",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Detail + 30 latest messages + escalations + last AI runs in one call; weak ETag on the inbox version (304 when nothing changed). Marks read.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation",
+                    "messages",
+                    "hasMore",
+                    "escalations",
+                    "runs"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "escalations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/labels": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "setConversationLabels",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Replace the conversation's labels (≤ 10).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "labelIds"
+                ],
+                "properties": {
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "labelIds"
+                  ],
+                  "properties": {
+                    "labelIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/conversations/{conversationId}/note": {
+      "parameters": [
+        {
+          "name": "conversationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "setConversationNote",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Internal note (≤ 1000 chars); never sent to the guest or the LLM.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "note"
+                  ],
+                  "properties": {
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/search": {
+      "get": {
+        "operationId": "searchInbox",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Accent-insensitive search over guest names / handles / phones and message text (FTS5).",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SearchHit"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/labels": {
+      "get": {
+        "operationId": "listLabels",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Portal labels (OD-12).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "labels"
+                  ],
+                  "properties": {
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Label"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createLabel",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only. 409 LABEL_EXISTS.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "color": {
+                    "enum": [
+                      "slate",
+                      "rose",
+                      "amber",
+                      "emerald",
+                      "sky",
+                      "violet"
+                    ]
+                  },
+                  "sort": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "$ref": "#/components/schemas/Label"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/labels/{labelId}": {
+      "parameters": [
+        {
+          "name": "labelId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateLabel",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "sort": {
+                    "type": "integer"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "$ref": "#/components/schemas/Label"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteLabel",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Manager only; removes it from every conversation.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/md/_registry": {
+      "get": {
+        "operationId": "getMasterDataRegistry",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-7 W4: collection schemas (fields, options resolved), capabilities, enums and template sample values — the admin renders lists and forms from it.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schemaVersion",
+                    "collections",
+                    "capabilities"
+                  ],
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer"
+                    },
+                    "collections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "enums": {
+                      "type": "object"
+                    },
+                    "samples": {
+                      "type": "object"
+                    },
+                    "actions": {
+                      "type": "array",
+                      "description": "AI-11 kịch bản action library (flow editor): id, label, help, params, outcomes, waits",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "help": {
+                            "type": "string"
+                          },
+                          "params": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "outcomes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "waits": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "outcomeLabels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/md/templates/preview": {
+      "post": {
+        "operationId": "previewTemplate",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Renders template variants with sample (or given) values.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "previews": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "values": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/md/{collection}": {
+      "parameters": [
+        {
+          "name": "collection",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "scenarios",
+              "templates",
+              "rules",
+              "authority",
+              "segments"
+            ]
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Every row of a collection (incl. inactive), sorted.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "rows"
+                  ],
+                  "properties": {
+                    "collection": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MdRow"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Create a custom row (manager). Validated against the registry.",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "row": {
+                      "$ref": "#/components/schemas/MdRow"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sort": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/md/{collection}/{rowId}": {
+      "parameters": [
+        {
+          "name": "collection",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "scenarios",
+              "templates",
+              "rules",
+              "authority",
+              "segments"
+            ]
+          }
+        },
+        {
+          "name": "rowId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,64}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Partial update with expectedVersion (manager). System rows keep their locked fields.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "row": {
+                      "$ref": "#/components/schemas/MdRow"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "object"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sort": {
+                    "type": "integer"
+                  },
+                  "expectedVersion": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMasterData",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Delete a custom row (manager); system rows → 409 SYSTEM_ROW (switch them off).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/guests": {
+      "get": {
+        "operationId": "listGuests",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Guest personas (segment, stats, tags, note), newest first, max 100.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "guests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "segment",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/guests/{guestId}": {
+      "parameters": [
+        {
+          "name": "guestId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "updateGuest",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Owner tags + note of a guest (expectedVersion); the segment is recomputed on the next message.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "guest": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "expectedVersion": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/authority/decisions": {
+      "get": {
+        "operationId": "listAuthorityDecisions",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Learning view: decisions per capability × segment over N days + delegation suggestions.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "integer"
+                    },
+                    "summary": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            }
+          }
+        ]
+      }
+    },
+    "/internal/v1/router/eval": {
+      "post": {
+        "operationId": "evalRouter",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-11: score the LLM router on the built-in check set (brain/routerCases.ts), ≤ 10 cases per call. Manager only; spends neurons (~30 per case with gemma-4).",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Workers AI model (@cf/…) to try; null = settings.router.model or modelId"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One batch of scored cases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "model",
+                    "total",
+                    "offset",
+                    "next",
+                    "results"
+                  ],
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "next": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "burst",
+                          "expect",
+                          "ok",
+                          "ms",
+                          "neurons"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "burst": {
+                            "type": "string"
+                          },
+                          "expect": {
+                            "type": "object"
+                          },
+                          "got": {
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "ms": {
+                            "type": "integer"
+                          },
+                          "neurons": {
+                            "type": "integer"
+                          },
+                          "ok": {
+                            "type": "object",
+                            "properties": {
+                              "act": {
+                                "type": "boolean"
+                              },
+                              "scenario": {
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "slots": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "hit": {
+                                    "type": "integer"
+                                  },
+                                  "of": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/scenarios/stats": {
+      "get": {
+        "operationId": "scenarioStats",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "AI-11: per kịch bản — runs in the last 7 days, runs waiting now (guest / quản lí), last run time.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "since",
+                    "stats"
+                  ],
+                  "properties": {
+                    "since": {
+                      "type": "string"
+                    },
+                    "stats": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "scenario",
+                          "runs7d",
+                          "waiting"
+                        ],
+                        "properties": {
+                          "scenario": {
+                            "type": "string"
+                          },
+                          "runs7d": {
+                            "type": "integer"
+                          },
+                          "waiting": {
+                            "type": "integer"
+                          },
+                          "lastAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "x-callers": ["admin-bff"],
+        "summary": "LSB-5: booking sessions (status=live|<status>, channel=web|admin) — ETag = inbox version",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["sessions"], "properties": { "sessions": { "type": "array", "items": { "type": "object" } } } } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      },
+      "post": {
+        "operationId": "createSession",
+        "x-callers": ["admin-bff"],
+        "summary": "LSB-5: admin wizard holds a room through the session engine (channel admin); returns the share token once",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["roomId", "bookingType", "checkinAt", "checkoutAt", "numGuests", "clientNonce"],
+                "properties": {
+                  "roomId": { "type": "string" },
+                  "bookingType": { "enum": ["hourly", "overnight", "dayuse", "custom"] },
+                  "checkinAt": { "type": "string" },
+                  "checkoutAt": { "type": "string" },
+                  "earlyCheckinHours": { "type": "integer" },
+                  "lateCheckoutHours": { "type": "integer" },
+                  "numGuests": { "type": "integer" },
+                  "shift": { "type": "string" },
+                  "clientNonce": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/by-hold/{holdId}": {
+      "get": {
+        "operationId": "sessionByHold",
+        "x-callers": ["admin-bff"],
+        "summary": "Deep link for 409 SESSION_MANAGED: hold → session",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "required": ["sessionId"], "properties": { "sessionId": { "type": "string" }, "channel": { "type": "string" }, "status": { "type": "string" } } }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}": {
+      "get": {
+        "operationId": "getSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Session + full audit timeline + payments (ETag = session version)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      },
+      "patch": {
+        "operationId": "saveSessionGuest",
+        "x-callers": ["admin-bff"],
+        "summary": "Guest info (+ admin closing note / deposit) → Core hold draft",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["guest"],
+                "properties": {
+                  "guest": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "phone": { "type": "string" },
+                      "zalo": { "type": "string" },
+                      "instagram": { "type": "string" },
+                      "facebook": { "type": "string" },
+                      "note": { "type": "string" }
+                    }
+                  },
+                  "promotionCode": { "type": "string" },
+                  "voucherId": { "type": "string" },
+                  "noVoucher": { "type": "boolean" },
+                  "closingNote": { "type": "string" },
+                  "isDeposit": { "type": "boolean" },
+                  "depositAmount": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/live": {
+      "get": {
+        "operationId": "waitSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Long-poll (≤ 25 s) for the next change of the session (Durable Object)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/preview": {
+      "post": {
+        "operationId": "previewSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Price preview: phone → tier + voucher wallet, promotion code",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object" } } } }, "default": { "$ref": "#/components/responses/Error" } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "phone": { "type": "string" }, "promotionCode": { "type": "string" }, "voucherId": { "type": "string" }, "noVoucher": { "type": "boolean" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/payments": {
+      "post": {
+        "operationId": "recordSessionPayment",
+        "x-callers": ["admin-bff"],
+        "summary": "Money received by this staff member (cash / card / transfer…): enough → booking, short → underpaid",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["amount"], "properties": { "amount": { "type": "integer" }, "method": { "enum": ["bank_transfer", "cash", "card", "ewallet", "other"] } } }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/confirm": {
+      "post": {
+        "operationId": "confirmSession",
+        "x-callers": ["admin-bff"],
+        "summary": "✅ the remaining amount arrived → Booking Core confirm with THIS staff member",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "amount": { "type": "integer" }, "method": { "type": "string" } } } } } }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/reject": {
+      "post": {
+        "operationId": "rejectSession",
+        "x-callers": ["admin-bff"],
+        "summary": "❌ money not received (1st → back to awaiting payment, 2nd → cancelled)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/revoke": {
+      "post": {
+        "operationId": "revokeSession",
+        "x-callers": ["admin-bff"],
+        "summary": "🗑 release the room now (guest page shows cancelled)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/accept-short": {
+      "post": {
+        "operationId": "acceptShortSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Underpaid → confirm as a deposit of the amount received",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/request-topup": {
+      "post": {
+        "operationId": "requestTopupSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Underpaid → ask the guest for the rest (new QR)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/restore": {
+      "post": {
+        "operationId": "restoreSession",
+        "x-callers": ["admin-bff"],
+        "summary": "Late transfer → re-hold the same slot and confirm (or conflict)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/sessions/{sessionId}/share-link": {
+      "post": {
+        "operationId": "shareSessionLink",
+        "x-callers": ["admin-bff"],
+        "summary": "Rotates the guest token and returns /dat-phong/<token> (send it to the guest to pay on their phone)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["token", "path"], "properties": { "token": { "type": "string" }, "path": { "type": "string" } } } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "request_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "QuietHours": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "start",
+          "end",
+          "holdBufferMinutes"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "start": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}$"
+          },
+          "end": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}$"
+          },
+          "holdBufferMinutes": {
+            "type": "integer"
+          }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "required": [
+          "botName",
+          "personaPrompt",
+          "modelId",
+          "supervisedMode",
+          "busyUntil",
+          "quietHours",
+          "busy",
+          "hotline",
+          "defaultHoldMinutes",
+          "depositPercent",
+          "depositMinLeadDays",
+          "burstWaitSeconds",
+          "takeoverMinutes",
+          "autoCheckinWindowHours",
+          "manualReminderLeadHours",
+          "dailyNeuronBudget",
+          "toolSwitches",
+          "version"
+        ],
+        "properties": {
+          "botName": {
+            "type": "string"
+          },
+          "personaPrompt": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "supervisedMode": {
+            "type": "boolean"
+          },
+          "busyUntil": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quietHours": {
+            "$ref": "#/components/schemas/QuietHours"
+          },
+          "busy": {
+            "type": "object",
+            "required": [
+              "active",
+              "reason",
+              "until"
+            ],
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "reason": {
+                "enum": [
+                  "quiet_hours",
+                  "manual",
+                  null
+                ]
+              },
+              "until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "busyAutoReplyTemplate": {
+            "type": "string"
+          },
+          "checkinMessageTemplate": {
+            "type": "string"
+          },
+          "hotline": {
+            "type": "string"
+          },
+          "maxDiscountPercent": {
+            "type": "integer"
+          },
+          "defaultHoldMinutes": {
+            "type": "integer"
+          },
+          "depositPercent": {
+            "type": "integer"
+          },
+          "depositMinLeadDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60,
+            "description": "OD-25: a deposit is offered only when check-in is at least this many days away; otherwise full payment (a guest asking for a deposit → DEPOSIT_EXCEPTION card)."
+          },
+          "takeoverMinutes": {
+            "type": "integer"
+          },
+          "autoCheckinWindowHours": {
+            "type": "integer"
+          },
+          "manualReminderLeadHours": {
+            "type": "integer"
+          },
+          "dailyNeuronBudget": {
+            "type": "integer"
+          },
+          "replyRateLimit": {
+            "type": "object",
+            "properties": {
+              "maxReplies": {
+                "type": "integer"
+              },
+              "windowSeconds": {
+                "type": "integer"
+              }
+            }
+          },
+          "toolSwitches": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "telegramStaffMap": {
+            "type": "object"
+          },
+          "metaAccess": {
+            "type": "object",
+            "description": "AR-2: who the AI answers on Facebook/Instagram. allowlist (default, nobody) ignores every other sender before anything is stored; open = everyone (owner-approved cutover only).",
+            "required": [
+              "mode",
+              "facebook",
+              "instagram"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "allowlist",
+                  "open"
+                ]
+              },
+              "facebook": {
+                "type": "object",
+                "properties": {
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "instagram": {
+                "type": "object",
+                "properties": {
+                  "usernames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "version": {
+            "type": "integer"
+          },
+          "updatedByStaffId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "visionModelId": {
+            "type": "string",
+            "description": "Workers AI model for turns where the guest sent photos (vision + tools). Default @cf/google/gemma-4-26b-a4b-it."
+          },
+          "burstWaitSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 180,
+            "description": "Owner 2026-11-06: Home waits this many seconds (default 30, precise Durable Object alarm) for more short messages before answering; complete questions, phone numbers, chips and short answers to Home's question are answered at once. 0 = off."
+          },
+          "router": {
+            "type": "object",
+            "description": "AI-11 LLM router (same model as replies unless set): reads each guest burst and picks the kịch bản, the guest's act and slots. shadow = runs and is traced next to the rules (Truy vết AI node 'Điều phối'), the conversation still follows the rules; on = its decision is used when confidence ≥ minConfidence; off = rules only.",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "shadow",
+                  "on"
+                ]
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Workers AI model id (@cf/…); null = modelId"
+              },
+              "minConfidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "understand": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "description": "AI-13: the same call reads the guest for the sales steps (room vs class, objection, wants a human, hard turn); runs even when mode = off. Default on."
+              },
+              "writer": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "description": "AI-13: Home rewrites the fixed sales lines naturally; price lines and payment blocks stay verbatim, otherwise the template is sent. Default on."
+              },
+              "thinking": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "off"
+                ],
+                "description": "AI-13: auto = a hard or unsure turn is read again by the Hiểu step with thinking (≤ 4 000 tokens, +5–45 s, ~3–6× neurons on that turn); the writer never thinks. Default auto."
+              }
+            }
+          }
+        }
+      },
+      "SettingsEnvelope": {
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          }
+        }
+      },
+      "GateCode": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "validFrom",
+          "validUntil",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Masked (•••0#) unless reveal=1"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validFrom": {
+            "type": "string"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "enum": [
+              "current",
+              "scheduled",
+              "expired",
+              "inactive"
+            ]
+          },
+          "source": {
+            "enum": [
+              "admin_ui",
+              "telegram"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "Lockbox": {
+        "type": "object",
+        "required": [
+          "roomId",
+          "roomNumber",
+          "code"
+        ],
+        "properties": {
+          "roomId": {
+            "type": "string"
+          },
+          "roomNumber": {
+            "type": "string"
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DoorCodes": {
+        "type": "object",
+        "required": [
+          "gateCodes",
+          "lockboxes"
+        ],
+        "properties": {
+          "gateCodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GateCode"
+            }
+          },
+          "lockboxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lockbox"
+            }
+          }
+        }
+      },
+      "ResolvedCodes": {
+        "type": "object",
+        "required": [
+          "gate",
+          "lockbox",
+          "missing"
+        ],
+        "properties": {
+          "gate": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "override",
+                      "vault"
+                    ]
+                  },
+                  "gateCodeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source"
+                ]
+              }
+            ]
+          },
+          "lockbox": {
+            "type": "boolean"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "gate",
+                "lockbox"
+              ]
+            }
+          }
+        }
+      },
+      "BookingDoorCode": {
+        "type": "object",
+        "required": [
+          "bookingId",
+          "resolved",
+          "gateCode",
+          "lockboxCode"
+        ],
+        "properties": {
+          "bookingId": {
+            "type": "string"
+          },
+          "resolved": {
+            "$ref": "#/components/schemas/ResolvedCodes"
+          },
+          "gateCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lockboxCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overrideNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gateMeta": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "id",
+                  "label",
+                  "validFrom",
+                  "validUntil"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "validFrom": {
+                    "type": "string"
+                  },
+                  "validUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "DoorCodeAuditLog": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "targetType",
+          "targetId",
+          "source",
+          "actorId",
+          "actorRole",
+          "actorName",
+          "codeMasked",
+          "codeLength",
+          "details",
+          "requestId",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "action": {
+            "enum": [
+              "gate_create",
+              "gate_deactivate",
+              "gate_auto_close",
+              "lockbox_upsert",
+              "override_upsert",
+              "override_delete"
+            ]
+          },
+          "targetType": {
+            "enum": [
+              "gate",
+              "lockbox",
+              "booking_override"
+            ]
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "admin_ui",
+              "telegram",
+              "system"
+            ]
+          },
+          "actorId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "actorRole": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "codeMasked": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "codeLength": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "requestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "required": [
+          "id",
+          "channel",
+          "senderName",
+          "mode",
+          "unreadCount",
+          "pendingCount",
+          "lastMessageAt",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "sandbox",
+              "facebook",
+              "instagram"
+            ]
+          },
+          "senderName": {
+            "type": "string"
+          },
+          "senderHandle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "loyaltyTier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "AI_ACTIVE",
+              "PENDING_PAYMENT_CONFIRM",
+              "PENDING_OWNER",
+              "HUMAN_TAKEOVER"
+            ]
+          },
+          "takeover": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "activeHoldId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "activeBookingId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unreadCount": {
+            "type": "integer"
+          },
+          "pendingCount": {
+            "type": "integer"
+          },
+          "lastMessagePreview": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastMessageAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "lastGuestMessageAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guestSeenAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Guest read our messages up to this time (Meta read receipts)."
+          },
+          "guestDeliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "referral": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "First ad / m.me referral {source,type,ref,adId,adTitle,photoUrl,at}."
+          },
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Internal staff note (detail views only)."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Label ids (OD-12)."
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversationId",
+          "senderType",
+          "status",
+          "text",
+          "attachments",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "senderType": {
+            "enum": [
+              "guest",
+              "ai",
+              "staff",
+              "system"
+            ]
+          },
+          "staff": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "received",
+              "draft_pending_approval",
+              "sending",
+              "sent",
+              "failed",
+              "rejected"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "description": "{type:'image',url,caption?} | {type:'cards',cards:[{title,subtitle?,imageUrl?,url?,buttons?}]} | {type:'quick_replies',options:string[]}",
+            "items": {
+              "type": "object"
+            }
+          },
+          "aiRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the guest unsent the message (text is then empty)."
+          },
+          "reaction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Emoji the guest put on this message."
+          },
+          "editedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ConversationEnvelope": {
+        "type": "object",
+        "required": [
+          "conversation"
+        ],
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          }
+        }
+      },
+      "Escalation": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "status",
+          "summary",
+          "details",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "enum": [
+              "CONFIRM_HOLD_PAYMENT",
+              "REQUEST_DOOR_CODE",
+              "PRICE_NEGOTIATION",
+              "FACILITY_ISSUE",
+              "GENERAL_HELP",
+              "CHECKIN_REMINDER"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "normal",
+              "high",
+              "critical"
+            ]
+          },
+          "holdId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bookingId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roomId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "description": "Never contains door codes"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "resolved",
+              "expired"
+            ]
+          },
+          "resolvedBy": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "ownerNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "required": [
+          "id",
+          "bookingId",
+          "roomId",
+          "checkinAt",
+          "deliveryMode",
+          "sendAt",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bookingId": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guestName": {
+            "type": "string"
+          },
+          "checkinAt": {
+            "type": "string"
+          },
+          "checkoutAt": {
+            "type": "string"
+          },
+          "deliveryMode": {
+            "enum": [
+              "auto",
+              "manual_reminder"
+            ]
+          },
+          "sendAt": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "scheduled",
+              "waiting_owner_code",
+              "reminded",
+              "sent",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "escalationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sentAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Turn": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "replied",
+              "drafted",
+              "silent_takeover",
+              "rate_limited",
+              "budget_exceeded",
+              "error",
+              "queued"
+            ]
+          },
+          "runId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Label": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "sort",
+          "isActive"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "enum": [
+              "slate",
+              "rose",
+              "amber",
+              "emerald",
+              "sky",
+              "violet"
+            ]
+          },
+          "sort": {
+            "type": "integer"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SearchHit": {
+        "type": "object",
+        "required": [
+          "kind",
+          "conversationId",
+          "messageId",
+          "snippet",
+          "createdAt",
+          "channel",
+          "senderName"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "conversation",
+              "message"
+            ]
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "senderName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MdRow": {
+        "type": "object",
+        "required": [
+          "id",
+          "data",
+          "isActive",
+          "isSystem",
+          "sort",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "isSystem": {
+            "type": "boolean"
+          },
+          "sort": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "RunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversationId",
+          "senderName",
+          "channel",
+          "guestText",
+          "route",
+          "intent",
+          "scenario",
+          "summary",
+          "modelId",
+          "tokensIn",
+          "tokensOut",
+          "neurons",
+          "latencyMs",
+          "hasProblem",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "senderName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guestText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "route": {
+            "type": "string"
+          },
+          "intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scenario": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokensIn": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tokensOut": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "neurons": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "hasProblem": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "RunStep": {
+        "type": "object",
+        "required": [
+          "i",
+          "kind",
+          "label",
+          "at"
+        ],
+        "properties": {
+          "i": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "input",
+              "stage",
+              "scenario",
+              "memory",
+              "persona",
+              "route",
+              "sales",
+              "prompt",
+              "llm",
+              "tool",
+              "guard",
+              "template",
+              "reply",
+              "error"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "ms": {
+            "type": "integer"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "error"
+            ]
+          },
+          "input": {},
+          "output": {},
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionView": {
+        "type": "object",
+        "description": "LSB-2 booking session as the guest (or staff) sees it",
+        "required": ["ref", "channel", "status", "statusLabel", "room", "bookingType", "checkinAt", "checkoutAt", "numGuests", "expiresAt", "serverNow", "remainingSeconds", "amountDue", "paidAmount", "remaining", "version", "timeline", "can"],
+        "properties": {
+          "ref": { "type": "string" },
+          "channel": { "enum": ["web", "admin", "chat"] },
+          "status": { "type": "string" },
+          "statusLabel": { "type": "string" },
+          "room": { "type": "object" },
+          "bookingType": { "type": "string" },
+          "shift": { "type": ["string", "null"] },
+          "checkinAt": { "type": "string" },
+          "checkoutAt": { "type": "string" },
+          "earlyHours": { "type": "integer" },
+          "lateHours": { "type": "integer" },
+          "numGuests": { "type": "integer" },
+          "expiresAt": { "type": "string" },
+          "serverNow": { "type": "string" },
+          "remainingSeconds": { "type": "integer" },
+          "amountDue": { "type": "integer" },
+          "paidAmount": { "type": "integer" },
+          "remaining": { "type": "integer" },
+          "pricing": { "type": ["object", "null"] },
+          "guest": { "type": ["object", "null"] },
+          "payment": { "type": ["object", "null"] },
+          "bookingId": { "type": ["string", "null"] },
+          "can": { "type": "object" },
+          "timeline": { "type": "array", "items": { "type": "object" } },
+          "version": { "type": "integer" }
+        }
+      },
+      "SessionDetail": {
+        "type": "object",
+        "required": ["session", "events", "payments"],
+        "properties": {
+          "token": { "type": "string", "description": "only on create" },
+          "session": { "$ref": "#/components/schemas/SessionView" },
+          "events": { "type": "array", "items": { "type": "object" } },
+          "payments": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error (4xx/5xx)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotModified": {
+        "description": "ETag matched (If-None-Match)"
+      }
+    }
+  }
+}

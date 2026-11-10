@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AdminShell } from "@/components/layout/AdminShell";
+import { AdminShell, useAdminStaff } from "@/components/layout/AdminShell";
 import { DateNavBar } from "@/components/dashboard/DateNavBar";
 import { GanttChart } from "@/components/dashboard/GanttChart";
 import { MobileRoomCard } from "@/components/dashboard/MobileRoomCard";
@@ -10,6 +10,7 @@ import { MobileVerticalGantt } from "@/components/dashboard/MobileVerticalGantt"
 import { BookingDetailDrawer } from "@/components/dashboard/BookingDetailDrawer";
 import { RoomLockModal } from "@/components/dashboard/RoomLockModal";
 import { RoomLockDetailDrawer } from "@/components/dashboard/RoomLockDetailDrawer";
+import { DoorCodesModal } from "@/components/door-codes/DoorCodesModal";
 import { Spinner } from "@/components/ui/Spinner";
 import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
@@ -20,6 +21,8 @@ import { subscribeToSyncEvents } from "@/lib/syncEvents";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const staff = useAdminStaff();
+  const isManager = staff?.role === "manager";
 
   const vnToday = useMemo(() => getVnToday(), []);
   const vnCurrentMonth = useMemo(() => getVnCurrentMonth(), []);
@@ -45,6 +48,7 @@ function DashboardContent() {
   const [selectedBooking, setSelectedBooking] = useState<GanttBookingItem | null>(null);
   const [mobileView, setMobileView] = useState<"gantt" | "cards">("gantt");
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
+  const [isDoorCodesModalOpen, setIsDoorCodesModalOpen] = useState(false);
   const [selectedBlockData, setSelectedBlockData] = useState<{
     block: GanttBlockItem;
     room: GanttRoomData;
@@ -315,42 +319,71 @@ function DashboardContent() {
   }, [roomsData, viewMode, month, date, vnToday]);
 
   return (
-    <AdminShell>
-      <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-        {/* Page Title & Quick Summary Stats (Synchronized with Tab) */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-              Bảng Quản Lý Phòng & Tiến Độ (Gantt)
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              {viewMode === "month"
-                ? `Lịch đặt phòng toàn diện theo tháng (${month}) • Gộp giờ đêm 01h-07h trực quan`
-                : `Theo dõi chi tiết 24 giờ trong ngày (${date}) • Cập nhật theo thời gian thực`}
-            </p>
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* Page Title & Quick Summary Stats (Synchronized with Tab) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+            Bảng Quản Lý Phòng & Tiến Độ (Gantt)
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            {viewMode === "month"
+              ? `Lịch đặt phòng toàn diện theo tháng (${month}) • Gộp giờ đêm 01h-07h trực quan`
+              : `Theo dõi chi tiết 24 giờ trong ngày (${date}) • Cập nhật theo thời gian thực`}
+          </p>
+        </div>
+
+        {/* Quick Metrics: Số booking hôm nay, Doanh thu (chỉ Manager) & Nút Mã cửa */}
+        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
+          <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
+            <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
+              {viewMode === "day" && date !== vnToday ? "Số booking trong ngày" : "Số booking hôm nay"}
+            </span>
+            <span className="text-base font-extrabold text-amber-700 font-mono tabular-nums">
+              {stats.todayBookingsCount} đơn
+            </span>
           </div>
 
-          {/* Quick Metrics: Số booking hôm nay & Doanh thu tháng này (khớp chuẩn Finance) */}
-          <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto pb-1">
-            <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
-              <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
-                {viewMode === "day" && date !== vnToday ? "Số booking trong ngày" : "Số booking hôm nay"}
-              </span>
-              <span className="text-base font-extrabold text-amber-700 font-mono">
-                {stats.todayBookingsCount} đơn
-              </span>
-            </div>
-
+          {isManager && (
             <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
                 {viewMode === "month" ? "Doanh thu tháng này" : "Doanh thu ngày"}
               </span>
-              <span className="text-base font-extrabold text-teal-700 font-mono">
+              <span className="text-base font-extrabold text-teal-700 font-mono tabular-nums">
                 {stats.totalRevenue.toLocaleString("vi-VN")} đ
               </span>
             </div>
-          </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsDoorCodesModalOpen(true)}
+            className="group px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 active:scale-[0.98] border border-emerald-200 hover:border-emerald-300 text-left text-xs shadow-2xs shrink-0 transition-all cursor-pointer flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+          >
+            <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-emerald-700 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+            </span>
+            <div>
+              <span className="text-emerald-800 block text-[10px] uppercase font-bold tracking-wider">
+                Mã cửa
+              </span>
+              <span className="text-sm font-extrabold text-emerald-950 flex items-center gap-1">
+                <span>{isManager ? "Cài đặt & tra cứu" : "Tra cứu & copy"}</span>
+                <svg className="w-3.5 h-3.5 text-emerald-700 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            </div>
+          </button>
         </div>
+      </div>
 
         {/* Date Navigator with Month/Day Tabs & Quick Scroll */}
         <DateNavBar
@@ -479,6 +512,16 @@ function DashboardContent() {
           rooms={roomsData}
         />
 
+        {/* Shared Door Codes Vault Modal */}
+        <DoorCodesModal
+          isOpen={isDoorCodesModalOpen}
+          onClose={() => setIsDoorCodesModalOpen(false)}
+          isManager={isManager}
+          initialDate={viewMode === "day" ? date : vnToday}
+          preloadedDate={viewMode === "day" ? date : undefined}
+          preloadedRooms={viewMode === "day" ? roomsData : undefined}
+        />
+
         {/* Room Lock Detail Drawer */}
         {selectedBlockData && (
           <RoomLockDetailDrawer
@@ -488,22 +531,23 @@ function DashboardContent() {
             onBlockDeleted={() => fetchData()}
           />
         )}
-      </div>
-    </AdminShell>
+    </div>
   );
 }
 
 export default function DashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-          <Spinner size="lg" />
-          <p className="text-sm text-slate-600 font-medium">Đang tải bảng phòng...</p>
-        </div>
-      }
-    >
-      <DashboardContent />
-    </Suspense>
+    <AdminShell>
+      <Suspense
+        fallback={
+          <div className="h-96 bg-slate-50 flex flex-col items-center justify-center gap-3">
+            <Spinner size="lg" />
+            <p className="text-sm text-slate-600 font-medium">Đang tải bảng phòng...</p>
+          </div>
+        }
+      >
+        <DashboardContent />
+      </Suspense>
+    </AdminShell>
   );
 }
