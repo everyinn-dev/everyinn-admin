@@ -4,6 +4,8 @@ import { getDb } from "@/lib/db";
 import { getCurrentStaff, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { verifyStaffJwt } from "@/lib/jwt";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const db = await getDb();
