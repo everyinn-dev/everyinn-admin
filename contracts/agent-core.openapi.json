@@ -206,6 +206,73 @@
         ]
       }
     },
+    "/internal/v1/door-codes/audit": {
+      "get": {
+        "operationId": "listDoorCodeAudit",
+        "x-callers": [
+          "admin-bff"
+        ],
+        "summary": "Secret-safe append-only door-code audit log (manager-only; masked codes only).",
+        "parameters": [
+          {
+            "name": "targetType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "gate",
+                "lockbox",
+                "booking_override"
+              ]
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "logs"
+                  ],
+                  "properties": {
+                    "logs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DoorCodeAuditLog"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/internal/v1/door-codes/gate": {
       "post": {
         "operationId": "createGateCode",
@@ -3939,6 +4006,135 @@
               "string",
               "null"
             ]
+          },
+          "gateMeta": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "id",
+                  "label",
+                  "validFrom",
+                  "validUntil"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "validFrom": {
+                    "type": "string"
+                  },
+                  "validUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "DoorCodeAuditLog": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "targetType",
+          "targetId",
+          "source",
+          "actorId",
+          "actorRole",
+          "actorName",
+          "codeMasked",
+          "codeLength",
+          "details",
+          "requestId",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "action": {
+            "enum": [
+              "gate_create",
+              "gate_deactivate",
+              "gate_auto_close",
+              "lockbox_upsert",
+              "override_upsert",
+              "override_delete"
+            ]
+          },
+          "targetType": {
+            "enum": [
+              "gate",
+              "lockbox",
+              "booking_override"
+            ]
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "admin_ui",
+              "telegram",
+              "system"
+            ]
+          },
+          "actorId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "actorRole": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "codeMasked": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "codeLength": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "requestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
           }
         }
       },

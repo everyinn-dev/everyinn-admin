@@ -35,7 +35,78 @@ export async function agentApi<T>(path: string, init: { method?: string; body?: 
   return { status: res.status, data: json as T, etag: res.headers.get("etag") };
 }
 
-// ── Types (subset of the AdminApi contract) ─────────────────────────────────────────────────
+// ── Door-code Vault & Audit DTOs ─────────────────────────────────────────────────────────────
+export interface DoorCodeGateItem {
+  id: string;
+  code: string;
+  label: string | null;
+  validFrom: string;
+  validUntil: string | null;
+  state: "current" | "scheduled" | "expired" | "inactive";
+  source: string;
+  createdAt?: string;
+}
+
+export interface DoorCodeLockboxItem {
+  roomId: string;
+  roomNumber: string;
+  code: string | null;
+  updatedAt: string | null;
+  source?: string | null;
+}
+
+export interface DoorCodesVaultResponse {
+  gateCodes: DoorCodeGateItem[];
+  lockboxes: DoorCodeLockboxItem[];
+}
+
+export interface DoorCodeResolvedMeta {
+  gate: { source: "override" } | { source: "vault"; gateCodeId: string } | null;
+  lockbox: boolean;
+  missing: Array<"gate" | "lockbox">;
+}
+
+export interface BookingDoorCodeResult {
+  bookingId: string;
+  resolved: DoorCodeResolvedMeta;
+  gateCode: string | null;
+  lockboxCode: string | null;
+  overrideNote?: string | null;
+  gateMeta?: {
+    id: string;
+    label: string | null;
+    validFrom: string;
+    validUntil: string | null;
+  } | null;
+}
+
+export type DoorCodeAuditAction =
+  | "gate_create"
+  | "gate_deactivate"
+  | "gate_auto_close"
+  | "lockbox_upsert"
+  | "override_upsert"
+  | "override_delete";
+
+export type DoorCodeAuditTargetType = "gate" | "lockbox" | "booking_override";
+
+export interface DoorCodeAuditItem {
+  id: number;
+  action: DoorCodeAuditAction;
+  targetType: DoorCodeAuditTargetType;
+  targetId: string;
+  source: "admin_ui" | "telegram" | "system";
+  actorId: number | null;
+  actorRole: string | null;
+  actorName: string | null;
+  codeMasked: string | null;
+  codeLength: number | null;
+  details: Record<string, unknown>;
+  requestId: string | null;
+  createdAt: string;
+}
+
+// ── AI Receptionist & Inbox DTOs (subset of the AdminApi contract) ──────────────────────────
 export type ConversationMode = "AI_ACTIVE" | "PENDING_PAYMENT_CONFIRM" | "PENDING_OWNER" | "HUMAN_TAKEOVER";
 
 export interface AgentConversation {
@@ -64,7 +135,6 @@ export interface AgentMessage {
   text: string;
   attachments: AgentAttachment[];
   aiRunId: string | null;
-  /** Guest unsent the message (Meta) — text is empty. */
   deletedAt?: string | null;
   createdAt: string;
 }
@@ -126,11 +196,8 @@ export interface AgentSettings {
   maxDiscountPercent: number;
   defaultHoldMinutes: number;
   depositPercent: number;
-  /** AI-7 OD-25: deposit allowed only when booked at least this many days ahead (else full payment). */
   depositMinLeadDays: number;
-  /** Wait this long (default 30 s) for more short messages before Home answers (0 = off); full questions are answered at once. */
   burstWaitSeconds: number;
-  /** AI-11 LLM router: off = rules only · shadow = runs + traced, rules still decide · on = used when confident. */
   router?: { mode: "off" | "shadow" | "on"; model: string | null; minConfidence: number; understand?: "on" | "off"; writer?: "on" | "off"; thinking?: "auto" | "off" };
   takeoverMinutes: number;
   autoCheckinWindowHours: number;
@@ -138,7 +205,6 @@ export interface AgentSettings {
   dailyNeuronBudget: number;
   toolSwitches: Record<string, boolean>;
   telegramStaffMap: Record<string, { staffId: number; role: "manager" | "receptionist"; name: string }>;
-  /** AR-2: who the AI answers on Facebook/Instagram (allowlist = everyone else is ignored and not stored). */
   metaAccess: {
     mode: "allowlist" | "open";
     facebook: { names: string[]; ids: string[] };
