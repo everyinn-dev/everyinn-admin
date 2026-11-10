@@ -127,6 +127,17 @@ export function isManagerOnlyDoorCodeRoute(method: string, path: string): boolea
 }
 
 /**
+ * On /api/agent/*, receptionists may only read/resolve door codes; AI Inbox, AI Config,
+ * door-code mutations, and door-code audit logs all require manager privileges.
+ */
+export function isReceptionistAllowedAgentRoute(method: string, path: string): boolean {
+  if (method === "GET" && /^door-codes$/.test(path)) return true;
+  if (method === "GET" && /^bookings\/[^/]+\/door-code$/.test(path)) return true;
+  if (method === "POST" && /^door-codes\/resolve-batch$/.test(path)) return true;
+  return false;
+}
+
+/**
  * Builds an `admin-db` `event_logs` audit descriptor for door-code actions and 403 denials.
  * Strict security invariant: NEVER includes plaintext PINs in the payload.
  */

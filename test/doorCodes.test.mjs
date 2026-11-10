@@ -7,6 +7,7 @@ import {
   findGateCodesForVnDate,
   formatBookingDoorCodeCopyText,
   isManagerOnlyDoorCodeRoute,
+  isReceptionistAllowedAgentRoute,
   maskDoorCode,
   normalizeDoorCode,
   vnDateRangeToIso,
@@ -19,7 +20,7 @@ test("normalizeDoorCode and maskDoorCode handle valid/invalid PINs cleanly", () 
   assert.equal(normalizeDoorCode("1234abcd"), null);
 
   assert.equal(maskDoorCode("2580#"), "•••0#");
-  assert.equal(maskDoorCode("123"), "••23".replace("23", "23"));
+  assert.equal(maskDoorCode("123"), "••23");
   assert.equal(maskDoorCode("12"), "••");
   assert.equal(maskDoorCode(""), null);
   assert.equal(maskDoorCode(null), null);
@@ -95,6 +96,18 @@ test("isManagerOnlyDoorCodeRoute allows receptionist reads and blocks writes & a
   assert.equal(isManagerOnlyDoorCodeRoute("PUT", "bookings/EI-100/door-code"), true);
   assert.equal(isManagerOnlyDoorCodeRoute("DELETE", "bookings/EI-100/door-code"), true);
   assert.equal(isManagerOnlyDoorCodeRoute("GET", "door-codes/audit"), true);
+
+  // Full /api/agent/* boundary for receptionist: ONLY door-code read/resolve allowed
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "door-codes"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "bookings/EI-100/door-code"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "door-codes/resolve-batch"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "settings"), false);
+  assert.equal(isReceptionistAllowedAgentRoute("PUT", "settings"), false);
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "conversations"), false);
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "runs"), false);
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "md/rules"), false);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "door-codes/gate"), false);
+  assert.equal(isReceptionistAllowedAgentRoute("GET", "door-codes/audit"), false);
 });
 
 test("buildDoorCodeAuditDescriptor logs secret-safe masked audit entries and never stores plaintext PINs", () => {

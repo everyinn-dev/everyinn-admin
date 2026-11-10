@@ -88,6 +88,8 @@ export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }
         </svg>
       ),
     },
+  ];
+  const managerNavItems = [
     {
       label: "Hộp Thư AI",
       href: "/agent-inbox",
@@ -106,8 +108,6 @@ export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }
         </svg>
       ),
     },
-  ];
-  const financeNavItems = [
     {
       label: "Tài Chính",
       href: "/finance",
@@ -118,7 +118,7 @@ export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }
       ),
     },
   ];
-  const navItems = isManager ? [...baseNavItems, ...financeNavItems] : baseNavItems;
+  const navItems = isManager ? [...baseNavItems, ...managerNavItems] : baseNavItems;
 
   return (
     <aside className="w-64 border-r border-slate-200 bg-slate-50/90 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 hidden lg:flex">

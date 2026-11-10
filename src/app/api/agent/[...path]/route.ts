@@ -4,7 +4,11 @@ import { getDb } from "@/lib/db";
 import { logEvent } from "@/lib/audit";
 import { agentCore, coreErrorResponse } from "@/lib/cores";
 import { matchAgentRoute, type AgentMethod as Method } from "@/lib/agentRoutes";
-import { buildDoorCodeAuditDescriptor, isManagerOnlyDoorCodeRoute } from "@/lib/doorCodeUtils";
+import {
+  buildDoorCodeAuditDescriptor,
+  isManagerOnlyDoorCodeRoute,
+  isReceptionistAllowedAgentRoute,
+} from "@/lib/doorCodeUtils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,17 +50,19 @@ async function proxy(req: NextRequest, method: Method, params: Promise<{ path: s
       body = text ? JSON.parse(text) : {};
     }
 
-    // Defense-in-depth RBAC guard at BFF edge before calling agent-core (also enforced in agent-core).
-    if (staff.role !== "manager" && isManagerOnlyDoorCodeRoute(method, path)) {
-      await writeDoorCodeAudit({
-        method,
-        path,
-        status: 403,
-        body: (body && typeof body === "object" ? (body as Record<string, unknown>) : null),
-        staff,
-      });
+    // Defense-in-depth RBAC guard at BFF edge: receptionists may only read/resolve door codes.
+    if (staff.role !== "manager" && !isReceptionistAllowedAgentRoute(method, path)) {
+      if (isManagerOnlyDoorCodeRoute(method, path)) {
+        await writeDoorCodeAudit({
+          method,
+          path,
+          status: 403,
+          body: (body && typeof body === "object" ? (body as Record<string, unknown>) : null),
+          staff,
+        });
+      }
       return NextResponse.json(
-        { error: "Chỉ quản lý (manager) được thực hiện thao tác mã cửa này.", code: "FORBIDDEN_ROLE" },
+        { error: "Chỉ quản lý (manager) được phép thực hiện thao tác hoặc truy cập tính năng này.", code: "FORBIDDEN_ROLE" },
         { status: 403 },
       );
     }

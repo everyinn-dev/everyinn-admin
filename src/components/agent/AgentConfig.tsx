@@ -2,8 +2,10 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { agentApi, AgentApiError, formatVnTime, ROOMS, type AgentSettings } from "@/lib/agentApi";
+import { agentApi, AgentApiError, type AgentSettings } from "@/lib/agentApi";
 import { useToast } from "@/components/ui/Toast";
+import { useAdminStaff } from "@/components/layout/AdminShell";
+import { DoorCodesPanel } from "@/components/door-codes/DoorCodesPanel";
 import { BusyToggle } from "./BusyToggle";
 import { RouterCheck } from "./RouterCheck";
 import { apiFetch } from "@/lib/apiClient";
@@ -271,150 +273,8 @@ function PersonaTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (
   );
 }
 
-// ── Tab 2: door-code vault ──────────────────────────────────────────────────────────────────
-interface GateCode {
-  id: string;
-  code: string;
-  label: string | null;
-  validFrom: string;
-  validUntil: string | null;
-  state: "current" | "scheduled" | "expired" | "inactive";
-  source: string;
-}
-interface Lockbox {
-  roomId: string;
-  roomNumber: string;
-  code: string | null;
-  updatedAt: string | null;
-}
-
-function CodesTab() {
-  const toast = useToast();
-  const err = useErr();
-  const [reveal, setReveal] = useState(false);
-  const [gates, setGates] = useState<GateCode[]>([]);
-  const [boxes, setBoxes] = useState<Lockbox[]>([]);
-  const [newGate, setNewGate] = useState({ code: "", label: "", validFrom: "", validUntil: "" });
-  const [boxInput, setBoxInput] = useState<Record<string, string>>({});
-
-  const load = useCallback(async () => {
-    const r = await agentApi<{ gateCodes: GateCode[]; lockboxes: Lockbox[] }>(`door-codes${reveal ? "?reveal=1" : ""}`);
-    setGates(r.data?.gateCodes ?? []);
-    setBoxes(r.data?.lockboxes ?? []);
-  }, [reveal]);
-  useEffect(() => {
-    load().catch((e) => err(e, "Không tải được kho mã cửa."));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load]);
-
-  const toIso = (local: string) => (local ? new Date(`${local}:00+07:00`).toISOString() : undefined);
-  const addGate = async () => {
-    try {
-      const r = await agentApi<{ releasedSchedules: number }>("door-codes/gate", {
-        method: "POST",
-        body: { code: newGate.code, label: newGate.label || undefined, validFrom: toIso(newGate.validFrom), validUntil: toIso(newGate.validUntil) },
-      });
-      toast.success(`Đã lưu mã cổng.${r.data?.releasedSchedules ? ` Đã gửi ${r.data.releasedSchedules} hướng dẫn đang chờ.` : ""}`);
-      setNewGate({ code: "", label: "", validFrom: "", validUntil: "" });
-      await load();
-    } catch (e) {
-      err(e, "Không lưu được mã cổng.");
-    }
-  };
-  const saveBox = async (roomId: string) => {
-    try {
-      await agentApi(`door-codes/lockbox/${roomId}`, { method: "PUT", body: { code: boxInput[roomId] } });
-      toast.success("Đã lưu mã hộp khóa.");
-      setBoxInput({ ...boxInput, [roomId]: "" });
-      await load();
-    } catch (e) {
-      err(e, "Không lưu được mã hộp khóa.");
-    }
-  };
-  const deactivate = async (id: string) => {
-    try {
-      await agentApi(`door-codes/gate/${id}/deactivate`, { method: "POST" });
-      await load();
-    } catch (e) {
-      err(e, "Không tắt được mã.");
-    }
-  };
-  const stateBadge: Record<GateCode["state"], string> = {
-    current: "bg-emerald-50 text-emerald-800 border-emerald-200",
-    scheduled: "bg-sky-50 text-sky-800 border-sky-200",
-    expired: "bg-slate-100 text-slate-500 border-slate-200",
-    inactive: "bg-slate-100 text-slate-400 border-slate-200",
-  };
-  const stateLabel = { current: "🟢 Đang dùng", scheduled: "🔵 Sắp áp dụng", expired: "⚪ Hết hạn", inactive: "⚪ Đã tắt" };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">Mã chỉ lưu mã hóa trong agent-db, không bao giờ vào nhật ký hay AI. Mã cổng thay đổi theo thời gian; mã hộp khóa cố định theo phòng.</p>
-        <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-          <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Hiện mã
-        </label>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className={card}>
-          <p className="text-sm font-black text-slate-800">🚪 Mã cổng (thay đổi định kỳ)</p>
-          <div className="grid grid-cols-2 gap-2">
-            <input className={`${input} font-mono`} placeholder="Mã, VD 2580#" value={newGate.code} onChange={(e) => setNewGate({ ...newGate, code: e.target.value })} inputMode="numeric" />
-            <input className={input} placeholder="Ghi chú (tuỳ chọn)" value={newGate.label} onChange={(e) => setNewGate({ ...newGate, label: e.target.value })} />
-            <label className="space-y-1">
-              <span className={label}>Hiệu lực từ (để trống = ngay)</span>
-              <input type="datetime-local" className={input} value={newGate.validFrom} onChange={(e) => setNewGate({ ...newGate, validFrom: e.target.value })} />
-            </label>
-            <label className="space-y-1">
-              <span className={label}>Đến (để trống = đến khi đổi)</span>
-              <input type="datetime-local" className={input} value={newGate.validUntil} onChange={(e) => setNewGate({ ...newGate, validUntil: e.target.value })} />
-            </label>
-          </div>
-          <button disabled={!newGate.code} onClick={addGate} className={`${btn} bg-emerald-600 text-white`}>
-            💾 Lưu mã cổng
-          </button>
-          <ul className="divide-y divide-slate-100">
-            {gates.map((g) => (
-              <li key={g.id} className="py-2 flex items-center justify-between gap-2 text-sm">
-                <div>
-                  <span className="font-mono font-bold text-slate-900">{g.code}</span>
-                  <span className={`ml-2 px-1.5 py-0.5 rounded-md border text-[10px] font-bold ${stateBadge[g.state]}`}>{stateLabel[g.state]}</span>
-                  <p className="text-[11px] text-slate-500">
-                    {formatVnTime(g.validFrom)} → {g.validUntil ? formatVnTime(g.validUntil) : "không giới hạn"} · {g.source === "telegram" ? "Telegram" : "Web"}
-                    {g.label ? ` · ${g.label}` : ""}
-                  </p>
-                </div>
-                {g.state !== "inactive" && (
-                  <button onClick={() => deactivate(g.id)} className="text-xs font-bold text-rose-700 hover:underline">
-                    Tắt
-                  </button>
-                )}
-              </li>
-            ))}
-            {gates.length === 0 && <li className="py-2 text-xs text-amber-700">Chưa có mã cổng — AI sẽ hỏi bạn qua Telegram khi cần.</li>}
-          </ul>
-          <p className="text-[11px] text-slate-500">Mẹo: nhắn <code>/code 2580#</code> hoặc <code>/code 2580# 05/11-12/11</code> cho bot Telegram.</p>
-        </div>
-        <div className={card}>
-          <p className="text-sm font-black text-slate-800">📦 Mã hộp khóa theo phòng (cố định)</p>
-          <ul className="space-y-2">
-            {boxes.map((b) => (
-              <li key={b.roomId} className="flex items-center gap-2">
-                <span className="w-28 text-sm font-bold text-slate-800">{ROOMS.find((r) => r.id === b.roomId)?.label ?? b.roomNumber}</span>
-                <span className={`w-20 font-mono text-sm ${b.code ? "text-slate-900" : "text-amber-700"}`}>{b.code ?? "Chưa có"}</span>
-                <input className={`${input} font-mono flex-1 min-w-0`} placeholder="Mã mới" value={boxInput[b.roomId] ?? ""} onChange={(e) => setBoxInput({ ...boxInput, [b.roomId]: e.target.value })} inputMode="numeric" />
-                <button disabled={!boxInput[b.roomId]} onClick={() => saveBox(b.roomId)} className={`${btn} bg-slate-800 text-white`}>
-                  Lưu
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="text-[11px] text-slate-500">Hoặc nhắn <code>/lockbox 102 1234</code> cho bot Telegram.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Tab 2: shared door-code vault (unified with Gantt "Mã cửa" modal) ───────────────────────
+// Rendered directly via <DoorCodesPanel isManager={isManager} /> inside AgentConfig below.
 
 // ── Tab 3: knowledge documents (RAG) ────────────────────────────────────────────────────────
 interface Doc {
@@ -912,6 +772,8 @@ function ToolsTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (s:
 
 export function AgentConfig() {
   const err = useErr();
+  const staff = useAdminStaff();
+  const isManager = staff?.role === "manager";
   const [tab, setTab] = useState<Tab>("persona");
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   useEffect(() => {
@@ -954,7 +816,7 @@ export function AgentConfig() {
       ) : tab === "offers" ? (
         <OffersTab />
       ) : tab === "codes" ? (
-        <CodesTab />
+        <DoorCodesPanel isManager={isManager} />
       ) : tab === "knowledge" ? (
         <KnowledgeTab />
       ) : tab === "faq" ? (
