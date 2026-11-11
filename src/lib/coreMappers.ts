@@ -11,6 +11,7 @@ import type {
   BookingStatus,
   BookingType,
   CappingWarning,
+  ClosureReasonCode,
   CdpTiersConfig,
   DailyRosterItem,
   DailyRosterResponse,
@@ -507,6 +508,8 @@ export interface CoreBookingDto {
     depositAmount: number;
     paidAmount: number;
     refundAmount: number;
+    /** received − refunded */
+    netPaid: number;
     remainingAmount: number;
     depositStatus: DepositStatus;
     depositDueDate: string | null;
@@ -521,6 +524,7 @@ export interface CoreBookingDto {
     cancelledAt: string | null;
     cancelledBy: CoreStaffRef | null;
     cancelReason: string | null;
+    closureReasonCode?: ClosureReasonCode | null;
     noShowAt: string | null;
     noShowBy: CoreStaffRef | null;
     noShowReason: string | null;
@@ -609,6 +613,9 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     cancelled_at: u(l.cancelledAt),
     cancel_reason: u(l.cancelReason),
     cancelled_by: u(l.cancelledBy?.id),
+    cancelled_by_staff_name: l.cancelledBy?.name ?? null,
+    closure_reason_code: l.closureReasonCode ?? null,
+    net_paid: f.netPaid ?? f.paidAmount - f.refundAmount,
     no_show_at: u(l.noShowAt),
     no_show_by: u(l.noShowBy?.id),
     no_show_by_staff_name: l.noShowBy?.name ?? null,

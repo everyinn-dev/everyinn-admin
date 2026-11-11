@@ -4,6 +4,7 @@ import React from "react";
 import { Booking } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { BookingsTableHeader } from "./BookingsTableHeader";
+import { closureReasonLabel } from "@/lib/bookingClosure";
 
 interface BookingsTableProps {
   bookings: Booking[];
@@ -46,12 +47,13 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
             const checkout = formatDateTimeParts(b.checkout_at);
             const created = formatDateTimeParts(b.created_at);
             const updated = formatDateTimeParts(b.updated_at);
+            const closed = b.status === "cancelled" || b.status === "no_show";
 
             return (
               <tr
                 key={b.id}
                 onClick={() => onSelectBooking(b)}
-                className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                className={`hover:bg-slate-50 transition-colors cursor-pointer group ${closed ? "bg-slate-50/70 text-slate-500 opacity-75" : ""}`}
               >
                 {/* 1. Mã đặt */}
                 <td className="py-3 px-3 font-mono font-bold text-emerald-700 whitespace-nowrap">
@@ -120,20 +122,29 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                 <td className="py-3 px-3 whitespace-nowrap">
                   <div className="space-y-0.5">
                     <Badge status={b.status} size="sm" />
-                    {b.status === "no_show" && b.refund_amount && b.refund_amount > 0 ? (
-                      <div className="text-[10px] text-purple-700 font-mono">
-                        Hoàn {Number(b.refund_amount).toLocaleString("vi-VN")}đ
+                    {closed && (
+                      <div className="text-[10px] text-slate-600 max-w-[160px] truncate" title={b.cancel_reason || b.no_show_reason || ""}>
+                        {closureReasonLabel(b.closure_reason_code ?? (b.status === "no_show" ? "no_show" : null)) ?? "Đã đóng"}
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </td>
 
                 {/* 10. Tổng tiền & Đặt cọc */}
                 <td className="py-3 px-3 text-right whitespace-nowrap">
-                  <div className="font-mono font-bold text-emerald-700 text-sm">
+                  <div className={`font-mono font-bold text-sm ${closed ? "text-slate-400 line-through" : "text-emerald-700"}`}>
                     {Number(b.total_price || 0).toLocaleString("vi-VN")} đ
                   </div>
-                  {b.is_deposit === 1 && (
+                  {closed && (
+                    <div className="text-[10px] font-medium mt-0.5 text-slate-600">
+                      Giữ lại <span className="font-mono font-bold text-emerald-700">{Number(b.net_paid ?? (b.paid_amount ?? 0) - (b.refund_amount ?? 0)).toLocaleString("vi-VN")}đ</span>
+                      {(b.refund_amount ?? 0) > 0 && <> · hoàn {Number(b.refund_amount).toLocaleString("vi-VN")}đ</>}
+                    </div>
+                  )}
+                  {!closed && b.is_deposit !== 1 && (b.remaining_amount ?? 0) > 0 && (
+                    <div className="text-[10px] font-medium mt-0.5 text-amber-900">Còn phải thu {Number(b.remaining_amount).toLocaleString("vi-VN")}đ</div>
+                  )}
+                  {!closed && b.is_deposit === 1 && (
                     <div className="text-[10px] font-medium mt-0.5">
                       {b.deposit_status === "fully_paid" ? (
                         <span className="text-emerald-800 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">

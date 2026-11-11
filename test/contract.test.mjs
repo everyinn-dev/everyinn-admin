@@ -97,6 +97,7 @@ const sampleBookingCanonical = {
     cancelledAt: null,
     cancelledBy: null,
     cancelReason: null,
+    closureReasonCode: null,
     noShowAt: null,
     noShowBy: null,
     noShowReason: null,

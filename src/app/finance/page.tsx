@@ -142,7 +142,8 @@ export default function FinancePage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Báo cáo doanh thu theo phòng</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Doanh thu = tổng thành tiền các đơn <b>đã xác nhận</b>, tính theo tháng <b>check-in</b> (đơn hủy / no-show không tính).
+            Doanh thu = giá trị các đơn <b>đã xác nhận</b>, theo tháng <b>check-in</b>. Đơn huỷ / no-show không tính vào doanh thu;
+            số tiền khách sạn <b>giữ lại</b> từ các đơn đó (đã thu − đã hoàn) được báo riêng ở dòng “Thu giữ từ huỷ / No-show”.
           </p>
         </div>
 
@@ -171,7 +172,7 @@ export default function FinancePage() {
 
         {/* Summary */}
         {data && (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5">
               <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Tổng doanh thu</p>
               <p className="mt-1 text-xl font-bold text-emerald-900 tabular-nums">{formatMoney(data.grandTotal)}</p>
@@ -180,7 +181,12 @@ export default function FinancePage() {
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Số đơn</p>
               <p className="mt-1 text-xl font-bold text-slate-900 tabular-nums">{moneyFmt.format(data.bookingCount)}</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-3.5 col-span-2 lg:col-span-1">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
+              <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Thu giữ từ huỷ / No-show</p>
+              <p className="mt-1 text-xl font-bold text-amber-900 tabular-nums">{formatMoney(data.retained?.grandTotal ?? 0)}</p>
+              <p className="text-[11px] text-amber-800/80">{moneyFmt.format(data.retained?.bookingCount ?? 0)} đơn giữ tiền</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Khoảng thời gian</p>
               <p className="mt-1 text-xl font-bold text-slate-900">
                 {monthLabel(data.from)} – {monthLabel(data.to)}
@@ -238,6 +244,21 @@ export default function FinancePage() {
                 ))}
               </tbody>
               <tfoot>
+                {data.retained && (
+                  <tr>
+                    <th className={`${stickyCol} bg-amber-50 border-t border-r border-amber-200 px-4 py-2 text-left text-xs font-bold text-amber-800 whitespace-nowrap`}>
+                      Thu giữ từ huỷ / No-show
+                    </th>
+                    {data.retained.columnTotals.map((v, i) => (
+                      <td key={data.months[i]} className={`bg-amber-50 border-t border-amber-200 px-4 py-2 text-right whitespace-nowrap ${v === 0 ? "text-amber-300" : "font-semibold text-amber-900"}`}>
+                        {cellMoney(v)}
+                      </td>
+                    ))}
+                    <td className="bg-amber-100 border-t border-l border-amber-200 px-4 py-2 text-right font-bold text-amber-900 whitespace-nowrap">
+                      {cellMoney(data.retained.grandTotal)}
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <th className={`${stickyCol} bottom-0 z-30 bg-slate-100 border-t-2 border-r border-slate-300 px-4 py-2.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider`}>
                     Tổng cộng

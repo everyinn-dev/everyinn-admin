@@ -2,6 +2,20 @@ import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, newIdempotencyKey } from "@/lib/cores";
 import { toHttpError } from "@/lib/apiError";
 import { toLegacyBookingRow, type CoreBookingEnvelope, type CoreBookingDto } from "@/lib/coreMappers";
+import { closureReasonLabel } from "@/lib/bookingClosure";
+import type { ClosureReasonCode } from "@/types";
+
+const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+const CLOSURE_CODES: readonly ClosureReasonCode[] = ["guest_cancel", "no_show", "property_cancel", "staff_error", "other"];
+const REFUND_METHODS = ["cash", "bank_transfer", "card", "ewallet", "other"] as const;
+
+/** One user intent == one key: the client sends it, so a double click / retry replays instead of failing. */
+function intentKey(req: Request, action: string): string {
+  const headerKey = req.headers.get("idempotency-key")?.trim();
+  return headerKey && IDEMPOTENCY_KEY_RE.test(headerKey) ? headerKey : newIdempotencyKey(action);
+}
+
+const vnd = (n: number) => `${n.toLocaleString("vi-VN")} đ`;
 
 function requireBooking(envelope: CoreBookingEnvelope | null): CoreBookingDto {
   if (!envelope?.booking) {
@@ -62,8 +76,9 @@ export async function GET(
  * PATCH /api/bookings/[id] — Booking state machine actions & updates via Booking Core.
  *
  * Supported actions:
- * - `no_show`: confirmed -> no_show (with optional refund)
- * - `cancel`: cancellation with inventory release and outcome recording
+ * - `cancel`: close the booking for a `reasonCode` (guest_cancel | no_show | property_cancel | staff_error | other)
+ *   with an optional refund. reasonCode "no_show" → Core no-show (status no_show), the rest → Core cancel.
+ * - `no_show`: alias of `cancel` with reasonCode "no_show"
  * - `complete_deposit_payment`: record remaining stay payment entry
  * - `mark_deposit_reminder_sent`: flag reminder timestamp
  * - `extend1h`: extend stay by N hours (default 1)
@@ -91,56 +106,43 @@ export async function PATCH(
     const currentBooking = currentRes.data.booking;
     const expectedVersion = Number(body.expectedVersion ?? currentBooking.control.version);
 
-    // ── ACTION: NO SHOW ───────────────────────────────────────────
-    if (action === "no_show") {
-      const rawRefund = Number(body.refundAmount || 0);
-      const refundAmount = isNaN(rawRefund) || rawRefund < 0 ? 0 : Math.round(rawRefund);
-      const reason = String(body.noShowReason || body.reason || "Khách không đến / Hủy vi phạm quy định").trim();
+    // ── ACTION: CLOSE BOOKING (cancel, with "no_show" as one of the reasons) ──
+    // `no_show` is kept as an alias of `cancel` + reasonCode "no_show" for older clients.
+    if (action === "cancel" || action === "no_show") {
+      const rawCode = action === "no_show" ? "no_show" : body.reasonCode;
+      const reasonCode = CLOSURE_CODES.includes(rawCode as ClosureReasonCode) ? (rawCode as ClosureReasonCode) : null;
+      if (!reasonCode) {
+        return Response.json({ error: "Vui lòng chọn lý do huỷ.", code: "VALIDATION_FAILED", details: { field: "reasonCode" } }, { status: 400 });
+      }
+      const note = String(body.reason ?? body.cancelReason ?? body.noShowReason ?? "").trim();
+      if (reasonCode === "other" && !note) {
+        return Response.json({ error: "Vui lòng nhập lý do huỷ.", code: "REASON_REQUIRED", details: { field: "reason" } }, { status: 400 });
+      }
+      const rawRefund = Number(body.refundAmount ?? 0);
+      const refundAmount = Number.isFinite(rawRefund) && rawRefund > 0 ? Math.round(rawRefund) : 0;
+      const methodIn = String(body.refundMethod ?? body.paymentMethod ?? "cash");
+      const method = (REFUND_METHODS as readonly string[]).includes(methodIn) ? methodIn : "cash";
+      const reference = typeof body.refundReference === "string" && body.refundReference.trim() ? body.refundReference.trim().slice(0, 120) : undefined;
+      const refund = refundAmount > 0 ? { amount: refundAmount, method, ...(reference ? { reference } : {}) } : undefined;
 
-      const coreRes = await bookingCore.post<CoreBookingEnvelope>(`/internal/v1/bookings/${id}/no-show`, {
+      const isNoShow = reasonCode === "no_show";
+      const coreRes = await bookingCore.post<CoreBookingEnvelope>(`/internal/v1/bookings/${id}/${isNoShow ? "no-show" : "cancel"}`, {
         staff,
-        idempotencyKey: newIdempotencyKey("booking-noshow"),
-        body: {
-          expectedVersion,
-          reason,
-          refund: refundAmount > 0 ? {
-            amount: refundAmount,
-            method: body.paymentMethod || "cash",
-          } : undefined,
-        },
+        idempotencyKey: intentKey(req, isNoShow ? "booking-noshow" : "booking-cancel"),
+        body: isNoShow
+          ? { expectedVersion, ...(note ? { reason: note } : {}), refund }
+          : { expectedVersion, reasonCode, ...(note ? { reason: note } : {}), refund },
       });
 
-      const updated = toLegacyBookingRow(requireBooking(coreRes.data));
-      const netRetained = updated.total_price;
-
+      const closed = requireBooking(coreRes.data);
+      const updated = toLegacyBookingRow(closed);
+      const retained = closed.financial.netPaid ?? closed.financial.paidAmount - closed.financial.refundAmount;
+      const label = isNoShow ? "Đã ghi nhận No-Show" : `Đã huỷ đặt phòng (${closureReasonLabel(reasonCode)})`;
       return Response.json({
         success: true,
-        message: refundAmount > 0
-          ? `Đã đánh dấu No-Show thành công. Đã hoàn ${refundAmount.toLocaleString("vi-VN")} đ, thực thu giữ ${netRetained.toLocaleString("vi-VN")} đ.`
-          : `Đã đánh dấu No-Show thành công. Khách sạn thu giữ 100% (${netRetained.toLocaleString("vi-VN")} đ).`,
-        netRetained,
+        message: `${label}. ${refundAmount > 0 ? `Đã hoàn ${vnd(refundAmount)}, ` : "Không hoàn tiền, "}giữ lại ${vnd(retained)}.`,
         refundAmount,
-        booking: updated,
-      });
-    }
-
-    // ── ACTION: CANCEL ────────────────────────────────────────────
-    if (action === "cancel") {
-      const reason = String(body.cancelReason || body.reason || "Lễ tân hủy/xóa đặt phòng").trim();
-
-      const coreRes = await bookingCore.post<CoreBookingEnvelope>(`/internal/v1/bookings/${id}/cancel`, {
-        staff,
-        idempotencyKey: newIdempotencyKey("booking-cancel"),
-        body: {
-          expectedVersion,
-          reason,
-        },
-      });
-
-      const updated = toLegacyBookingRow(requireBooking(coreRes.data));
-      return Response.json({
-        success: true,
-        message: "Đã hủy đặt phòng thành công.",
+        netRetained: retained,
         booking: updated,
       });
     }
@@ -266,45 +268,12 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/bookings/[id] — Cancel booking (replaces legacy hard delete).
+ * DELETE /api/bookings/[id] — retired. Bookings are never deleted: they are closed with
+ * PATCH { action: "cancel", reasonCode, refundAmount? } so the record, the money trail and the audit stay.
  */
-export async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const staff = await getCurrentStaff();
-    if (!staff) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const reason = String(body.cancelReason || body.reason || "Lễ tân hủy/xóa đặt phòng").trim();
-
-    const currentRes = await bookingCore.get<CoreBookingEnvelope>(`/internal/v1/bookings/${id}`, { staff });
-    if (!currentRes.data?.booking) {
-      return Response.json({ error: "Không tìm thấy thông tin đặt phòng." }, { status: 404 });
-    }
-
-    const expectedVersion = Number(body.expectedVersion ?? currentRes.data.booking.control.version);
-
-    const coreRes = await bookingCore.post<CoreBookingEnvelope>(`/internal/v1/bookings/${id}/cancel`, {
-      staff,
-      idempotencyKey: newIdempotencyKey("booking-delete"),
-      body: {
-        expectedVersion,
-        reason,
-      },
-    });
-
-    const updated = toLegacyBookingRow(requireBooking(coreRes.data));
-    return Response.json({
-      success: true,
-      message: `Đã hủy đặt phòng #${id} thành công.`,
-      booking: updated,
-    });
-  } catch (error) {
-    return toHttpError(error);
-  }
+export async function DELETE() {
+  return Response.json(
+    { error: "Không thể xoá đơn đặt phòng. Vui lòng dùng chức năng \"Huỷ đặt phòng\".", code: "METHOD_NOT_ALLOWED" },
+    { status: 405, headers: { Allow: "GET, PATCH" } },
+  );
 }
