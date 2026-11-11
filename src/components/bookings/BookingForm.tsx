@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { resolveIntentKey, type IntentKey } from "@/lib/intentKey";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BookingRulesConfig,
@@ -125,6 +126,14 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
+  // Double submit guard: the ref blocks a second click in the same tick (React state is async); `redirecting`
+  // keeps the button locked during the 1.5 s before the redirect, when the booking already exists.
+  const inFlightRef = useRef(false);
+  const [redirecting, setRedirecting] = useState(false);
+  // One Idempotency-Key per booking intent: the same form content reuses the key, so a retry after a lost
+  // response is replayed by Booking Core instead of creating a second booking. A changed form or a rejected
+  // request gets a fresh key.
+  const intentRef = useRef<IntentKey | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -356,6 +365,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   // Form submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current || redirecting) return;
     setErrorMsg("");
     setSuccessMsg("");
 
@@ -434,6 +444,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       }
     }
 
+    inFlightRef.current = true;
+    let succeeded = false;
     try {
       setSubmitting(true);
       const payload = {
@@ -461,14 +473,18 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         depositDueDate: isDeposit && depositDueDate ? depositDueDate : null,
       };
 
+      const body = JSON.stringify(payload);
+      intentRef.current = resolveIntentKey(intentRef.current, body, () => `adm.booking-create.${crypto.randomUUID()}`);
       const res = await fetch("/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json", "Idempotency-Key": intentRef.current.key },
+        body,
       });
 
       const data = (await res.json()) as any;
       if (!res.ok) {
+        // Core rejected this attempt: the next submit is a new attempt with a fresh key.
+        intentRef.current = null;
         const errorText = data.error || "Không thể tạo đặt phòng.";
         if (res.status === 409) {
           toast.warning(errorText, "Xung đột lịch & Giờ dọn phòng");
@@ -485,13 +501,17 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       toast.success(successNotice, isDeposit ? "Đặt cọc thành công" : "Tạo đơn thành công");
       notifyDataChanged("BOOKINGS_CHANGED");
 
+      // The booking exists now: keep the form locked until the redirect instead of re-enabling submit.
+      succeeded = true;
+      setRedirecting(true);
       setTimeout(() => {
         router.push(`/dashboard?date=${calculatedCheckinAt.toISOString().slice(0, 10)}`);
       }, 1500);
     } catch (err: any) {
       setErrorMsg(err.message || "Đã xảy ra lỗi khi tạo đặt phòng.");
     } finally {
-      setSubmitting(false);
+      inFlightRef.current = false;
+      if (!succeeded) setSubmitting(false);
     }
   };
 
@@ -881,7 +901,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           type="submit"
           variant="primary"
           size="lg"
-          isLoading={submitting}
+          isLoading={submitting || redirecting}
+          disabled={redirecting}
           leftIcon={<span>{isDeposit ? "🔒" : "✅"}</span>}
         >
           {isDeposit
