@@ -37,7 +37,12 @@
 	},
 	"upload_source_maps": true,
 	// LSB-5: "Gửi link thanh toán cho khách" builds <landing>/dat-phong/<token>
-	"vars": { "LANDING_BASE_URL": "https://everyinn.vn" },
+	// AI_NAV_ENABLED: "false" hides AI menu items ("Hộp Thư AI", "Cấu Hình AI", mobile "AI") in prod
+	// while keeping the routes/APIs intact; `env.dev` keeps "true" so UAT can keep testing AI features.
+	"vars": {
+		"LANDING_BASE_URL": "https://everyinn.vn",
+		"AI_NAV_ENABLED": "false"
+	},
 	// Production Service Bindings to the Cores (Phase 1.5, P-3 / S6).
 	"services": [
 		{ "binding": "BOOKING_CORE", "service": "everyinn-booking-core" },
@@ -53,7 +58,10 @@
 			"name": "everyinn-admin-dev",
 			"main": ".open-next/worker.js",
 			"preview_urls": false,
-			"vars": { "LANDING_BASE_URL": "https://saigonliving-dev.hi-everyinn.workers.dev" },
+			"vars": {
+				"LANDING_BASE_URL": "https://saigonliving-dev.hi-everyinn.workers.dev",
+				"AI_NAV_ENABLED": "true"
+			},
 			"assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
 			// Staff-only DB (auth + Admin audit). No booking/member data here.
 			"d1_databases": [
