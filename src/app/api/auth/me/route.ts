@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";
 import { getCurrentStaff, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { verifyStaffJwt } from "@/lib/jwt";
+import { isAiNavEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function GET() {
     const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     const payload = token ? await verifyStaffJwt(token) : null;
     const expiresAt = payload?.exp ? payload.exp * 1000 : Date.now() + 86400 * 1000;
+    const aiNavEnabled = await isAiNavEnabled();
 
     return NextResponse.json({
       authenticated: true,
@@ -28,6 +30,10 @@ export async function GET() {
         fullName: staff.full_name,
         role: staff.role,
         expiresAt,
+        aiNavEnabled,
+      },
+      features: {
+        aiNavEnabled,
       },
     });
   } catch (error) {

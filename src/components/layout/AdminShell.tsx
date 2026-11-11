@@ -7,6 +7,7 @@ import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { Spinner } from "../ui/Spinner";
 import { DepositReminderModal } from "../bookings/DepositReminderModal";
+import { showMobileAiNavButton } from "@/lib/adminNav";
 import {
   getCachedStaffIdentity,
   setCachedStaffIdentity,
@@ -88,7 +89,8 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children, bare = false }
 
         // Silently verify in background to ensure JWT cookie is still valid (throttled to 15 mins)
         const now = Date.now();
-        if (now - lastAuthVerifiedMs >= AUTH_VERIFY_COOLDOWN_MS) {
+        const missingFeatureFlag = typeof cached.aiNavEnabled !== "boolean";
+        if (missingFeatureFlag || now - lastAuthVerifiedMs >= AUTH_VERIFY_COOLDOWN_MS) {
           lastAuthVerifiedMs = now;
           fetch("/api/auth/me")
             .then(async (res) => {
@@ -103,6 +105,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children, bare = false }
                     fullName: data.staff.fullName,
                     role: data.staff.role,
                     expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
+                    aiNavEnabled: Boolean(data.features?.aiNavEnabled ?? data.staff.aiNavEnabled),
                   };
                   setStaff(refreshedStaff);
                   setCachedStaffIdentity(refreshedStaff);
@@ -130,6 +133,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children, bare = false }
             fullName: data.staff.fullName,
             role: data.staff.role,
             expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
+            aiNavEnabled: Boolean(data.features?.aiNavEnabled ?? data.staff.aiNavEnabled),
           };
           setStaff(freshStaff);
           setCachedStaffIdentity(freshStaff);
@@ -168,12 +172,15 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children, bare = false }
     );
   }
 
+  const isManager = staff?.role === "manager";
+  const aiNavEnabled = Boolean(staff?.aiNavEnabled);
+
   return (
     <AdminStaffContext.Provider value={staff}>
       <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
         <Topbar staff={staff} />
         <div className="flex-1 flex overflow-hidden">
-          <Sidebar isManager={staff?.role === "manager"} />
+          <Sidebar isManager={isManager} aiNavEnabled={aiNavEnabled} />
           <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
         </div>
 
@@ -238,7 +245,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children, bare = false }
             </svg>
             <span>Danh Sách</span>
           </Link>
-          {staff?.role === "manager" && (
+          {showMobileAiNavButton({ isManager, aiNavEnabled }) && (
             <Link
               href="/agent-inbox"
               className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${

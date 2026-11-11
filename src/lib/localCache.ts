@@ -119,6 +119,7 @@ export interface StaffIdentity {
   fullName: string;
   role: string;
   expiresAt: number; // Unix ms timestamp when JWT expires
+  aiNavEnabled?: boolean;
 }
 
 export interface StaffOption {

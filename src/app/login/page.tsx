@@ -47,6 +47,7 @@ function LoginForm() {
           fullName: data.staff.fullName,
           role: data.staff.role,
           expiresAt: data.staff.expiresAt || (Date.now() + 86400 * 1000),
+          aiNavEnabled: Boolean(data.features?.aiNavEnabled ?? data.staff.aiNavEnabled),
         });
       }
 

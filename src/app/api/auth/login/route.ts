@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { createSession, SESSION_COOKIE_NAME, SESSION_DURATION_DAYS, verifyPassword } from "@/lib/auth";
 import { logEvent } from "@/lib/audit";
+import { isAiNavEnabled } from "@/lib/features";
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
     await logEvent(db, "STAFF_LOGIN", "staff", String(staffUser.id), { phone: cleanPhone }, staffUser.id);
 
     const expiresAt = Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
+    const aiNavEnabled = await isAiNavEnabled();
     const response = NextResponse.json({
       success: true,
       staff: {
@@ -60,6 +62,10 @@ export async function POST(req: NextRequest) {
         fullName: staffUser.full_name,
         role: staffUser.role,
         expiresAt,
+        aiNavEnabled,
+      },
+      features: {
+        aiNavEnabled,
       },
     });
 

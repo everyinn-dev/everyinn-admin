@@ -3,8 +3,12 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { filterSidebarManagerItems } from "@/lib/adminNav";
 
-export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }) => {
+export const Sidebar: React.FC<{ isManager?: boolean; aiNavEnabled?: boolean }> = ({
+  isManager = false,
+  aiNavEnabled = false,
+}) => {
   const pathname = usePathname();
 
   const baseNavItems = [
@@ -118,7 +122,8 @@ export const Sidebar: React.FC<{ isManager?: boolean }> = ({ isManager = false }
       ),
     },
   ];
-  const navItems = isManager ? [...baseNavItems, ...managerNavItems] : baseNavItems;
+  const visibleManagerItems = filterSidebarManagerItems(managerNavItems, { isManager, aiNavEnabled });
+  const navItems = [...baseNavItems, ...visibleManagerItems];
 
   return (
     <aside className="w-64 border-r border-slate-200 bg-slate-50/90 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 hidden lg:flex">
