@@ -394,10 +394,15 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       if (!res.ok) {
         const errorText = data.error || data.message || "Không thể cập nhật đặt phòng.";
         if (res.status === 409) {
-          toast.warning(
-            data.error || data.message || "Dữ liệu hoặc lịch phòng đã bị thay đổi bởi người khác. Đang tải lại dữ liệu mới nhất...",
-            "Xung đột lịch & Giờ dọn phòng (409)"
-          );
+          // 409 has several meanings in Core: a concurrent edit, a room-slot clash, or a booking that is no longer
+          // editable (cancelled / no-show). Title the message by its code; the text is Core's own reason.
+          const title =
+            data.code === "VERSION_CONFLICT"
+              ? "Đơn vừa được người khác cập nhật"
+              : data.code === "INVALID_STATE"
+                ? "Đơn không còn chỉnh sửa được"
+                : "Xung đột lịch phòng";
+          toast.warning(data.error || data.message || "Dữ liệu đã thay đổi. Đang tải lại dữ liệu mới nhất...", title);
           await loadData();
           return;
         }

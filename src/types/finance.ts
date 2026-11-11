@@ -19,5 +19,11 @@ export interface RevenueMatrix {
   columnTotals: number[];
   grandTotal: number;
   bookingCount: number;
+  /** Money kept from cancelled / no-show bookings (received − refunded), by check-in month. Optional for older Cores. */
+  retained?: {
+    columnTotals: number[];
+    grandTotal: number;
+    bookingCount: number;
+  };
 }
 

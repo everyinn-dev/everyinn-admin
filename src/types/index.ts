@@ -3,6 +3,8 @@ export type RoomClass = "haven" | "signature";
 export type BookingType = "hourly" | "overnight" | "dayuse" | "custom";
 
 export type BookingStatus = "confirmed" | "pending" | "holding" | "cancelled" | "no_show";
+/** Unified cancel flow: why a booking was closed. 'no_show' ⇔ status no_show, the rest ⇔ cancelled. */
+export type ClosureReasonCode = "guest_cancel" | "no_show" | "property_cancel" | "staff_error" | "other";
 
 export type DepositStatus = "none" | "deposit_paid" | "fully_paid";
 
@@ -222,6 +224,11 @@ export interface Booking extends ControlFields {
   cancelled_at?: string;
   cancel_reason?: string;
   cancelled_by?: number;
+  cancelled_by_staff_name?: string | null;
+  /** Why the booking was closed (cancel or no-show). */
+  closure_reason_code?: ClosureReasonCode | null;
+  /** Money kept = received − refunded (ledger projection from Booking Core). */
+  net_paid?: number;
 
   // Promotion tracking
   promotion_id?: string;
@@ -327,6 +334,12 @@ export interface GanttBookingItem {
   noShowReason?: string;
   refundAmount?: number;
   originalPrice?: number;
+  cancelledAt?: string;
+  cancelledByStaffName?: string | null;
+  cancelReason?: string;
+  closureReasonCode?: ClosureReasonCode | null;
+  /** received − refunded; for a closed booking this is the amount retained. */
+  netPaid?: number;
   // Deposit fields
   isDeposit?: number;
   depositAmount?: number;
