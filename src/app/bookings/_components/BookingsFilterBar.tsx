@@ -140,10 +140,13 @@ export const BookingsFilterBar: React.FC<BookingsFilterBarProps> = ({
             onChange={(e) => onStatusChange(e.target.value)}
             className="w-full rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 transition-colors shadow-xs"
           >
+            <option value="live">Đang hiệu lực (Chờ xử lý + Đã xác nhận)</option>
             <option value="">Tất cả trạng thái</option>
+            <option value="pending">Chờ xử lý</option>
             <option value="confirmed">Đã xác nhận</option>
+            <option value="closed">Đã đóng (Huỷ + No-show)</option>
+            <option value="cancelled">Đã huỷ</option>
             <option value="no_show">🚫 No-Show</option>
-            <option value="cancelled">Đã hủy</option>
           </select>
         </div>
 

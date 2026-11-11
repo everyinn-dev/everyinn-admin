@@ -16,6 +16,7 @@ import {
   getBookingsFilterState, setBookingsFilterState,
 } from "@/lib/localCache";
 import { apiFetch } from "@/lib/apiClient";
+import { bookingRowToItem } from "@/lib/bookingClosure";
 import { subscribeToSyncEvents } from "@/lib/syncEvents";
 import { DailyRosterModal } from "@/components/bookings/DailyRosterModal";
 
@@ -40,7 +41,9 @@ export const BookingsListClient: React.FC = () => {
 
   // Filter states
   const [search, setSearch] = useState(initialSearch);
-  const [status, setStatus] = useState(savedFilter?.status ?? "");
+  // Default view = bookings still occupying a room; closed ones are one filter away (read-only).
+  // A deep link (search / bookingId) must find the booking whatever its status.
+  const [status, setStatus] = useState(initialSearch ? "" : savedFilter?.status ?? "live");
   const [depositStatus, setDepositStatus] = useState(initialDepositStatus);
   const [roomId, setRoomId] = useState(savedFilter?.roomId ?? "");
   const [bookingType, setBookingType] = useState(savedFilter?.bookingType ?? "");
@@ -109,46 +112,7 @@ export const BookingsListClient: React.FC = () => {
   // Declared before `fetchBookings` because the auto-open path calls it. Stable identity
   // (only setState inside), so it can safely be a dependency of the fetch callback.
   const handleSelectBooking = useCallback((b: Booking) => {
-    setSelectedBooking({
-      id: b.id,
-      roomId: b.room_id,
-      guestName: b.member_name,
-      phone: b.member_phone,
-      bookingType: b.booking_type,
-      checkinAt: b.checkin_at,
-      checkoutAt: b.checkout_at,
-      totalPrice: b.total_price,
-      status: b.status,
-      instagram: b.instagram,
-      facebook: b.facebook,
-      closingNote: b.closing_note,
-      note: b.note,
-      // Control fields
-      createdAt: b.created_at,
-      createdByStaffId: b.created_by_staff_id,
-      createdByStaffName: b.created_by_staff_name,
-      updatedAt: b.updated_at,
-      updatedByStaffId: b.updated_by_staff_id,
-      updatedByStaffName: b.updated_by_staff_name,
-      modNo: b.mod_no,
-      // No-Show and Refund tracking
-      noShowAt: b.no_show_at,
-      noShowBy: b.no_show_by,
-      noShowByStaffName: b.no_show_by_staff_name,
-      noShowReason: b.no_show_reason,
-      refundAmount: b.refund_amount,
-      originalPrice: b.original_price,
-      // Deposit tracking
-      isDeposit: b.is_deposit,
-      depositAmount: b.deposit_amount,
-      paidAmount: b.paid_amount,
-      remainingAmount: b.remaining_amount,
-      depositDueDate: b.deposit_due_date,
-      depositStatus: b.deposit_status,
-      depositPaidAt: b.deposit_paid_at,
-      depositReminderSentAt: b.deposit_reminder_sent_at,
-      remainingPaidAt: b.remaining_paid_at,
-    });
+    setSelectedBooking(bookingRowToItem(b));
   }, []);
 
   // 2. Fetch bookings with server-side pagination, search & filters
@@ -270,7 +234,7 @@ export const BookingsListClient: React.FC = () => {
   // Reset all filters to default
   const handleResetFilters = () => {
     setSearch("");
-    setStatus("");
+    setStatus("live");
     setDepositStatus("");
     setRoomId("");
     setBookingType("");

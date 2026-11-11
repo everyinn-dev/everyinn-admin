@@ -2,7 +2,6 @@
 
 import { DoorCodeCard } from "@/components/agent/DoorCodeCard";
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { GanttBookingItem } from "@/types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -10,6 +9,18 @@ import { BookingEditForm } from "./BookingEditForm";
 import { useToast } from "../ui/Toast";
 import { apiFetch } from "@/lib/apiClient";
 import { notifyDataChanged } from "@/lib/syncEvents";
+import { CancelBookingPanel } from "@/components/bookings/cancel/CancelBookingPanel";
+import { ClosedBookingBanner } from "@/components/bookings/cancel/ClosedBookingBanner";
+import { bookingRowToItem, canCloseBooking, isClosedBooking, isVersionConflict, netReceivedOf, type BffError } from "@/lib/bookingClosure";
+import type { Booking } from "@/types";
+
+/** Overlay a fresh row on the current item without wiping fields the row does not carry. */
+function mergeFresh(current: GanttBookingItem, row: Booking): GanttBookingItem {
+  const fresh = bookingRowToItem(row) as unknown as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...current };
+  for (const [k, v] of Object.entries(fresh)) if (v !== undefined) merged[k] = v;
+  return merged as unknown as GanttBookingItem;
+}
 
 interface BookingDetailDrawerProps {
   booking: GanttBookingItem | null;
@@ -33,19 +44,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   const [extendError, setExtendError] = useState("");
   const [extendSuccess, setExtendSuccess] = useState("");
 
-  // Cancel state
-  const [cancelling, setCancelling] = useState(false);
+  // Cancel state (one flow: cancel with a reason; "No-show" is one of the reasons)
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  // No-Show state
-  const [showConfirmNoShow, setShowConfirmNoShow] = useState(false);
-  const [noShowing, setNoShowing] = useState(false);
-  const [noShowReason, setNoShowReason] = useState("Khách báo hủy sát giờ vi phạm quy định");
-  const [hasRefund, setHasRefund] = useState(false);
-  const [refundAmount, setRefundAmount] = useState<number>(0);
-  const [noShowError, setNoShowError] = useState("");
 
   // Complete Deposit Payment state
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -81,10 +81,6 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       setExtendError("");
       setExtendSuccess("");
       setShowConfirmCancel(false);
-      setShowConfirmNoShow(false);
-      setHasRefund(false);
-      setRefundAmount(0);
-      setNoShowError("");
       setShowPaymentForm(false);
       setPaymentError("");
       setPaymentNote("");
@@ -95,16 +91,34 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     setPaymentAmount(remaining);
   }, [booking, currentBooking]);
 
+  // The list / Gantt snapshot may be stale (cancelled in another tab or by a colleague): always load the
+  // latest state when a booking is opened, so every action below is gated on the real status.
+  const openedId = booking?.id;
+  useEffect(() => {
+    if (!openedId) return;
+    let alive = true;
+    apiFetch(`/api/bookings/${openedId}`)
+      .then(async (res) => (res.ok ? ((await res.json()) as { booking?: Booking }) : null))
+      .then((data) => {
+        if (!alive || !data?.booking) return;
+        setCurrentBooking((cur) => (cur && cur.id === openedId ? mergeFresh(cur, data.booking!) : cur));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [openedId]);
+
   if (!currentBooking) return null;
 
   const checkin = new Date(currentBooking.checkinAt);
   const checkout = new Date(currentBooking.checkoutAt);
   const isPastCheckout = new Date() > checkout;
 
-  const actualCashReceived =
-    currentBooking.isDeposit === 1 || (currentBooking as any).is_deposit === 1
-      ? (currentBooking.paidAmount ?? (currentBooking as any).paid_amount ?? currentBooking.depositAmount ?? (currentBooking as any).deposit_amount ?? 0)
-      : (currentBooking.totalPrice || 0);
+  // Money actually received (ledger: received − refunded) — never assumed from totalPrice.
+  const actualCashReceived = netReceivedOf(currentBooking);
+  const isClosed = isClosedBooking(currentBooking);
+  const canClose = canCloseBooking(currentBooking);
 
   const formatDateTime = (date: Date) => {
     return date.toLocaleString("vi-VN", {
@@ -123,15 +137,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       if (res.ok) {
         const data = ((await res.json()) as any);
         if (data.booking) {
-          const fresh: GanttBookingItem = {
-            ...currentBooking,
-            ...data.booking,
-            modNo: data.booking.mod_no ?? data.booking.version ?? currentBooking.modNo,
-            version: data.booking.version ?? data.booking.mod_no ?? currentBooking.version,
-            loyaltySyncStatus: data.booking.loyalty_sync_status ?? currentBooking.loyaltySyncStatus,
-            incidentalFee: data.booking.incidental_fee ?? (data.booking as any).incidentalFee ?? currentBooking.incidentalFee,
-            incidentalReason: data.booking.incidental_reason ?? (data.booking as any).incidentalReason ?? currentBooking.incidentalReason,
-          };
+          const fresh = mergeFresh(currentBooking, data.booking as Booking);
           setCurrentBooking(fresh);
           onBookingUpdated?.(fresh);
         }
@@ -140,6 +146,23 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     } catch (err) {
       console.error("Failed to refetch booking:", err);
     }
+  };
+
+  /**
+   * Core rejected a command. Only VERSION_CONFLICT means "someone else changed it" → reload. Every other code
+   * (INVALID_STATE, PAST_CHECKOUT, REFUND_EXCEEDS_RECEIVED, …) carries Core's own Vietnamese reason → show it,
+   * and still reload so the buttons reflect the real status.
+   * Returns true when the caller should stop silently.
+   */
+  const handleCommandError = async (status: number, data: BffError, title: string): Promise<boolean> => {
+    if (isVersionConflict(status, data)) {
+      toast.warning("Dữ liệu đặt phòng đã thay đổi bởi người khác. Đã tải lại dữ liệu mới nhất.", "Xung đột dữ liệu");
+      await refetchBooking();
+      return true;
+    }
+    toast.error(data.error || "Thao tác không thành công.", title);
+    if (status === 409) await refetchBooking();
+    return false;
   };
 
   const handleRetryLoyaltySync = async () => {
@@ -188,16 +211,12 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       const data = (await res.json()) as any;
       if (!res.ok) {
         const errorText = data.error || "Không thể gia hạn thêm 1 giờ.";
-        if (res.status === 409) {
-          toast.warning("Dữ liệu đặt phòng đã thay đổi bởi phiên làm việc khác. Đang tải lại dữ liệu mới nhất...", "Xung đột dữ liệu (409)");
-          await refetchBooking();
-          return;
-        }
-        toast.error(errorText, "Lỗi gia hạn (+1h)");
+        if (await handleCommandError(res.status, data, "Lỗi gia hạn (+1h)")) return;
         throw new Error(errorText);
       }
 
-      const successMsg = "Đã gia hạn thêm 1 giờ trả phòng (+60.000đ)!";
+      const addedFee = (data.booking?.total_price ?? currentBooking.totalPrice) - currentBooking.totalPrice;
+      const successMsg = `Đã gia hạn thêm 1 giờ trả phòng${addedFee > 0 ? ` (+${addedFee.toLocaleString("vi-VN")}đ)` : ""}!`;
       setExtendSuccess(successMsg);
       toast.success(successMsg, "Gia hạn thành công");
 
@@ -263,102 +282,16 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     notifyDataChanged("BOOKINGS_CHANGED");
   };
 
-  const handleCancelBooking = async () => {
-    try {
-      setCancelling(true);
-      setErrorMsg("");
-      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cancelReason,
-          expectedVersion: currentBooking.version ?? currentBooking.modNo,
-        }),
-      });
-
-      const data = (await res.json()) as any;
-      if (!res.ok) {
-        const errorText = data.error || "Không thể xóa đặt phòng.";
-        if (res.status === 409) {
-          toast.warning("Dữ liệu đặt phòng đã thay đổi bởi người khác. Đang tải lại dữ liệu...", "Xung đột (409)");
-          await refetchBooking();
-          return;
-        }
-        toast.error(errorText, "Lỗi xóa đặt phòng");
-        throw new Error(errorText);
-      }
-
-      toast.success(
-        data.message || `Đơn #${currentBooking.id} đã được xóa thành công. Lịch phòng và hồ sơ CDP đã được cập nhật.`,
-        "Đã xóa đặt phòng"
-      );
-      setShowConfirmCancel(false);
-      onBookingCancelled?.();
-      notifyDataChanged("BOOKINGS_CHANGED");
-      onClose();
-    } catch (err: any) {
-      setErrorMsg(err.message || "Lỗi khi xóa đặt phòng.");
-    } finally {
-      setCancelling(false);
-    }
-  };
-
-  const handleNoShowBooking = async () => {
-    try {
-      setNoShowing(true);
-      setNoShowError("");
-      const actualRefund = hasRefund ? Math.min(actualCashReceived, Math.max(0, refundAmount)) : 0;
-
-      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "no_show",
-          noShowReason,
-          refundAmount: actualRefund,
-          expectedVersion: currentBooking.version ?? currentBooking.modNo,
-        }),
-      });
-
-      const data = (await res.json()) as any;
-      if (!res.ok) {
-        const errorText = data.error || "Không thể đánh dấu No-Show.";
-        if (res.status === 409) {
-          toast.warning("Dữ liệu đặt phòng đã thay đổi bởi người khác. Đang tải lại dữ liệu...", "Xung đột (409)");
-          await refetchBooking();
-          return;
-        }
-        toast.error(errorText, "Lỗi No-Show");
-        throw new Error(errorText);
-      }
-
-      toast.success(
-        data.message || `Đơn #${currentBooking.id} đã đánh dấu No-Show thành công.`,
-        "No-Show thành công"
-      );
-      setShowConfirmNoShow(false);
-
-      const netRetained = data.netRetained ?? (actualCashReceived - actualRefund);
-      const updated: GanttBookingItem = {
-        ...currentBooking,
-        status: "no_show",
-        totalPrice: netRetained,
-        refundAmount: actualRefund,
-        originalPrice: currentBooking.totalPrice,
-        noShowReason,
-        noShowAt: new Date().toISOString(),
-        version: data.booking?.version ?? (currentBooking.version || 0) + 1,
-        modNo: data.booking?.mod_no ?? (currentBooking.modNo || 0) + 1,
-      };
-      setCurrentBooking(updated);
-      onBookingUpdated?.(updated);
-      onBookingCancelled?.();
-      notifyDataChanged("BOOKINGS_CHANGED");
-    } catch (err: any) {
-      setNoShowError(err.message || "Lỗi khi đánh dấu No-Show.");
-    } finally {
-      setNoShowing(false);
-    }
+  /** The cancel panel succeeded: show the closed state in place (read-only) instead of closing the drawer. */
+  const handleBookingClosed = ({ booking: row, message }: { booking: Record<string, unknown>; message: string }) => {
+    toast.success(message, "Đã huỷ đặt phòng");
+    const updated = mergeFresh(currentBooking, row as unknown as Booking);
+    setCurrentBooking(updated);
+    setShowConfirmCancel(false);
+    setMode("view");
+    onBookingUpdated?.(updated);
+    onBookingCancelled?.();
+    notifyDataChanged("BOOKINGS_CHANGED");
   };
 
   const handleCompletePayment = async () => {
@@ -378,11 +311,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
 
       const data = (await res.json()) as any;
       if (!res.ok) {
-        if (res.status === 409) {
-          toast.warning("Dữ liệu đặt phòng đã thay đổi. Đang tải lại dữ liệu...", "Xung đột (409)");
-          await refetchBooking();
-          return;
-        }
+        if (await handleCommandError(res.status, data, "Lỗi thanh toán")) return;
         throw new Error(data.error || "Không thể bổ sung thanh toán.");
       }
 
@@ -420,11 +349,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       });
       const data = (await res.json()) as any;
       if (!res.ok) {
-        if (res.status === 409) {
-          toast.warning("Dữ liệu đặt phòng đã thay đổi. Đang tải lại dữ liệu...", "Xung đột (409)");
-          await refetchBooking();
-          return;
-        }
+        if (await handleCommandError(res.status, data, "Lỗi nhắc cọc")) return;
         throw new Error(data.error || "Không thể ghi nhận gửi nhắc cọc.");
       }
       toast.success("Đã ghi nhận gửi nhắc cọc cho khách!", "Gửi nhắc thành công");
@@ -488,84 +413,25 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
             />
           ) : (
             <>
-              {/* No Show Alert Banner if status is no_show */}
-              {currentBooking.status === "no_show" && (
-                <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 shadow-xs space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🚫</span>
-                      <span className="text-xs font-bold text-purple-900 uppercase tracking-wider">
-                        Khách Không Đến / Hủy Vi Phạm
-                      </span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
-                      Đã giải phóng phòng
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-700 space-y-1.5 bg-white p-3 rounded-xl border border-purple-200 shadow-xs">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Thời điểm No-Show:</span>
-                      <span className="font-mono text-purple-900 font-bold">
-                        {currentBooking.noShowAt ? formatDateTime(new Date(currentBooking.noShowAt)) : "Đã ghi nhận"}
-                      </span>
-                    </div>
-                    {currentBooking.noShowByStaffName && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-500">Nhân viên xử lý:</span>
-                        <span className="text-slate-900 font-semibold">{currentBooking.noShowByStaffName}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-start gap-2 pt-1 border-t border-slate-100">
-                      <span className="text-slate-500 shrink-0">Lý do ghi nhận:</span>
-                      <span className="text-slate-800 italic text-right font-medium">
-                        {currentBooking.noShowReason || "Khách không đến / Hủy vi phạm quy định"}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-slate-500 block text-[11px] font-medium">Đã hoàn lại:</span>
-                        <span className="font-mono text-purple-800 font-bold">
-                          {currentBooking.refundAmount ? Number(currentBooking.refundAmount).toLocaleString("vi-VN") : "0"} đ
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-slate-500 block text-[11px] font-medium">Thực thu giữ:</span>
-                        <span className="font-mono text-emerald-700 font-extrabold">
-                          {Number(currentBooking.totalPrice).toLocaleString("vi-VN")} đ
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rebook CTA */}
-                  <Link
-                    href={`/bookings/new?phone=${encodeURIComponent(currentBooking.phone)}&name=${encodeURIComponent(currentBooking.guestName)}`}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                  >
-                    <span>🔄</span>
-                    <span>Tạo Đơn Đặt Phòng Mới Cho Khách Này (Rebook)</span>
-                  </Link>
-                </div>
-              )}
+              {/* Closed booking (cancelled / no-show): read-only state + money trail */}
+              {isClosed && <ClosedBookingBanner booking={currentBooking} />}
 
               {/* Primary Action Buttons (+1h & Edit) */}
-              {currentBooking.status !== "cancelled" && currentBooking.status !== "no_show" && (
+              {!isClosed && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
-                      disabled={extending}
+                      disabled={extending || isPastCheckout}
                       onClick={handleExtend1h}
                       className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-sm border border-emerald-500 flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-                      title="Gia hạn checkout thêm đúng 1 giờ (+60.000đ)"
+                      title={isPastCheckout ? "Đã qua giờ trả phòng" : "Gia hạn checkout thêm 1 giờ (phí theo bảng giá)"}
                     >
                       {extending ? (
                         <span>Đang thêm 1h...</span>
                       ) : (
                         <>
                           <span>⏱️ +1h Checkout</span>
-                          <span className="text-[10px] opacity-90">(+60k)</span>
                         </>
                       )}
                     </button>
@@ -806,7 +672,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               </div>
 
               {/* Door codes (AI receptionist vault, OD-4) */}
-              {currentBooking.status !== "cancelled" && (
+              {!isClosed && (
                 <DoorCodeCard bookingId={currentBooking.id} roomId={currentBooking.roomId} checkinAt={currentBooking.checkinAt} checkoutAt={currentBooking.checkoutAt} />
               )}
 
@@ -821,11 +687,15 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                         : "bg-amber-100 text-amber-900 border border-amber-300"
                       : "bg-emerald-100 text-emerald-800 border border-emerald-300"
                   }`}>
-                    {currentBooking.isDeposit === 1
-                      ? currentBooking.depositStatus === "fully_paid"
-                        ? "Đã thu đủ 100%"
-                        : "Đơn đặt cọc (Chờ thu nốt)"
-                      : "Thanh toán tại quầy"}
+                    {isClosed
+                      ? `Đã đóng · giữ lại ${actualCashReceived.toLocaleString("vi-VN")}đ`
+                      : currentBooking.isDeposit === 1
+                        ? currentBooking.depositStatus === "fully_paid"
+                          ? "Đã thu đủ 100%"
+                          : "Đơn đặt cọc (Chờ thu nốt)"
+                        : (currentBooking.remainingAmount ?? 0) > 0
+                          ? `Còn phải thu ${(currentBooking.remainingAmount ?? 0).toLocaleString("vi-VN")}đ`
+                          : "Đã thu đủ"}
                   </span>
                 </div>
                 <div className="text-2xl font-extrabold text-emerald-700 font-mono tracking-tight">
@@ -1010,193 +880,16 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                 </div>
               </div>
 
-              {/* Cancel Confirmation Prompt */}
-              {showConfirmCancel && (
-                <div className="p-4 rounded-xl bg-rose-50 border border-rose-300 space-y-3.5 animate-in fade-in duration-200 shadow-xs">
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-base shrink-0 mt-0.5">🗑️</span>
-                    <div>
-                      <h4 className="text-xs font-bold text-rose-900 uppercase tracking-wide">
-                        Xác nhận xóa hoàn toàn đặt phòng #{currentBooking.id}?
-                      </h4>
-                      <p className="text-[11px] text-rose-800 mt-1 leading-relaxed font-medium">
-                        Hệ thống sẽ <strong>xóa vĩnh viễn (Hard delete)</strong> đơn này, giải phóng lịch trên biểu đồ Gantt và tự động hoàn trả số lượt/tiền chi tiêu khỏi hồ sơ CDP của khách (vẫn lưu thông tin thành viên).
-                      </p>
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Lý do xóa / hủy đơn (tùy chọn)..."
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-rose-300 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/20 shadow-xs"
-                  />
-                  {errorMsg && <p className="text-xs text-rose-700 font-semibold">{errorMsg}</p>}
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      className="flex-1 font-semibold"
-                      isLoading={cancelling}
-                      onClick={handleCancelBooking}
-                    >
-                      Xác nhận xóa vĩnh viễn
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowConfirmCancel(false)}
-                    >
-                      Đóng
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* No-Show Confirmation Prompt */}
-              {showConfirmNoShow && (
-                <div className="p-4 rounded-xl bg-purple-50 border border-purple-300 space-y-3.5 animate-in fade-in duration-200 shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🚫</span>
-                    <div>
-                      <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wide">
-                        Xác nhận No-Show (Khách không đến / Hủy vi phạm)
-                      </h4>
-                      <p className="text-[11px] text-purple-800 font-medium">
-                        Phòng sẽ được giải phóng ngay lập tức trên Gantt để nhận khách khác.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Refund Choice */}
-                  <div className="space-y-2 bg-white p-3 rounded-lg border border-purple-200 shadow-xs">
-                    <span className="text-[11px] font-bold text-slate-700 block">
-                      Chính sách hoàn tiền:
-                    </span>
-                    <div className="space-y-1.5">
-                      <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="refundChoice"
-                          checked={!hasRefund}
-                          onChange={() => {
-                            setHasRefund(false);
-                            setRefundAmount(0);
-                          }}
-                          className="accent-purple-600 cursor-pointer"
-                        />
-                        <span>Không hoàn tiền (Thu giữ 100%: <strong>{actualCashReceived.toLocaleString("vi-VN")}đ</strong>)</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="refundChoice"
-                          checked={hasRefund}
-                          onChange={() => {
-                            setHasRefund(true);
-                            setRefundAmount(Math.round(actualCashReceived * 0.5));
-                          }}
-                          className="accent-purple-600 cursor-pointer"
-                        />
-                        <span>Có hoàn tiền một phần cho khách</span>
-                      </label>
-                    </div>
-
-                    {hasRefund && (
-                      <div className="pt-2 border-t border-slate-100 space-y-2">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <span className="text-slate-500 text-[11px] font-medium">Gợi ý nhanh:</span>
-                          <button
-                            type="button"
-                            onClick={() => setRefundAmount(Math.round(actualCashReceived * 0.3))}
-                            className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-purple-800 font-bold border border-slate-200 cursor-pointer shadow-xs"
-                          >
-                            Hoàn 30%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRefundAmount(Math.round(actualCashReceived * 0.5))}
-                            className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-purple-800 font-bold border border-slate-200 cursor-pointer shadow-xs"
-                          >
-                            Hoàn 50%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRefundAmount(actualCashReceived)}
-                            className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-purple-800 font-bold border border-slate-200 cursor-pointer shadow-xs"
-                          >
-                            Hoàn 100%
-                          </button>
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] text-slate-600 block mb-1 font-medium">
-                            Số tiền hoàn trả (VNĐ, tối đa {actualCashReceived.toLocaleString("vi-VN")}đ):
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={actualCashReceived}
-                            step="any"
-                            value={refundAmount}
-                            onChange={(e) => setRefundAmount(Math.min(actualCashReceived, Math.max(0, parseInt(e.target.value) || 0)))}
-                            className="w-full px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 shadow-xs"
-                          />
-                        </div>
-
-                        <div className="p-2 rounded bg-slate-50 text-[11px] space-y-0.5 border border-slate-200">
-                          <div className="flex justify-between text-slate-500">
-                            <span>Khách đã đóng thực tế:</span>
-                            <span className="font-mono font-bold">{actualCashReceived.toLocaleString("vi-VN")}đ</span>
-                          </div>
-                          <div className="flex justify-between text-rose-700 font-medium">
-                            <span>Số tiền hoàn trả:</span>
-                            <span className="font-mono font-bold">-{refundAmount.toLocaleString("vi-VN")}đ</span>
-                          </div>
-                          <div className="flex justify-between text-emerald-800 font-bold pt-1 border-t border-slate-200">
-                            <span>Doanh thu giữ lại thực tế:</span>
-                            <span className="font-mono">{Math.max(0, actualCashReceived - refundAmount).toLocaleString("vi-VN")}đ</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Reason input */}
-                  <div>
-                    <label className="text-[11px] text-slate-700 block mb-1 font-bold">
-                      Lý do No-Show / Hủy vi phạm:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="VD: Khách báo bận không đến được, Khách tắt máy..."
-                      value={noShowReason}
-                      onChange={(e) => setNoShowReason(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 shadow-xs"
-                    />
-                  </div>
-
-                  {noShowError && <p className="text-xs text-rose-700 font-semibold">{noShowError}</p>}
-
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold"
-                      isLoading={noShowing}
-                      onClick={handleNoShowBooking}
-                    >
-                      Xác nhận No-Show
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowConfirmNoShow(false)}
-                    >
-                      Đóng
-                    </Button>
-                  </div>
-                </div>
+              {/* Unified cancel flow (reason → refund → confirm); "No-show" is one of the reasons */}
+              {showConfirmCancel && canClose && (
+                <CancelBookingPanel
+                  booking={currentBooking}
+                  onClosed={handleBookingClosed}
+                  onError={async (status, data) => {
+                    if (isVersionConflict(status, data) || status === 409) await refetchBooking();
+                  }}
+                  onDismiss={() => setShowConfirmCancel(false)}
+                />
               )}
             </>
           )}
@@ -1205,31 +898,18 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
         {/* Drawer Footer */}
         <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {mode === "view" && currentBooking.status === "confirmed" && !isPastCheckout && !showConfirmNoShow && !showConfirmCancel && (
+            {mode === "view" && canClose && !showConfirmCancel && (
               <button
                 type="button"
-                onClick={() => {
-                  setShowConfirmNoShow(true);
-                  setShowConfirmCancel(false);
-                }}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                onClick={() => setShowConfirmCancel(true)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
-                <span>🚫</span>
-                <span>Khách không đến (No-Show)</span>
+                <span>⛔</span>
+                <span>Huỷ đặt phòng / No-show</span>
               </button>
             )}
-
-            {mode === "view" && !showConfirmCancel && !showConfirmNoShow && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowConfirmCancel(true);
-                  setShowConfirmNoShow(false);
-                }}
-                className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold underline underline-offset-2 transition-colors cursor-pointer"
-              >
-                Xóa / Hủy đặt phòng này
-              </button>
+            {mode === "view" && !isClosed && !canClose && (
+              <span className="text-[11px] text-slate-500 italic">Đã qua giờ trả phòng — không thể huỷ.</span>
             )}
           </div>
 

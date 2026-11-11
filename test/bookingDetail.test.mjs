@@ -51,6 +51,7 @@ const sampleBookingDto = {
   lifecycle: {
     cancelledAt: null,
     cancelReason: null,
+    closureReasonCode: null,
     cancelledBy: null,
     noShowAt: null,
     noShowReason: null,
