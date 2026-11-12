@@ -6,11 +6,20 @@ import { BookingType } from "@/types";
 interface BookingTypeTabsProps {
   selectedType: BookingType;
   onChangeType: (type: BookingType) => void;
+  /**
+   * Edit mode: the booking type decides how the whole stay is priced, so it cannot be switched on an existing
+   * booking. Only this type stays selectable (it is the current one); the others are shown but locked.
+   */
+  lockedType?: BookingType;
+  /** Shown under the tabs while locked: why, and what to do instead (e.g. a "Huỷ & tạo lại" button). */
+  lockedHint?: React.ReactNode;
 }
 
 export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
   selectedType,
   onChangeType,
+  lockedType,
+  lockedHint,
 }) => {
   const types: { id: BookingType; label: string; icon: string; desc: string }[] = [
     {
@@ -48,14 +57,23 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
         {types.map((t) => {
           const isSelected = selectedType === t.id;
           const isCustom = t.id === "custom";
+          const isLocked = lockedType !== undefined && t.id !== lockedType;
 
           return (
             <button
               key={t.id}
               type="button"
-              onClick={() => onChangeType(t.id)}
-              className={`p-3 rounded-xl border text-left transition-all relative select-none cursor-pointer ${
-                isSelected
+              aria-disabled={isLocked || undefined}
+              aria-pressed={isSelected}
+              title={isLocked ? "Không đổi được hình thức của đơn đã tạo. Hãy huỷ đơn và tạo lại." : undefined}
+              onClick={() => {
+                if (isLocked) return;
+                onChangeType(t.id);
+              }}
+              className={`p-3 rounded-xl border text-left transition-all relative select-none ${isLocked ? "cursor-not-allowed" : "cursor-pointer"} ${
+                isLocked
+                  ? "bg-slate-100 border-slate-200 border-dashed"
+                  : isSelected
                   ? isCustom
                     ? "bg-fuchsia-50 border-fuchsia-500 shadow-xs ring-2 ring-fuchsia-500/20"
                     : "bg-emerald-50 border-emerald-600 shadow-xs ring-2 ring-emerald-600/20"
@@ -66,7 +84,9 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
                 <span className="text-base">{t.icon}</span>
                 <span
                   className={`text-sm font-bold truncate ${
-                    isSelected
+                    isLocked
+                      ? "text-slate-500"
+                      : isSelected
                       ? isCustom
                         ? "text-fuchsia-900"
                         : "text-emerald-900"
@@ -77,7 +97,7 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 font-medium">
-                {t.desc}
+                {isLocked ? "🔒 Đã khoá" : t.desc}
               </p>
               {isSelected && (
                 <div
@@ -92,6 +112,12 @@ export const BookingTypeTabs: React.FC<BookingTypeTabsProps> = ({
           );
         })}
       </div>
+      {lockedType !== undefined && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-medium text-slate-600">
+          <span>🔒 Hình thức đặt phòng không đổi được sau khi tạo đơn. Muốn đổi: huỷ đơn (hoàn tiền) rồi tạo đơn mới.</span>
+          {lockedHint}
+        </div>
+      )}
     </div>
   );
 };

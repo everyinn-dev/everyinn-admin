@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Booking, BookingType, GanttBookingItem, PricingRule, Room, SurchargeRule } from "@/types";
 import { Promotion } from "@/types/promotions";
 import { calculatePrice } from "@/lib/pricing";
+import { hasMoneyReason, initialCustomPrice, moneyEditState } from "@/lib/bookingEdit";
 import { roundToNearest30Min, toVnDateInput, getVnHour } from "@/lib/timelineUtils";
 import { BookingTypeTabs } from "../bookings/BookingTypeTabs";
 import { HourlyFields } from "../bookings/HourlyFields";
@@ -20,9 +21,11 @@ interface BookingEditFormProps {
   initialBooking?: GanttBookingItem | Booking | null;
   onSuccess: (updatedBooking: Booking) => void;
   onCancel: () => void;
+  /** "Huỷ & tạo lại": the booking type cannot be changed here, so the drawer opens the cancel flow instead. */
+  onRequestRebook?: () => void;
 }
 
-function extractBookingFields(b: Booking | GanttBookingItem) {
+export function extractBookingFields(b: Booking | GanttBookingItem) {
   const roomId = (b as Booking).room_id ?? (b as GanttBookingItem).roomId ?? "";
   const bookingType = ((b as Booking).booking_type ?? (b as GanttBookingItem).bookingType ?? "hourly") as BookingType;
   const note = b.note ?? "";
@@ -47,11 +50,8 @@ function extractBookingFields(b: Booking | GanttBookingItem) {
   const durationH = Math.max(3, Math.round((outDate.getTime() - inDate.getTime()) / (3600 * 1000)));
   const nights = Math.max(1, Math.round((outDate.getTime() - inDate.getTime()) / (24 * 3600 * 1000)));
 
-  // For custom price:
-  // If the booking has been extended (+1h) or has extraFee, total stay price = totalPrice - incidentalFee.
-  // Or basePrice + extraFee.
-  const stayTotal = Math.max(0, totalPrice - incidentalFee);
-  const customPrice = stayTotal || (basePrice + extraFee) || 0;
+  const customPrice = initialCustomPrice({ base_price: basePrice, total_price: totalPrice, incidental_fee: incidentalFee });
+  void extraFee;
 
   return {
     roomId,
@@ -77,6 +77,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   initialBooking,
   onSuccess,
   onCancel,
+  onRequestRebook,
 }) => {
   const toast = useToast();
   const initialFields = useMemo(() => (initialBooking ? extractBookingFields(initialBooking) : null), [initialBooking]);
@@ -94,8 +95,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [note, setNote] = useState(initialFields?.note ?? "");
   const [closingNote, setClosingNote] = useState(initialFields?.closingNote ?? "");
 
-  // Incidental charges state ("Thêm phát sinh")
-  const [showIncidental, setShowIncidental] = useState((initialFields?.incidentalFee ?? 0) > 0);
+  // Incidental charges are added / voided in the drawer's "Phụ phí & phát sinh" section, not here. The form only
+  // shows what the booking already carries so the price preview adds up.
   const [incidentalFee, setIncidentalFee] = useState(initialFields?.incidentalFee ?? 0);
   const [incidentalReason, setIncidentalReason] = useState(initialFields?.incidentalReason ?? "");
 
@@ -122,6 +123,13 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [customCheckoutDate, setCustomCheckoutDate] = useState(initialFields?.outDateStr ?? "");
   const [customCheckoutTime, setCustomCheckoutTime] = useState(initialFields?.outTimeStr ?? "12:00");
   const [customPrice, setCustomPrice] = useState(initialFields?.customPrice ?? 0);
+
+  // The type the booking was created with: it cannot be changed on edit (cancel + re-create instead).
+  const originalType = useMemo<BookingType>(() => (booking ? extractBookingFields(booking).bookingType : (initialFields?.bookingType ?? "hourly")), [booking, initialFields]);
+  const originalFields = useMemo(() => (booking ? extractBookingFields(booking) : initialFields), [booking, initialFields]);
+
+  // Why money changed (custom price / incidental charge): required, goes to the audit trail.
+  const [moneyReason, setMoneyReason] = useState("");
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -165,7 +173,6 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
 
       setIncidentalFee(fields.incidentalFee);
       setIncidentalReason(fields.incidentalReason);
-      setShowIncidental(fields.incidentalFee > 0);
 
       // Set date & time fields in Vietnam timezone
       setHourlyDate(fields.inDateStr);
@@ -185,6 +192,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       setCustomCheckoutDate(fields.outDateStr);
       setCustomCheckoutTime(fields.outTimeStr);
       setCustomPrice(fields.customPrice);
+      setMoneyReason("");
     } catch (err: any) {
       setErrorMessage(err.message || "Lỗi tải dữ liệu đặt phòng.");
     } finally {
@@ -302,7 +310,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         }
       }
 
-      const activeIncidental = showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0;
+      const activeIncidental = Math.max(0, Number(incidentalFee) || 0);
       const totalBeforeIncidental = Math.max(
         0,
         raw.basePrice + raw.holidaySurcharge + raw.totalExtraFee + raw.extraGuestFee - promoDiscount
@@ -333,13 +341,22 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
     calculatedCheckoutAt,
     calculatedLateHours,
     customPrice,
-    showIncidental,
     incidentalFee,
   ]);
+
+  const moneyState = moneyEditState({ originalType, originalCustomPrice: originalFields?.customPrice ?? customPrice, customPrice });
+  const { customPriceChanged, needsReason: needsMoneyReason } = moneyState;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+
+    if (!hasMoneyReason(moneyState, moneyReason)) {
+      const err = "Vui lòng nhập lý do khi đổi giá.";
+      setErrorMessage(err);
+      toast.warning(err, "Thiếu lý do");
+      return;
+    }
 
     if (!selectedRoom) {
       const err = "Vui lòng chọn phòng hợp lệ.";
@@ -378,15 +395,15 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           action: "update",
           expectedVersion: expectedVer,
           roomId,
-          bookingType,
+          // bookingType is deliberately not sent: it is locked to the booking's own type (Core 422 BOOKING_TYPE_LOCKED).
           checkinAt: calculatedCheckinAt.toISOString(),
           checkoutAt: calculatedCheckoutAt.toISOString(),
           lateCheckoutHours: calculatedLateHours,
-          customPrice: bookingType === "custom" ? customPrice : 0,
+          // Only a price the receptionist actually changed is sent; an untouched price is never re-sent as a "new base".
+          ...(customPriceChanged ? { customPrice } : {}),
           note,
           closingNote,
-          incidentalFee: showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0,
-          incidentalReason: showIncidental && incidentalReason ? incidentalReason.trim() : null,
+          ...(needsMoneyReason && moneyReason.trim() ? { reason: moneyReason.trim() } : {}),
         }),
       });
 
@@ -455,7 +472,22 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       </div>
 
       {/* Booking Type Selector */}
-      <BookingTypeTabs selectedType={bookingType} onChangeType={setBookingType} />
+      <BookingTypeTabs
+        selectedType={bookingType}
+        onChangeType={setBookingType}
+        lockedType={originalType}
+        lockedHint={
+          onRequestRebook ? (
+            <button
+              type="button"
+              onClick={onRequestRebook}
+              className="rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
+            >
+              ⛔ Huỷ &amp; tạo lại
+            </button>
+          ) : null
+        }
+      />
 
       {/* Form Fields Based on Booking Type */}
       {bookingType === "hourly" && (
@@ -529,71 +561,21 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         </div>
       )}
 
-      {/* Incidental / Surcharge Section (Nút Thêm Phát Sinh) */}
-      {!showIncidental ? (
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => setShowIncidental(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl border border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/50 hover:bg-purple-50 text-purple-900 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-          >
-            <span>➕</span>
-            <span>Thêm phát sinh</span>
-            <span className="text-[11px] font-normal text-purple-700">(Đền bù, bán thêm dịch vụ, tips...)</span>
-          </button>
-        </div>
-      ) : (
-        <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50/80 to-indigo-50/60 border border-purple-200 space-y-3 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-950 uppercase tracking-wide flex items-center gap-1.5">
-              <span>⚡</span> Chi phí phát sinh cộng thêm
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setShowIncidental(false);
-                setIncidentalFee(0);
-                setIncidentalReason("");
-              }}
-              className="text-xs text-slate-400 hover:text-rose-600 font-semibold cursor-pointer"
-            >
-              ✕ Xóa phát sinh
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-purple-900">
-                Số tiền phát sinh (VNĐ) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                min={0}
-                step={1000}
-                value={incidentalFee || ""}
-                onChange={(e) => setIncidentalFee(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="VD: 150000"
-                className="w-full rounded-lg bg-white border border-purple-300 px-3 py-1.5 text-sm font-mono font-bold text-purple-950 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-purple-900">
-                Lý do / Nội dung phát sinh
-              </label>
-              <input
-                type="text"
-                value={incidentalReason}
-                onChange={(e) => setIncidentalReason(e.target.value)}
-                placeholder="VD: Đền bù vỡ ly, minibar 2 lon nước, giặt ủi..."
-                className="w-full rounded-lg bg-white border border-purple-300 px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
-              />
-            </div>
-          </div>
-
-          <p className="text-[11px] text-purple-800/90 italic">
-            💡 Số tiền phát sinh được cộng thẳng vào tổng thanh toán cuối cùng của đơn (không áp dụng chiết khấu mã khuyến mãi).
-          </p>
+      {needsMoneyReason && (
+        <div className="space-y-1.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5">
+          <label htmlFor="money-reason" className="block text-xs font-bold text-amber-900 uppercase tracking-wide">
+            Lý do đổi giá <span className="text-rose-600">*</span>
+          </label>
+          <input
+            id="money-reason"
+            type="text"
+            maxLength={500}
+            value={moneyReason}
+            onChange={(e) => setMoneyReason(e.target.value)}
+            placeholder="VD: Khách quen, giảm 50k theo thoả thuận"
+            className="w-full rounded-xl bg-white border border-amber-300 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20"
+          />
+          <p className="text-[11px] text-amber-800">Lý do được ghi vào nhật ký của đơn cùng giá trước / sau.</p>
         </div>
       )}
 
@@ -604,8 +586,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           selectedRoom={selectedRoom}
           numGuests={numGuests}
           promotionName={promotionName || undefined}
-          incidentalFee={showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0}
-          incidentalReason={showIncidental && incidentalReason ? incidentalReason : undefined}
+          incidentalFee={Math.max(0, Number(incidentalFee) || 0)}
+          incidentalReason={incidentalReason ? incidentalReason : undefined}
         />
       )}
 

@@ -2,6 +2,7 @@ export type RoomClass = "haven" | "signature";
 
 export type BookingType = "hourly" | "overnight" | "dayuse" | "custom";
 
+import type { ChargeLine } from "@/lib/charges";
 export type BookingStatus = "confirmed" | "pending" | "holding" | "cancelled" | "no_show";
 /** Unified cancel flow: why a booking was closed. 'no_show' ⇔ status no_show, the rest ⇔ cancelled. */
 export type ClosureReasonCode = "guest_cancel" | "no_show" | "property_cancel" | "staff_error" | "other";
@@ -225,6 +226,8 @@ export interface Booking extends ControlFields {
   cancel_reason?: string;
   cancelled_by?: number;
   cancelled_by_staff_name?: string | null;
+  /** Stay charges added after the booking was created (+N hours, early / late, incidental). */
+  charges?: ChargeLine[];
   /** Why the booking was closed (cancel or no-show). */
   closure_reason_code?: ClosureReasonCode | null;
   /** Money kept = received − refunded (ledger projection from Booking Core). */
@@ -336,6 +339,7 @@ export interface GanttBookingItem {
   originalPrice?: number;
   cancelledAt?: string;
   cancelledByStaffName?: string | null;
+  charges?: ChargeLine[];
   cancelReason?: string;
   closureReasonCode?: ClosureReasonCode | null;
   /** received − refunded; for a closed booking this is the amount retained. */
