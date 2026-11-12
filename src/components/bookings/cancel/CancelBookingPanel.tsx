@@ -14,6 +14,8 @@ interface CancelBookingPanelProps {
   /** Called with the BFF error when Core rejects the command (the drawer decides: reload vs show message). */
   onError: (status: number, data: BffError) => Promise<void> | void;
   onDismiss: () => void;
+  /** Open with this reason already chosen (e.g. "Huỷ & tạo lại" from the edit form). */
+  initialReason?: ClosureReasonCode;
 }
 
 const vnd = (n: number) => `${Math.max(0, Math.round(n)).toLocaleString("vi-VN")}đ`;
@@ -22,14 +24,17 @@ const vnd = (n: number) => `${Math.max(0, Math.round(n)).toLocaleString("vi-VN")
  * "Huỷ đặt phòng" — one flow for every way a booking ends early (No-show included).
  * Step 1: why (reason code). Step 2: money (refund 0…received, the rest is retained). Step 3: confirm.
  */
-export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking, onClosed, onError, onDismiss }) => {
+export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking, onClosed, onError, onDismiss, initialReason }) => {
   const received = netReceivedOf(booking);
   const isPending = booking.status === "pending";
+  // From the check-in time until checkout the guest may already be in the room.
+  const inHouse = Date.now() >= Date.parse(booking.checkinAt);
+  const initial = CLOSURE_REASONS.find((r) => r.code === initialReason && !(r.code === "no_show" && isPending)) ?? null;
 
-  const [reasonCode, setReasonCode] = useState<ClosureReasonCode | null>(null);
+  const [reasonCode, setReasonCode] = useState<ClosureReasonCode | null>(initial?.code ?? null);
   const [note, setNote] = useState("");
-  const [refundChoice, setRefundChoice] = useState<RefundChoice>("none");
-  const [partialAmount, setPartialAmount] = useState(0);
+  const [refundChoice, setRefundChoice] = useState<RefundChoice>(received > 0 && initial?.defaultRefund === "full" ? "full" : "none");
+  const [partialAmount, setPartialAmount] = useState(received);
   const [refundMethod, setRefundMethod] = useState<RefundMethod>("cash");
   const [refundReference, setRefundReference] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -105,6 +110,12 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
           Hồ sơ thành viên và điểm tích luỹ không thay đổi.
         </p>
       </div>
+
+      {inHouse && (
+        <p role="note" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
+          ⚠️ Đã qua giờ nhận phòng — khách có thể đang ở. Chỉ huỷ khi chắc chắn; tiền đã thu phải được hoàn hoặc giữ lại rõ ràng ở bước 2.
+        </p>
+      )}
 
       {/* 1. Reason */}
       <fieldset className="space-y-1.5 bg-white p-3 rounded-lg border border-rose-200 shadow-xs">

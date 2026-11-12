@@ -220,7 +220,9 @@ export async function PATCH(
       };
 
       if (body.roomId) updatePayload.roomId = body.roomId;
+      // bookingType is locked on edit (Core: 422 BOOKING_TYPE_LOCKED) — only forwarded so Core can refuse a change.
       if (body.bookingType) updatePayload.bookingType = body.bookingType;
+      if (typeof body.reason === "string" && body.reason.trim()) updatePayload.reason = body.reason.trim().slice(0, 500);
       if (body.checkinAt) updatePayload.checkinAt = body.checkinAt;
       if (body.checkoutAt) updatePayload.checkoutAt = body.checkoutAt;
       if (body.earlyCheckinHours !== undefined) updatePayload.earlyCheckinHours = Number(body.earlyCheckinHours);
