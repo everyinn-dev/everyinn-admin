@@ -12,7 +12,7 @@ import { ChargeSheet } from "./ChargeSheet";
 
 interface ChargesSectionProps {
   booking: GanttBookingItem;
-  /** Closed or past-checkout bookings only list their charges. */
+  /** Closed (cancelled / no-show) bookings only list their charges. A stay past checkout can still get charges. */
   readOnly: boolean;
   onChanged: (result: { booking: Record<string, unknown>; message: string }) => void;
   onError: (status: number, data: BffError) => Promise<void> | void;
@@ -29,7 +29,7 @@ export const ChargesSection: React.FC<ChargesSectionProps> = ({ booking, readOnl
   const [sheet, setSheet] = useState<{ kind: ChargeKind; hours: number } | null>(null);
   const [voiding, setVoiding] = useState<ChargeLine | null>(null);
   const lines = booking.charges ?? [];
-  const presets = chargePresets(booking.bookingType);
+  const presets = chargePresets(booking.bookingType, { checkinAt: booking.checkinAt });
 
   if (readOnly && lines.length === 0) return null;
 

@@ -57,14 +57,25 @@ export const CHARGE_KIND_ICON: Record<ChargeKind, string> = {
   incidental: "🧾",
 };
 
-/** Which kinds the business rules allow for a booking type (Core is the authority; this only hides impossible buttons). */
-export function availableChargeKinds(bookingType: BookingType): ChargeKind[] {
+export interface ChargeTiming {
+  checkinAt: string;
+  /** injectable for tests */
+  nowMs?: number;
+}
+
+/**
+ * Which kinds the business rules allow for a booking type (Core is the authority; this only hides impossible buttons).
+ * Charges stay open AFTER checkout (a broken glass found in the room, a guest who left late): only "nhận sớm" goes away
+ * once the check-in time has passed, because there is nothing left to be early for.
+ */
+export function availableChargeKinds(bookingType: BookingType, timing?: ChargeTiming): ChargeKind[] {
+  const started = timing ? (timing.nowMs ?? Date.now()) >= Date.parse(timing.checkinAt) : false;
   switch (bookingType) {
     case "hourly":
       return ["extension", "incidental"];
     case "overnight":
     case "dayuse":
-      return ["early_checkin", "late_checkout", "incidental"];
+      return started ? ["late_checkout", "incidental"] : ["early_checkin", "late_checkout", "incidental"];
     default:
       return ["incidental"]; // custom: hand-typed price, no per-hour charge
   }
@@ -78,8 +89,8 @@ export interface ChargePreset {
 }
 
 /** The quick buttons. Each one just opens the sheet with a kind (and hours) already chosen. */
-export function chargePresets(bookingType: BookingType): ChargePreset[] {
-  const kinds = availableChargeKinds(bookingType);
+export function chargePresets(bookingType: BookingType, timing?: ChargeTiming): ChargePreset[] {
+  const kinds = availableChargeKinds(bookingType, timing);
   const out: ChargePreset[] = [];
   if (kinds.includes("extension")) out.push({ id: "plus1h", label: "+1h Checkout", kind: "extension", hours: 1 });
   if (kinds.includes("early_checkin")) out.push({ id: "early", label: "Nhận sớm", kind: "early_checkin", hours: 1 });

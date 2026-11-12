@@ -20,6 +20,17 @@ test("the quick buttons are presets of the one sheet: +1h for every non-custom t
   }
 });
 
+test("charges stay open after checkout; only early check-in goes away once the check-in time has passed", () => {
+  const NOW = Date.parse("2026-11-12T10:00:00.000Z");
+  const started = { checkinAt: "2026-11-12T01:00:00.000Z", nowMs: NOW }; // already past check-in (and past checkout)
+  const upcoming = { checkinAt: "2026-11-12T15:00:00.000Z", nowMs: NOW };
+  assert.deepEqual(availableChargeKinds("overnight", started), ["late_checkout", "incidental"]);
+  assert.deepEqual(availableChargeKinds("dayuse", upcoming), ["early_checkin", "late_checkout", "incidental"]);
+  assert.deepEqual(availableChargeKinds("hourly", started), ["extension", "incidental"]);
+  assert.deepEqual(availableChargeKinds("custom", started), ["incidental"]);
+  assert.deepEqual(chargePresets("overnight", started).map((p) => p.kind), ["late_checkout", "incidental"]);
+});
+
 test("a fee different from the table (or any incidental charge) needs a reason", () => {
   assert.equal(chargeNeedsReason("incidental", 100_000, 100_000, false), true);
   assert.equal(chargeNeedsReason("extension", 60_000, 60_000, false), false);
