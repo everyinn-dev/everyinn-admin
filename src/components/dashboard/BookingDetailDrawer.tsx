@@ -12,7 +12,7 @@ import { notifyDataChanged } from "@/lib/syncEvents";
 import { CancelBookingPanel } from "@/components/bookings/cancel/CancelBookingPanel";
 import { ClosedBookingBanner } from "@/components/bookings/cancel/ClosedBookingBanner";
 import { bookingRowToItem, canCloseBooking, isClosedBooking, isVersionConflict, netReceivedOf, type BffError } from "@/lib/bookingClosure";
-import type { Booking } from "@/types";
+import type { Booking, ClosureReasonCode } from "@/types";
 
 /** Overlay a fresh row on the current item without wiping fields the row does not carry. */
 function mergeFresh(current: GanttBookingItem, row: Booking): GanttBookingItem {
@@ -46,6 +46,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
 
   // Cancel state (one flow: cancel with a reason; "No-show" is one of the reasons)
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  const [cancelInitialReason, setCancelInitialReason] = useState<ClosureReasonCode | undefined>(undefined);
 
   // Complete Deposit Payment state
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -410,6 +411,12 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               initialBooking={currentBooking}
               onSuccess={handleEditSuccess}
               onCancel={() => setMode("view")}
+              onRequestRebook={() => {
+                // Booking type / price plan cannot be edited: close the form and open the cancel flow (refund) to re-create.
+                setMode("view");
+                setCancelInitialReason("staff_error");
+                setShowConfirmCancel(true);
+              }}
             />
           ) : (
             <>
@@ -419,7 +426,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               {/* Primary Action Buttons (+1h & Edit) */}
               {!isClosed && (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className={`grid gap-2.5 ${currentBooking.bookingType === "custom" ? "grid-cols-1" : "grid-cols-2"}`}>
+                    {currentBooking.bookingType !== "custom" && (
                     <button
                       type="button"
                       disabled={extending || isPastCheckout}
@@ -435,6 +443,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                         </>
                       )}
                     </button>
+                    )}
 
                     <button
                       type="button"
@@ -883,12 +892,17 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               {/* Unified cancel flow (reason → refund → confirm); "No-show" is one of the reasons */}
               {showConfirmCancel && canClose && (
                 <CancelBookingPanel
+                  key={cancelInitialReason ?? "pick"}
+                  initialReason={cancelInitialReason}
                   booking={currentBooking}
                   onClosed={handleBookingClosed}
                   onError={async (status, data) => {
                     if (isVersionConflict(status, data) || status === 409) await refetchBooking();
                   }}
-                  onDismiss={() => setShowConfirmCancel(false)}
+                  onDismiss={() => {
+                    setShowConfirmCancel(false);
+                    setCancelInitialReason(undefined);
+                  }}
                 />
               )}
             </>
@@ -901,7 +915,10 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
             {mode === "view" && canClose && !showConfirmCancel && (
               <button
                 type="button"
-                onClick={() => setShowConfirmCancel(true)}
+                onClick={() => {
+                  setCancelInitialReason(undefined);
+                  setShowConfirmCancel(true);
+                }}
                 className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <span>⛔</span>

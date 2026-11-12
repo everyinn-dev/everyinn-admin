@@ -21,7 +21,7 @@ export const CLOSURE_REASONS: readonly ClosureReasonOption[] = [
   { code: "guest_cancel", label: "Khách chủ động huỷ", hint: "Chính sách: không hoàn tiền cọc khi khách tự huỷ.", defaultRefund: "none", noteRequired: false },
   { code: "no_show", label: "Khách không đến (No-show)", hint: "Ghi nhận No-show; chỉ áp dụng cho đơn đã xác nhận.", defaultRefund: "none", noteRequired: false },
   { code: "property_cancel", label: "Khách sạn huỷ (sự cố phòng / overbook)", hint: "Lỗi phía khách sạn: mặc định hoàn toàn bộ.", defaultRefund: "full", noteRequired: false },
-  { code: "staff_error", label: "Tạo nhầm / trùng đơn", hint: "Lỗi thao tác: mặc định hoàn toàn bộ số đã thu.", defaultRefund: "full", noteRequired: false },
+  { code: "staff_error", label: "Tạo nhầm / đổi hình thức (tạo lại đơn)", hint: "Đặt nhầm hoặc cần đổi hình thức: huỷ, hoàn toàn bộ số đã thu rồi tạo đơn mới cho khách.", defaultRefund: "full", noteRequired: false },
   { code: "other", label: "Lý do khác", hint: "Bắt buộc ghi rõ lý do.", defaultRefund: "none", noteRequired: true },
 ];
 

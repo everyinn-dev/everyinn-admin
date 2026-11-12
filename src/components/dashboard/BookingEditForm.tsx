@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Booking, BookingType, GanttBookingItem, PricingRule, Room, SurchargeRule } from "@/types";
 import { Promotion } from "@/types/promotions";
 import { calculatePrice } from "@/lib/pricing";
+import { hasMoneyReason, initialCustomPrice, moneyEditState } from "@/lib/bookingEdit";
 import { roundToNearest30Min, toVnDateInput, getVnHour } from "@/lib/timelineUtils";
 import { BookingTypeTabs } from "../bookings/BookingTypeTabs";
 import { HourlyFields } from "../bookings/HourlyFields";
@@ -20,9 +21,11 @@ interface BookingEditFormProps {
   initialBooking?: GanttBookingItem | Booking | null;
   onSuccess: (updatedBooking: Booking) => void;
   onCancel: () => void;
+  /** "Huỷ & tạo lại": the booking type cannot be changed here, so the drawer opens the cancel flow instead. */
+  onRequestRebook?: () => void;
 }
 
-function extractBookingFields(b: Booking | GanttBookingItem) {
+export function extractBookingFields(b: Booking | GanttBookingItem) {
   const roomId = (b as Booking).room_id ?? (b as GanttBookingItem).roomId ?? "";
   const bookingType = ((b as Booking).booking_type ?? (b as GanttBookingItem).bookingType ?? "hourly") as BookingType;
   const note = b.note ?? "";
@@ -47,11 +50,8 @@ function extractBookingFields(b: Booking | GanttBookingItem) {
   const durationH = Math.max(3, Math.round((outDate.getTime() - inDate.getTime()) / (3600 * 1000)));
   const nights = Math.max(1, Math.round((outDate.getTime() - inDate.getTime()) / (24 * 3600 * 1000)));
 
-  // For custom price:
-  // If the booking has been extended (+1h) or has extraFee, total stay price = totalPrice - incidentalFee.
-  // Or basePrice + extraFee.
-  const stayTotal = Math.max(0, totalPrice - incidentalFee);
-  const customPrice = stayTotal || (basePrice + extraFee) || 0;
+  const customPrice = initialCustomPrice({ base_price: basePrice, total_price: totalPrice, incidental_fee: incidentalFee });
+  void extraFee;
 
   return {
     roomId,
@@ -77,6 +77,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   initialBooking,
   onSuccess,
   onCancel,
+  onRequestRebook,
 }) => {
   const toast = useToast();
   const initialFields = useMemo(() => (initialBooking ? extractBookingFields(initialBooking) : null), [initialBooking]);
@@ -122,6 +123,13 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [customCheckoutDate, setCustomCheckoutDate] = useState(initialFields?.outDateStr ?? "");
   const [customCheckoutTime, setCustomCheckoutTime] = useState(initialFields?.outTimeStr ?? "12:00");
   const [customPrice, setCustomPrice] = useState(initialFields?.customPrice ?? 0);
+
+  // The type the booking was created with: it cannot be changed on edit (cancel + re-create instead).
+  const originalType = useMemo<BookingType>(() => (booking ? extractBookingFields(booking).bookingType : (initialFields?.bookingType ?? "hourly")), [booking, initialFields]);
+  const originalFields = useMemo(() => (booking ? extractBookingFields(booking) : initialFields), [booking, initialFields]);
+
+  // Why money changed (custom price / incidental charge): required, goes to the audit trail.
+  const [moneyReason, setMoneyReason] = useState("");
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -185,6 +193,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       setCustomCheckoutDate(fields.outDateStr);
       setCustomCheckoutTime(fields.outTimeStr);
       setCustomPrice(fields.customPrice);
+      setMoneyReason("");
     } catch (err: any) {
       setErrorMessage(err.message || "Lỗi tải dữ liệu đặt phòng.");
     } finally {
@@ -337,9 +346,28 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
     incidentalFee,
   ]);
 
+  const moneyState = moneyEditState({
+    originalType,
+    originalCustomPrice: originalFields?.customPrice ?? customPrice,
+    customPrice,
+    originalIncidentalFee: originalFields?.incidentalFee ?? 0,
+    originalIncidentalReason: originalFields?.incidentalReason ?? "",
+    showIncidental,
+    incidentalFee,
+    incidentalReason,
+  });
+  const { activeIncidental, customPriceChanged, needsReason: needsMoneyReason } = moneyState;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+
+    if (!hasMoneyReason(moneyState, moneyReason, incidentalReason)) {
+      const err = "Vui lòng nhập lý do khi đổi giá hoặc thêm/sửa khoản phát sinh.";
+      setErrorMessage(err);
+      toast.warning(err, "Thiếu lý do");
+      return;
+    }
 
     if (!selectedRoom) {
       const err = "Vui lòng chọn phòng hợp lệ.";
@@ -378,15 +406,17 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           action: "update",
           expectedVersion: expectedVer,
           roomId,
-          bookingType,
+          // bookingType is deliberately not sent: it is locked to the booking's own type (Core 422 BOOKING_TYPE_LOCKED).
           checkinAt: calculatedCheckinAt.toISOString(),
           checkoutAt: calculatedCheckoutAt.toISOString(),
           lateCheckoutHours: calculatedLateHours,
-          customPrice: bookingType === "custom" ? customPrice : 0,
+          // Only a price the receptionist actually changed is sent; an untouched price is never re-sent as a "new base".
+          ...(customPriceChanged ? { customPrice } : {}),
           note,
           closingNote,
-          incidentalFee: showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0,
+          incidentalFee: activeIncidental,
           incidentalReason: showIncidental && incidentalReason ? incidentalReason.trim() : null,
+          ...(needsMoneyReason && moneyReason.trim() ? { reason: moneyReason.trim() } : {}),
         }),
       });
 
@@ -455,7 +485,22 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       </div>
 
       {/* Booking Type Selector */}
-      <BookingTypeTabs selectedType={bookingType} onChangeType={setBookingType} />
+      <BookingTypeTabs
+        selectedType={bookingType}
+        onChangeType={setBookingType}
+        lockedType={originalType}
+        lockedHint={
+          onRequestRebook ? (
+            <button
+              type="button"
+              onClick={onRequestRebook}
+              className="rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
+            >
+              ⛔ Huỷ &amp; tạo lại
+            </button>
+          ) : null
+        }
+      />
 
       {/* Form Fields Based on Booking Type */}
       {bookingType === "hourly" && (
@@ -594,6 +639,24 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           <p className="text-[11px] text-purple-800/90 italic">
             💡 Số tiền phát sinh được cộng thẳng vào tổng thanh toán cuối cùng của đơn (không áp dụng chiết khấu mã khuyến mãi).
           </p>
+        </div>
+      )}
+
+      {needsMoneyReason && (
+        <div className="space-y-1.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5">
+          <label htmlFor="money-reason" className="block text-xs font-bold text-amber-900 uppercase tracking-wide">
+            Lý do thay đổi giá / phát sinh <span className="text-rose-600">*</span>
+          </label>
+          <input
+            id="money-reason"
+            type="text"
+            maxLength={500}
+            value={moneyReason}
+            onChange={(e) => setMoneyReason(e.target.value)}
+            placeholder={customPriceChanged ? "VD: Khách quen, giảm 50k theo thoả thuận" : "VD: Đền bù vỡ ly"}
+            className="w-full rounded-xl bg-white border border-amber-300 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20"
+          />
+          <p className="text-[11px] text-amber-800">Lý do được ghi vào nhật ký của đơn cùng giá trước / sau.</p>
         </div>
       )}
 
