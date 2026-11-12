@@ -110,7 +110,6 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
 
   const checkin = new Date(currentBooking.checkinAt);
   const checkout = new Date(currentBooking.checkoutAt);
-  const isPastCheckout = new Date() > checkout;
 
   // Money actually received (ledger: received − refunded) — never assumed from totalPrice.
   const actualCashReceived = netReceivedOf(currentBooking);
@@ -473,7 +472,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               {/* Stay charges: +1h / early / late / incidental — one list, one sheet. Read-only once closed or past checkout. */}
               <ChargesSection
                 booking={currentBooking}
-                readOnly={isClosed || isPastCheckout}
+                readOnly={isClosed}
                 onChanged={handleChargesChanged}
                 onError={async (status, data) => {
                   if (isVersionConflict(status, data) || status === 409) await refetchBooking();

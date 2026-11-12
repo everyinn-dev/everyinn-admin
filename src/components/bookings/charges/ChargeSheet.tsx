@@ -30,7 +30,7 @@ const fmtVn = (iso: string) =>
  * Booking Core's own quote — nothing is priced in the browser.
  */
 export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, initialHours = 1, onAdded, onError, onDismiss }) => {
-  const kinds = availableChargeKinds(booking.bookingType);
+  const kinds = availableChargeKinds(booking.bookingType, { checkinAt: booking.checkinAt });
   const [kind, setKind] = useState<ChargeKind>(kinds.includes(initialKind) ? initialKind : kinds[0]!);
   const [hours, setHours] = useState(Math.min(6, Math.max(1, initialHours)));
   const [amount, setAmount] = useState(0);
