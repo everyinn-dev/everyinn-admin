@@ -96,6 +96,7 @@ export function bookingRowToItem(b: Booking): GanttBookingItem {
     cancelledByStaffName: b.cancelled_by_staff_name ?? null,
     cancelReason: b.cancel_reason,
     closureReasonCode: b.closure_reason_code ?? null,
+    charges: b.charges ?? [],
     noShowAt: b.no_show_at,
     noShowBy: b.no_show_by,
     noShowByStaffName: b.no_show_by_staff_name,

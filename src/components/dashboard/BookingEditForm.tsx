@@ -95,8 +95,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [note, setNote] = useState(initialFields?.note ?? "");
   const [closingNote, setClosingNote] = useState(initialFields?.closingNote ?? "");
 
-  // Incidental charges state ("Thêm phát sinh")
-  const [showIncidental, setShowIncidental] = useState((initialFields?.incidentalFee ?? 0) > 0);
+  // Incidental charges are added / voided in the drawer's "Phụ phí & phát sinh" section, not here. The form only
+  // shows what the booking already carries so the price preview adds up.
   const [incidentalFee, setIncidentalFee] = useState(initialFields?.incidentalFee ?? 0);
   const [incidentalReason, setIncidentalReason] = useState(initialFields?.incidentalReason ?? "");
 
@@ -173,7 +173,6 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
 
       setIncidentalFee(fields.incidentalFee);
       setIncidentalReason(fields.incidentalReason);
-      setShowIncidental(fields.incidentalFee > 0);
 
       // Set date & time fields in Vietnam timezone
       setHourlyDate(fields.inDateStr);
@@ -311,7 +310,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         }
       }
 
-      const activeIncidental = showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0;
+      const activeIncidental = Math.max(0, Number(incidentalFee) || 0);
       const totalBeforeIncidental = Math.max(
         0,
         raw.basePrice + raw.holidaySurcharge + raw.totalExtraFee + raw.extraGuestFee - promoDiscount
@@ -342,28 +341,18 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
     calculatedCheckoutAt,
     calculatedLateHours,
     customPrice,
-    showIncidental,
     incidentalFee,
   ]);
 
-  const moneyState = moneyEditState({
-    originalType,
-    originalCustomPrice: originalFields?.customPrice ?? customPrice,
-    customPrice,
-    originalIncidentalFee: originalFields?.incidentalFee ?? 0,
-    originalIncidentalReason: originalFields?.incidentalReason ?? "",
-    showIncidental,
-    incidentalFee,
-    incidentalReason,
-  });
-  const { activeIncidental, customPriceChanged, needsReason: needsMoneyReason } = moneyState;
+  const moneyState = moneyEditState({ originalType, originalCustomPrice: originalFields?.customPrice ?? customPrice, customPrice });
+  const { customPriceChanged, needsReason: needsMoneyReason } = moneyState;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!hasMoneyReason(moneyState, moneyReason, incidentalReason)) {
-      const err = "Vui lòng nhập lý do khi đổi giá hoặc thêm/sửa khoản phát sinh.";
+    if (!hasMoneyReason(moneyState, moneyReason)) {
+      const err = "Vui lòng nhập lý do khi đổi giá.";
       setErrorMessage(err);
       toast.warning(err, "Thiếu lý do");
       return;
@@ -414,8 +403,6 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           ...(customPriceChanged ? { customPrice } : {}),
           note,
           closingNote,
-          incidentalFee: activeIncidental,
-          incidentalReason: showIncidental && incidentalReason ? incidentalReason.trim() : null,
           ...(needsMoneyReason && moneyReason.trim() ? { reason: moneyReason.trim() } : {}),
         }),
       });
@@ -574,78 +561,10 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         </div>
       )}
 
-      {/* Incidental / Surcharge Section (Nút Thêm Phát Sinh) */}
-      {!showIncidental ? (
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => setShowIncidental(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl border border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/50 hover:bg-purple-50 text-purple-900 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-          >
-            <span>➕</span>
-            <span>Thêm phát sinh</span>
-            <span className="text-[11px] font-normal text-purple-700">(Đền bù, bán thêm dịch vụ, tips...)</span>
-          </button>
-        </div>
-      ) : (
-        <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50/80 to-indigo-50/60 border border-purple-200 space-y-3 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-950 uppercase tracking-wide flex items-center gap-1.5">
-              <span>⚡</span> Chi phí phát sinh cộng thêm
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setShowIncidental(false);
-                setIncidentalFee(0);
-                setIncidentalReason("");
-              }}
-              className="text-xs text-slate-400 hover:text-rose-600 font-semibold cursor-pointer"
-            >
-              ✕ Xóa phát sinh
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-purple-900">
-                Số tiền phát sinh (VNĐ) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                min={0}
-                step={1000}
-                value={incidentalFee || ""}
-                onChange={(e) => setIncidentalFee(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="VD: 150000"
-                className="w-full rounded-lg bg-white border border-purple-300 px-3 py-1.5 text-sm font-mono font-bold text-purple-950 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-purple-900">
-                Lý do / Nội dung phát sinh
-              </label>
-              <input
-                type="text"
-                value={incidentalReason}
-                onChange={(e) => setIncidentalReason(e.target.value)}
-                placeholder="VD: Đền bù vỡ ly, minibar 2 lon nước, giặt ủi..."
-                className="w-full rounded-lg bg-white border border-purple-300 px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
-              />
-            </div>
-          </div>
-
-          <p className="text-[11px] text-purple-800/90 italic">
-            💡 Số tiền phát sinh được cộng thẳng vào tổng thanh toán cuối cùng của đơn (không áp dụng chiết khấu mã khuyến mãi).
-          </p>
-        </div>
-      )}
-
       {needsMoneyReason && (
         <div className="space-y-1.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5">
           <label htmlFor="money-reason" className="block text-xs font-bold text-amber-900 uppercase tracking-wide">
-            Lý do thay đổi giá / phát sinh <span className="text-rose-600">*</span>
+            Lý do đổi giá <span className="text-rose-600">*</span>
           </label>
           <input
             id="money-reason"
@@ -653,7 +572,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
             maxLength={500}
             value={moneyReason}
             onChange={(e) => setMoneyReason(e.target.value)}
-            placeholder={customPriceChanged ? "VD: Khách quen, giảm 50k theo thoả thuận" : "VD: Đền bù vỡ ly"}
+            placeholder="VD: Khách quen, giảm 50k theo thoả thuận"
             className="w-full rounded-xl bg-white border border-amber-300 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20"
           />
           <p className="text-[11px] text-amber-800">Lý do được ghi vào nhật ký của đơn cùng giá trước / sau.</p>
@@ -667,8 +586,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           selectedRoom={selectedRoom}
           numGuests={numGuests}
           promotionName={promotionName || undefined}
-          incidentalFee={showIncidental ? Math.max(0, Number(incidentalFee) || 0) : 0}
-          incidentalReason={showIncidental && incidentalReason ? incidentalReason : undefined}
+          incidentalFee={Math.max(0, Number(incidentalFee) || 0)}
+          incidentalReason={incidentalReason ? incidentalReason : undefined}
         />
       )}
 

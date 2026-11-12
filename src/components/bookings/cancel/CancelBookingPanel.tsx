@@ -2,9 +2,11 @@
 
 import React, { useMemo, useState } from "react";
 import type { ClosureReasonCode, GanttBookingItem } from "@/types";
-import { Button } from "@/components/ui/Button";
-import { apiFetch } from "@/lib/apiClient";
 import { CLOSURE_REASONS, netReceivedOf, REFUND_METHODS, type BffError, type RefundMethod } from "@/lib/bookingClosure";
+import { BookingCommandPanel } from "@/components/bookings/shared/BookingCommandPanel";
+import { MoneySummary } from "@/components/bookings/shared/MoneySummary";
+import { ReasonField } from "@/components/bookings/shared/ReasonField";
+import { useBookingCommand } from "@/components/bookings/shared/useBookingCommand";
 
 type RefundChoice = "none" | "full" | "partial";
 
@@ -23,6 +25,7 @@ const vnd = (n: number) => `${Math.max(0, Math.round(n)).toLocaleString("vi-VN")
 /**
  * "Huỷ đặt phòng" — one flow for every way a booking ends early (No-show included).
  * Step 1: why (reason code). Step 2: money (refund 0…received, the rest is retained). Step 3: confirm.
+ * Built on the same pieces as the charge panel (frame, command hook, reason field, money block).
  */
 export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking, onClosed, onError, onDismiss, initialReason }) => {
   const received = netReceivedOf(booking);
@@ -37,16 +40,13 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
   const [partialAmount, setPartialAmount] = useState(received);
   const [refundMethod, setRefundMethod] = useState<RefundMethod>("cash");
   const [refundReference, setRefundReference] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [localError, setLocalError] = useState("");
-  // One key per opening of the panel: a double click or a network retry replays the same command in Core.
-  const [idempotencyKey] = useState(() => `adm.booking-close.${crypto.randomUUID()}`);
+  const { run, submitting, error } = useBookingCommand({ onError });
 
   const reason = CLOSURE_REASONS.find((r) => r.code === reasonCode) ?? null;
   const refundAmount = refundChoice === "full" ? received : refundChoice === "partial" ? Math.min(received, Math.max(0, partialAmount)) : 0;
   const retained = received - refundAmount;
 
-  const validation = useMemo(() => {
+  const blockedReason = useMemo(() => {
     if (!reason) return "Vui lòng chọn lý do huỷ.";
     if (reason.code === "no_show" && isPending) return "Đơn chưa xác nhận không thể ghi nhận No-show.";
     if (reason.noteRequired && !note.trim()) return "Vui lòng nhập lý do cụ thể.";
@@ -57,7 +57,6 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
   const pickReason = (code: ClosureReasonCode) => {
     const r = CLOSURE_REASONS.find((x) => x.code === code)!;
     setReasonCode(code);
-    setLocalError("");
     if (received <= 0) {
       setRefundChoice("none");
       return;
@@ -67,50 +66,39 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
   };
 
   const submit = async () => {
-    if (validation || !reason) {
-      setLocalError(validation);
-      return;
-    }
-    setSubmitting(true);
-    setLocalError("");
-    try {
-      const res = await apiFetch(`/api/bookings/${booking.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-        body: JSON.stringify({
-          action: "cancel",
-          reasonCode: reason.code,
-          reason: note.trim() || undefined,
-          refundAmount,
-          refundMethod: refundAmount > 0 ? refundMethod : undefined,
-          refundReference: refundAmount > 0 && refundReference.trim() ? refundReference.trim() : undefined,
-          expectedVersion: booking.version ?? booking.modNo,
-        }),
-      });
-      const data = (await res.json()) as BffError & { booking?: Record<string, unknown>; message?: string };
-      if (!res.ok) {
-        await onError(res.status, data);
-        setLocalError(data.error || "Không thể huỷ đặt phòng.");
-        return;
-      }
-      onClosed({ booking: data.booking ?? {}, message: data.message || "Đã huỷ đặt phòng." });
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : "Lỗi kết nối, vui lòng thử lại.");
-    } finally {
-      setSubmitting(false);
-    }
+    if (blockedReason || !reason) return;
+    const data = await run<{ booking?: Record<string, unknown>; message?: string }>(
+      `/api/bookings/${booking.id}`,
+      {
+        action: "cancel",
+        reasonCode: reason.code,
+        reason: note.trim() || undefined,
+        refundAmount,
+        refundMethod: refundAmount > 0 ? refundMethod : undefined,
+        refundReference: refundAmount > 0 && refundReference.trim() ? refundReference.trim() : undefined,
+        expectedVersion: booking.version ?? booking.modNo,
+      },
+      "PATCH",
+    );
+    if (data) onClosed({ booking: data.booking ?? {}, message: data.message || "Đã huỷ đặt phòng." });
   };
 
   return (
-    <div className="p-4 rounded-xl bg-rose-50 border border-rose-300 space-y-3.5 animate-in fade-in duration-200 shadow-xs">
-      <div>
-        <h4 className="text-xs font-bold text-rose-900 uppercase tracking-wide">Huỷ đặt phòng #{booking.id}</h4>
-        <p className="text-[11px] text-rose-800 mt-1 leading-relaxed font-medium">
-          Đơn vẫn được lưu lại với trạng thái <strong>Đã huỷ</strong> (hoặc <strong>No-show</strong>) và phòng được giải phóng trên Bảng phòng.
-          Hồ sơ thành viên và điểm tích luỹ không thay đổi.
-        </p>
-      </div>
-
+    <BookingCommandPanel
+      tone="rose"
+      title={`Huỷ đặt phòng #${booking.id}`}
+      intro={
+        <>
+          Đơn vẫn được lưu lại với trạng thái <strong>Đã huỷ</strong> (hoặc <strong>No-show</strong>) và phòng được giải phóng trên Bảng phòng. Hồ sơ thành viên và điểm tích luỹ không thay đổi.
+        </>
+      }
+      submitting={submitting}
+      error={error}
+      blockedReason={reasonCode ? blockedReason : undefined}
+      confirmLabel={reason?.code === "no_show" ? "Xác nhận No-show" : "Xác nhận huỷ"}
+      onConfirm={submit}
+      onDismiss={onDismiss}
+    >
       {inHouse && (
         <p role="note" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
           ⚠️ Đã qua giờ nhận phòng — khách có thể đang ở. Chỉ huỷ khi chắc chắn; tiền đã thu phải được hoàn hoặc giữ lại rõ ràng ở bước 2.
@@ -118,20 +106,13 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
       )}
 
       {/* 1. Reason */}
-      <fieldset className="space-y-1.5 bg-white p-3 rounded-lg border border-rose-200 shadow-xs">
+      <fieldset className="space-y-1.5 bg-white p-3 rounded-xl border border-rose-200 shadow-xs">
         <legend className="text-[11px] font-bold text-slate-700 px-1">1. Lý do huỷ</legend>
         {CLOSURE_REASONS.map((r) => {
           const disabled = r.code === "no_show" && isPending;
           return (
             <label key={r.code} className={`flex items-start gap-2 text-xs ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
-              <input
-                type="radio"
-                name="closureReason"
-                className="mt-0.5 accent-rose-600"
-                disabled={disabled}
-                checked={reasonCode === r.code}
-                onChange={() => pickReason(r.code)}
-              />
+              <input type="radio" name="closureReason" className="mt-0.5 accent-rose-600" disabled={disabled} checked={reasonCode === r.code} onChange={() => pickReason(r.code)} />
               <span>
                 <span className="font-semibold text-slate-800">{r.label}</span>
                 <span className="block text-[11px] text-slate-500">{disabled ? "Chỉ áp dụng cho đơn đã xác nhận." : r.hint}</span>
@@ -139,18 +120,11 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
             </label>
           );
         })}
-        <input
-          type="text"
-          maxLength={500}
-          placeholder={reason?.noteRequired ? "Ghi rõ lý do (bắt buộc)..." : "Ghi chú thêm (tuỳ chọn)..."}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="mt-1 w-full px-3 py-1.5 rounded-lg bg-white border border-rose-300 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/20"
-        />
+        <ReasonField label={reason?.noteRequired ? "Ghi rõ lý do" : "Ghi chú thêm (tuỳ chọn)"} required={reason?.noteRequired} value={note} onChange={setNote} />
       </fieldset>
 
       {/* 2. Money */}
-      <fieldset className="space-y-2 bg-white p-3 rounded-lg border border-rose-200 shadow-xs">
+      <fieldset className="space-y-2 bg-white p-3 rounded-xl border border-rose-200 shadow-xs">
         <legend className="text-[11px] font-bold text-slate-700 px-1">2. Tiền của đơn</legend>
         <div className="grid grid-cols-2 gap-2 text-[11px]">
           <div>
@@ -195,7 +169,7 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
                       key={pct}
                       type="button"
                       onClick={() => setPartialAmount(Math.round(received * pct))}
-                      className="px-2 py-0.5 rounded text-[11px] bg-slate-100 hover:bg-slate-200 text-rose-800 font-bold border border-slate-200 cursor-pointer"
+                      className="px-2 py-0.5 rounded-lg text-[11px] bg-slate-100 hover:bg-slate-200 text-rose-800 font-bold border border-slate-200 cursor-pointer"
                     >
                       Hoàn {pct * 100}%
                     </button>
@@ -207,7 +181,7 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
                   max={received}
                   value={partialAmount}
                   onChange={(e) => setPartialAmount(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white border border-rose-300 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-rose-600"
+                  className="w-full px-3 py-1.5 rounded-xl bg-white border border-rose-300 text-xs font-mono font-bold text-amber-700 focus:outline-none focus:border-rose-600"
                   aria-label="Số tiền hoàn"
                 />
               </div>
@@ -218,7 +192,7 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
                 <select
                   value={refundMethod}
                   onChange={(e) => setRefundMethod(e.target.value as RefundMethod)}
-                  className="px-2 py-1.5 rounded-lg bg-white border border-rose-300 text-xs text-slate-800"
+                  className="px-2 py-1.5 rounded-xl bg-white border border-rose-300 text-xs text-slate-800"
                   aria-label="Phương thức hoàn"
                 >
                   {REFUND_METHODS.map((m) => (
@@ -233,35 +207,20 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
                   placeholder="Mã giao dịch (tuỳ chọn)"
                   value={refundReference}
                   onChange={(e) => setRefundReference(e.target.value)}
-                  className="px-2 py-1.5 rounded-lg bg-white border border-rose-300 text-xs text-slate-800 placeholder-slate-400"
+                  className="px-2 py-1.5 rounded-xl bg-white border border-rose-300 text-xs text-slate-800 placeholder-slate-400"
                 />
               </div>
             )}
 
-            <div className="p-2 rounded bg-slate-50 text-[11px] space-y-0.5 border border-slate-200">
-              <div className="flex justify-between text-rose-700 font-medium">
-                <span>Hoàn cho khách:</span>
-                <span className="font-mono font-bold">-{vnd(refundAmount)}</span>
-              </div>
-              <div className="flex justify-between text-emerald-800 font-bold pt-1 border-t border-slate-200">
-                <span>Khách sạn giữ lại:</span>
-                <span className="font-mono">{vnd(retained)}</span>
-              </div>
-            </div>
+            <MoneySummary
+              rows={[
+                { label: "Hoàn cho khách", value: refundAmount, tone: "bad" },
+                { label: "Khách sạn giữ lại", value: retained, tone: "good", strong: true },
+              ]}
+            />
           </div>
         )}
       </fieldset>
-
-      {(localError || (reasonCode && validation)) && <p className="text-xs text-rose-700 font-semibold">{localError || validation}</p>}
-
-      <div className="flex gap-2 pt-1">
-        <Button size="sm" variant="danger" className="flex-1 font-semibold" isLoading={submitting} disabled={submitting || !!validation} onClick={submit}>
-          {reason?.code === "no_show" ? "Xác nhận No-show" : "Xác nhận huỷ"}
-        </Button>
-        <Button size="sm" variant="secondary" disabled={submitting} onClick={onDismiss}>
-          Đóng
-        </Button>
-      </div>
-    </div>
+    </BookingCommandPanel>
   );
 };

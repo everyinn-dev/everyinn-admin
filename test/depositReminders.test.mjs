@@ -49,6 +49,7 @@ const sampleReminderBooking = {
     remainingPaidBy: null,
     refundAmount: 0,
   },
+  charges: [],
   lifecycle: {
     cancelledAt: null,
     cancelReason: null,

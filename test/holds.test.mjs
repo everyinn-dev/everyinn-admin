@@ -113,6 +113,7 @@ const sampleConfirmedBooking = {
     remainingPaidAt: "2026-10-16T07:05:00Z",
     remainingPaidBy: { id: 1, name: "Lễ Tân A" },
   },
+  charges: [],
   lifecycle: {
     confirmedAt: "2026-10-16T07:05:00Z",
     cancelledAt: null,

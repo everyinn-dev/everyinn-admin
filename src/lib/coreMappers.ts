@@ -5,6 +5,7 @@
  * one go, the BFF keeps the JSON shapes the UI already consumes and translates the Core contracts here.
  * Core timestamps are UTC ISO strings (same as legacy rows), so they pass through unchanged.
  */
+import type { ChargeLine } from "./charges";
 import type {
   Booking,
   BookingRulesConfig,
@@ -519,6 +520,8 @@ export interface CoreBookingDto {
     remainingPaidAt: string | null;
     remainingPaidBy: CoreStaffRef | null;
   };
+  /** Stay charges: +N hours, early check-in, late check-out, incidental (Booking Core `charges[]`). */
+  charges: ChargeLine[];
   lifecycle: {
     confirmedAt: string | null;
     cancelledAt: string | null;
@@ -610,6 +613,7 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
     promotion_code: u(d.promotion?.code),
     promotion_name: u(d.promotion?.name),
 
+    charges: d.charges ?? [],
     cancelled_at: u(l.cancelledAt),
     cancel_reason: u(l.cancelReason),
     cancelled_by: u(l.cancelledBy?.id),
