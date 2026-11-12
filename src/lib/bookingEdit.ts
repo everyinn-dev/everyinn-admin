@@ -1,6 +1,7 @@
 /**
  * Pure rules of the booking edit form (kept out of the .tsx so they are unit-testable).
- * See ADMIN_BOOKING_EDIT_REVIEW_2026-11-12: the booking type is locked, money changes need a reason.
+ * See ADMIN_BOOKING_EDIT_REVIEW_2026-11-12: the booking type is locked, a changed price needs a reason, and every
+ * extra charge (+1h, early, late, incidental) goes through the charge sheet — not through this form.
  */
 import type { BookingType } from "@/types";
 
@@ -22,33 +23,19 @@ export interface MoneyEditInput {
   originalType: BookingType;
   originalCustomPrice: number;
   customPrice: number;
-  originalIncidentalFee: number;
-  originalIncidentalReason: string;
-  showIncidental: boolean;
-  incidentalFee: number;
-  incidentalReason: string;
 }
 
 export interface MoneyEditState {
-  activeIncidental: number;
   customPriceChanged: boolean;
-  incidentalChanged: boolean;
-  /** Core answers 400 REASON_REQUIRED without a reason in these cases. */
+  /** Core answers 400 REASON_REQUIRED without a reason in this case. */
   needsReason: boolean;
 }
 
 export function moneyEditState(i: MoneyEditInput): MoneyEditState {
-  const activeIncidental = i.showIncidental ? Math.max(0, Number(i.incidentalFee) || 0) : 0;
   const customPriceChanged = i.originalType === "custom" && i.customPrice !== i.originalCustomPrice;
-  const incidentalChanged =
-    activeIncidental !== i.originalIncidentalFee ||
-    (activeIncidental > 0 && (i.incidentalReason || "").trim() !== (i.originalIncidentalReason || "").trim());
-  return { activeIncidental, customPriceChanged, incidentalChanged, needsReason: customPriceChanged || incidentalChanged };
+  return { customPriceChanged, needsReason: customPriceChanged };
 }
 
-/** A reason is satisfied by the dedicated field, or (for a charge being set) by the charge's own description. */
-export function hasMoneyReason(state: MoneyEditState, moneyReason: string, incidentalReason: string): boolean {
-  if (!state.needsReason) return true;
-  if (moneyReason.trim()) return true;
-  return state.incidentalChanged && state.activeIncidental > 0 && incidentalReason.trim().length > 0;
+export function hasMoneyReason(state: MoneyEditState, moneyReason: string): boolean {
+  return !state.needsReason || moneyReason.trim().length > 0;
 }

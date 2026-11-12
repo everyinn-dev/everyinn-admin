@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { notifyDataChanged } from "@/lib/syncEvents";
 import { CancelBookingPanel } from "@/components/bookings/cancel/CancelBookingPanel";
 import { ClosedBookingBanner } from "@/components/bookings/cancel/ClosedBookingBanner";
+import { ChargesSection } from "@/components/bookings/charges/ChargesSection";
 import { bookingRowToItem, canCloseBooking, isClosedBooking, isVersionConflict, netReceivedOf, type BffError } from "@/lib/bookingClosure";
 import type { Booking, ClosureReasonCode } from "@/types";
 
@@ -40,9 +41,6 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   const [mode, setMode] = useState<"view" | "edit">("view");
 
   // +1h Checkout state
-  const [extending, setExtending] = useState(false);
-  const [extendError, setExtendError] = useState("");
-  const [extendSuccess, setExtendSuccess] = useState("");
 
   // Cancel state (one flow: cancel with a reason; "No-show" is one of the reasons)
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
@@ -79,8 +77,6 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     setCurrentBooking(booking);
     if (isNewBooking) {
       setMode("view");
-      setExtendError("");
-      setExtendSuccess("");
       setShowConfirmCancel(false);
       setShowPaymentForm(false);
       setPaymentError("");
@@ -194,60 +190,13 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     }
   };
 
-  const handleExtend1h = async () => {
-    try {
-      setExtending(true);
-      setExtendError("");
-      setExtendSuccess("");
-
-      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "extend1h",
-          expectedVersion: currentBooking.version ?? currentBooking.modNo,
-        }),
-      });
-
-      const data = (await res.json()) as any;
-      if (!res.ok) {
-        const errorText = data.error || "Không thể gia hạn thêm 1 giờ.";
-        if (await handleCommandError(res.status, data, "Lỗi gia hạn (+1h)")) return;
-        throw new Error(errorText);
-      }
-
-      const addedFee = (data.booking?.total_price ?? currentBooking.totalPrice) - currentBooking.totalPrice;
-      const successMsg = `Đã gia hạn thêm 1 giờ trả phòng${addedFee > 0 ? ` (+${addedFee.toLocaleString("vi-VN")}đ)` : ""}!`;
-      setExtendSuccess(successMsg);
-      toast.success(successMsg, "Gia hạn thành công");
-
-      const updated: GanttBookingItem = {
-        ...currentBooking,
-        checkoutAt: data.booking.checkout_at || currentBooking.checkoutAt,
-        totalPrice: data.booking.total_price ?? currentBooking.totalPrice,
-        basePrice: data.booking.base_price ?? currentBooking.basePrice,
-        extraFee: data.booking.extra_fee ?? currentBooking.extraFee,
-        lateCheckoutHours: data.booking.late_checkout_hours ?? currentBooking.lateCheckoutHours,
-        remainingAmount: data.booking.remaining_amount ?? currentBooking.remainingAmount,
-        paidAmount: data.booking.paid_amount ?? currentBooking.paidAmount,
-        depositStatus: data.booking.deposit_status ?? currentBooking.depositStatus,
-        discountAmount: data.booking.discount_amount ?? currentBooking.discountAmount,
-        promotionName: data.booking.promotion_name !== undefined ? data.booking.promotion_name : currentBooking.promotionName,
-        incidentalFee: data.booking.incidental_fee ?? (data.booking as any).incidentalFee ?? currentBooking.incidentalFee,
-        incidentalReason: data.booking.incidental_reason ?? (data.booking as any).incidentalReason ?? currentBooking.incidentalReason,
-        modNo: data.booking.mod_no !== undefined ? data.booking.mod_no : (currentBooking.modNo || 0) + 1,
-        version: data.booking.version ?? data.booking.mod_no ?? (currentBooking.version || 0) + 1,
-        updatedAt: data.booking.updated_at || new Date().toISOString(),
-        updatedByStaffName: data.booking.updated_by_staff_name || currentBooking.updatedByStaffName,
-      };
-      setCurrentBooking(updated);
-      onBookingUpdated?.(updated);
-      notifyDataChanged("BOOKINGS_CHANGED");
-    } catch (err: any) {
-      setExtendError(err.message || "Lỗi khi gia hạn thêm 1 giờ.");
-    } finally {
-      setExtending(false);
-    }
+  /** A stay charge was added or voided: show the booking as Core now has it (new total, new amount due, new times). */
+  const handleChargesChanged = ({ booking: row, message }: { booking: Record<string, unknown>; message: string }) => {
+    toast.success(message, "Phụ phí");
+    const updated = mergeFresh(currentBooking, row as unknown as Booking);
+    setCurrentBooking(updated);
+    onBookingUpdated?.(updated);
+    notifyDataChanged("BOOKINGS_CHANGED");
   };
 
   const handleEditSuccess = (updatedData: any) => {
@@ -316,16 +265,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
         throw new Error(data.error || "Không thể bổ sung thanh toán.");
       }
 
-      toast.success(data.message || "Đã bổ sung thanh toán thành công!", "Thanh toán thành công");
-      const updated: GanttBookingItem = {
-        ...currentBooking,
-        paidAmount: data.paidAmount,
-        remainingAmount: data.remainingAmount,
-        depositStatus: data.depositStatus,
-        remainingPaidAt: new Date().toISOString(),
-        version: data.booking?.version ?? (currentBooking.version || 0) + 1,
-        modNo: data.booking?.mod_no ?? (currentBooking.modNo || 0) + 1,
-      };
+      toast.success(data.message || "Đã ghi nhận thanh toán.", "Thanh toán thành công");
+      const updated: GanttBookingItem = data.booking ? mergeFresh(currentBooking, data.booking as Booking) : currentBooking;
       setCurrentBooking(updated);
       setShowPaymentForm(false);
       onBookingUpdated?.(updated);
@@ -423,53 +364,19 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
               {/* Closed booking (cancelled / no-show): read-only state + money trail */}
               {isClosed && <ClosedBookingBanner booking={currentBooking} />}
 
-              {/* Primary Action Buttons (+1h & Edit) */}
+              {/* Primary action: edit. Charges (+1h, early, late, incidental) live in their own section below. */}
               {!isClosed && (
                 <div className="space-y-2">
-                  <div className={`grid gap-2.5 ${currentBooking.bookingType === "custom" ? "grid-cols-1" : "grid-cols-2"}`}>
-                    {currentBooking.bookingType !== "custom" && (
-                    <button
-                      type="button"
-                      disabled={extending || isPastCheckout}
-                      onClick={handleExtend1h}
-                      className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-sm border border-emerald-500 flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-                      title={isPastCheckout ? "Đã qua giờ trả phòng" : "Gia hạn checkout thêm 1 giờ (phí theo bảng giá)"}
-                    >
-                      {extending ? (
-                        <span>Đang thêm 1h...</span>
-                      ) : (
-                        <>
-                          <span>⏱️ +1h Checkout</span>
-                        </>
-                      )}
-                    </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => setMode("edit")}
-                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
-                    >
-                      <span>✏️ Chỉnh sửa</span>
-                    </button>
-                  </div>
-
-                  {extendError && (
-                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-[11px] text-rose-800 flex items-start gap-1.5 animate-in fade-in duration-150 font-medium">
-                      <span className="shrink-0 text-sm">⚠️</span>
-                      <span className="leading-snug">{extendError}</span>
-                    </div>
-                  )}
-
-                  {extendSuccess && (
-                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-[11px] text-emerald-800 flex items-center gap-1.5 animate-in fade-in duration-150 font-bold">
-                      <span className="shrink-0 text-sm">✅</span>
-                      <span>{extendSuccess}</span>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMode("edit")}
+                    className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    <span>✏️ Chỉnh sửa</span>
+                  </button>
 
                   {/* Complete Deposit Payment CTA & Form */}
-                  {currentBooking.isDeposit === 1 && currentBooking.depositStatus === "deposit_paid" && (
+                  {(currentBooking.remainingAmount ?? 0) > 0 && (
                     <div className="pt-1 space-y-2.5">
                       {!showPaymentForm ? (
                         <button
@@ -494,7 +401,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                         <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 space-y-3 shadow-xs animate-in fade-in duration-150">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
-                              <span>💰</span> Bổ sung thanh toán cọc
+                              <span>💰</span> Ghi nhận thanh toán
                             </span>
                             <button
                               type="button"
@@ -562,6 +469,16 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                   )}
                 </div>
               )}
+
+              {/* Stay charges: +1h / early / late / incidental — one list, one sheet. Read-only once closed or past checkout. */}
+              <ChargesSection
+                booking={currentBooking}
+                readOnly={isClosed || isPastCheckout}
+                onChanged={handleChargesChanged}
+                onError={async (status, data) => {
+                  if (isVersionConflict(status, data) || status === 409) await refetchBooking();
+                }}
+              />
 
               {/* Guest Information Card */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 shadow-xs">

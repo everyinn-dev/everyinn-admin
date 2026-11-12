@@ -48,6 +48,7 @@ const sampleBookingDto = {
     remainingPaidBy: null,
     refundAmount: 0,
   },
+  charges: [],
   lifecycle: {
     cancelledAt: null,
     cancelReason: null,

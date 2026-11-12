@@ -72,6 +72,7 @@ const sampleBookingCanonical = {
     remainingPaidAt: "2026-10-16T07:00:00Z",
     remainingPaidBy: { id: 1, name: "Manager" },
   },
+  charges: [],
   lifecycle: {
     confirmedAt: "2026-10-16T06:00:00Z",
     cancelledAt: null,

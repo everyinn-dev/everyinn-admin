@@ -3,17 +3,11 @@ import { bookingCore, newIdempotencyKey } from "@/lib/cores";
 import { toHttpError } from "@/lib/apiError";
 import { toLegacyBookingRow, type CoreBookingEnvelope, type CoreBookingDto } from "@/lib/coreMappers";
 import { closureReasonLabel } from "@/lib/bookingClosure";
+import { intentKey } from "@/lib/bffIdempotency";
 import type { ClosureReasonCode } from "@/types";
 
-const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
 const CLOSURE_CODES: readonly ClosureReasonCode[] = ["guest_cancel", "no_show", "property_cancel", "staff_error", "other"];
 const REFUND_METHODS = ["cash", "bank_transfer", "card", "ewallet", "other"] as const;
-
-/** One user intent == one key: the client sends it, so a double click / retry replays instead of failing. */
-function intentKey(req: Request, action: string): string {
-  const headerKey = req.headers.get("idempotency-key")?.trim();
-  return headerKey && IDEMPOTENCY_KEY_RE.test(headerKey) ? headerKey : newIdempotencyKey(action);
-}
 
 const vnd = (n: number) => `${n.toLocaleString("vi-VN")} đ`;
 
@@ -79,9 +73,9 @@ export async function GET(
  * - `cancel`: close the booking for a `reasonCode` (guest_cancel | no_show | property_cancel | staff_error | other)
  *   with an optional refund. reasonCode "no_show" → Core no-show (status no_show), the rest → Core cancel.
  * - `no_show`: alias of `cancel` with reasonCode "no_show"
- * - `complete_deposit_payment`: record remaining stay payment entry
+ * - `complete_deposit_payment`: record a payment against the amount still due (any live booking, ≤ remaining)
  * - `mark_deposit_reminder_sent`: flag reminder timestamp
- * - `extend1h`: extend stay by N hours (default 1)
+ * - `extend1h`: legacy +1h (the drawer now uses POST /api/bookings/[id]/charges)
  * - `update`: reschedule dates/room, modify guest details or custom pricing
  */
 export async function PATCH(
@@ -149,18 +143,31 @@ export async function PATCH(
 
     // ── ACTION: COMPLETE DEPOSIT PAYMENT ─────────────────────────
     if (action === "complete_deposit_payment") {
-      const amount = Number(body.amount) || currentBooking.financial.remainingAmount;
-      const method = (body.paymentMethod as string) || "cash";
-      const note = (body.note as string) || "Hoàn tất thanh toán cọc";
+      // The drawer sends `paymentAmount` (older callers `amount`); it used to be ignored and the whole balance recorded.
+      const remaining = currentBooking.financial.remainingAmount;
+      const asked = Number(body.paymentAmount ?? body.amount);
+      const amount = Number.isFinite(asked) && asked > 0 ? Math.round(asked) : remaining;
+      if (remaining <= 0) {
+        return Response.json({ error: "Đơn này không còn khoản phải thu.", code: "NOTHING_DUE" }, { status: 422 });
+      }
+      if (amount > remaining) {
+        return Response.json(
+          { error: `Số tiền thu (${vnd(amount)}) vượt quá số còn phải thu (${vnd(remaining)}).`, code: "PAYMENT_EXCEEDS_DUE", details: { remaining } },
+          { status: 422 },
+        );
+      }
+      const methodIn = String(body.paymentMethod ?? "cash");
+      const method = (REFUND_METHODS as readonly string[]).includes(methodIn) ? methodIn : "cash";
+      const note = (typeof body.note === "string" && body.note.trim()) || "Ghi nhận thanh toán";
 
       await bookingCore.post(`/internal/v1/bookings/${id}/financial-entries`, {
         staff,
-        idempotencyKey: newIdempotencyKey("booking-deposit-pay"),
+        idempotencyKey: intentKey(req, "booking-deposit-pay"),
         body: {
           entryType: "payment",
           amount,
           method,
-          note,
+          reason: note,
         },
       });
 
