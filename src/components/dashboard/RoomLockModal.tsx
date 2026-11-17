@@ -9,9 +9,9 @@ import {
   TIME_SLOTS_30MIN,
   getVnToday,
   isPastTimeSlot,
-  roundUpToNext30Min,
   timeStrToMinutes,
 } from "@/lib/timelineUtils";
+import { addDaysStr, canManageBlockType, ROOM_BLOCK_TYPES, vnLocalToIso, vnNextSlot, type RoomBlockType } from "@/lib/roomBlocks";
 
 interface RoomLockModalProps {
   isOpen: boolean;
@@ -19,21 +19,20 @@ interface RoomLockModalProps {
   onSuccess: () => void;
   rooms: GanttRoomData[];
   initialRoomId?: string;
+  /** stop_sell / owner_stay are manager-only (Booking Core enforces it too). */
+  isManager?: boolean;
 }
 
-const REASON_PRESETS = [
-  { label: "❄️ Sửa máy lạnh / Thiết bị", value: "Sửa máy lạnh / Thiết bị" },
-  { label: "🧹 Không có tạp vụ ca đêm (Đến 09h)", value: "Không có tạp vụ ca đêm" },
-  { label: "🎨 Sơn tường / Vệ sinh sâu", value: "Sơn tường / Vệ sinh sâu" },
-  { label: "🛠️ Bảo trì phòng", value: "Bảo trì phòng" },
-  { label: "📝 Lý do khác", value: "" },
+/** Each preset pre-selects the block type it really is (staff can still change it). */
+const REASON_PRESETS: { label: string; value: string; type: RoomBlockType }[] = [
+  { label: "❄️ Sửa máy lạnh / Thiết bị", value: "Sửa máy lạnh / Thiết bị", type: "maintenance" },
+  { label: "🧹 Không có tạp vụ ca đêm (Đến 09h)", value: "Không có tạp vụ ca đêm", type: "maintenance" },
+  { label: "🎨 Sơn tường / Vệ sinh sâu", value: "Sơn tường / Vệ sinh sâu", type: "deep_cleaning" },
+  { label: "🛠️ Bảo trì phòng", value: "Bảo trì phòng", type: "maintenance" },
+  { label: "📝 Lý do khác", value: "", type: "maintenance" },
 ];
 
-function getNextDayStr(dateStr: string): string {
-  const d = new Date(`${dateStr}T12:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
+const getNextDayStr = (dateStr: string) => addDaysStr(dateStr, 1);
 
 export const RoomLockModal: React.FC<RoomLockModalProps> = ({
   isOpen,
@@ -41,6 +40,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
   onSuccess,
   rooms,
   initialRoomId,
+  isManager = false,
 }) => {
   const toast = useToast();
   const todayStr = useMemo(() => getVnToday(), []);
@@ -49,6 +49,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
   const [reasonPreset, setReasonPreset] = useState<string>("Không có tạp vụ ca đêm");
   const [customReason, setCustomReason] = useState<string>("");
   const [note, setNote] = useState<string>("");
+  const [blockType, setBlockType] = useState<RoomBlockType>("maintenance");
 
   // Separate Date and 30-minute Time Slots
   const [fromDate, setFromDate] = useState<string>(todayStr);
@@ -67,16 +68,15 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
       setReasonPreset("Không có tạp vụ ca đêm");
       setCustomReason("");
       setNote("");
+      setBlockType("maintenance");
 
-      const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
-      const currentToday = vnNow.toISOString().slice(0, 10);
-      const nextSlot = roundUpToNext30Min(vnNow);
+      // Next 30' slot in Vietnam time, whatever the device timezone is (may roll over to tomorrow).
+      const next = vnNextSlot();
+      setFromDate(next.date);
+      setFromTime(next.time);
 
-      setFromDate(currentToday);
-      setFromTime(nextSlot);
-
-      // Default quick end: 09:00 tomorrow morning (very typical for night closures)
-      const nextDay = getNextDayStr(currentToday);
+      // Default quick end: 09:00 the morning after the start (very typical for night closures)
+      const nextDay = getNextDayStr(next.date);
       setToDate(nextDay);
       setToTime("09:00");
     }
@@ -87,8 +87,8 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
     if (!fromDate || !fromTime || !toDate || !toTime) {
       return { durationHours: 0, isRangeValid: false, durationText: "" };
     }
-    const startMs = new Date(`${fromDate}T${fromTime}:00`).getTime();
-    const endMs = new Date(`${toDate}T${toTime}:00`).getTime();
+    const startMs = Date.parse(vnLocalToIso(fromDate, fromTime));
+    const endMs = Date.parse(vnLocalToIso(toDate, toTime));
     const diffMs = endMs - startMs;
 
     if (isNaN(diffMs) || diffMs <= 0) {
@@ -161,8 +161,14 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
       return;
     }
 
-    const fromDateTime = new Date(`${fromDate}T${fromTime}:00`);
-    const toDateTime = new Date(`${toDate}T${toTime}:00`);
+    if (!canManageBlockType(blockType, isManager)) {
+      setErrorMsg("Chỉ quản lý được khoá phòng loại Đóng bán / Chủ ở.");
+      return;
+    }
+
+    // Times are Vietnam wall-clock, sent with +07:00 (never the device timezone).
+    const fromDateTime = new Date(vnLocalToIso(fromDate, fromTime));
+    const toDateTime = new Date(vnLocalToIso(toDate, toTime));
 
     if (isNaN(fromDateTime.getTime()) || isNaN(toDateTime.getTime())) {
       setErrorMsg("Thời gian bắt đầu hoặc kết thúc không hợp lệ.");
@@ -180,6 +186,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
           blockedTo: toDateTime.toISOString(),
           reason: finalReason,
           note: note.trim() || undefined,
+          blockType,
         }),
       });
 
@@ -283,6 +290,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                     type="button"
                     onClick={() => {
                       setReasonPreset(preset.value);
+                      setBlockType(preset.type);
                       if (preset.value === "") {
                         setCustomReason("");
                       }
@@ -309,6 +317,38 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
                 autoFocus
               />
             )}
+          </div>
+
+          {/* 2b. Loại khoá — drives reporting, the calendar label and who may reopen it */}
+          <div>
+            <label className="block font-bold text-slate-700 mb-1.5 uppercase tracking-wider text-[10px]">
+              Loại khoá <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {ROOM_BLOCK_TYPES.map((t) => {
+                const allowed = canManageBlockType(t.code, isManager);
+                const isSelected = blockType === t.code;
+                return (
+                  <button
+                    key={t.code}
+                    type="button"
+                    disabled={!allowed}
+                    onClick={() => setBlockType(t.code)}
+                    title={allowed ? t.hint : "Chỉ quản lý được chọn loại này"}
+                    className={`text-left px-2.5 py-1.5 rounded-lg border text-[11px] transition-all shadow-xs ${
+                      isSelected
+                        ? "bg-amber-100 border-amber-500 text-amber-950 font-bold ring-1 ring-amber-500/20"
+                        : allowed
+                          ? "bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 cursor-pointer"
+                          : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <span className="font-semibold">{t.icon} {t.label}</span>
+                    <span className="block text-[10px] font-normal opacity-80">{allowed ? t.hint : "Chỉ quản lý"}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* 3. Thời gian khóa (Tách riêng ngày và giờ, bước 30 phút, disable giờ quá khứ) */}

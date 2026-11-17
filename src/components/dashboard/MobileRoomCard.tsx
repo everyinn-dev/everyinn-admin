@@ -2,26 +2,28 @@
 
 import React from "react";
 import Link from "next/link";
-import { GanttBookingItem, GanttRoomData } from "@/types";
+import { GanttBlockItem, GanttBookingItem, GanttRoomData } from "@/types";
 import { Badge } from "../ui/Badge";
+import { activeBlockNow, blockPhase, formatVn, roomBlockTypeOf } from "@/lib/roomBlocks";
 
 interface MobileRoomCardProps {
   room: GanttRoomData;
   currentDate: string;
   onBookingClick: (booking: GanttBookingItem) => void;
+  /** Opens the room-lock drawer (view / reopen). */
+  onBlockClick?: (block: GanttBlockItem) => void;
 }
 
 export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
   room,
   currentDate,
   onBookingClick,
+  onBlockClick,
 }) => {
-  const formatTime = (iso: string) => {
-    return new Date(iso).toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatTime = (iso: string) => formatVn(iso, { hour: "2-digit", minute: "2-digit" });
+  // Blocks of this day that are still current or upcoming (ended ones are history).
+  const blocks = (room.blocks ?? []).filter((b) => blockPhase(b) !== "ended");
+  const lockedNow = activeBlockNow(room.blocks);
 
   const isOccupiedNow = room.bookings.some((b) => {
     const now = Date.now();
@@ -49,6 +51,10 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200">
               Đang có khách
             </span>
+          ) : lockedNow ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+              🔒 Đang khoá
+            </span>
           ) : (
             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
               Phòng trống
@@ -56,6 +62,34 @@ export const MobileRoomCard: React.FC<MobileRoomCardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Room locks (maintenance / stop-sell / owner stay / deep cleaning) */}
+      {blocks.length > 0 && (
+        <div className="space-y-1.5">
+          {blocks.map((b) => {
+            const t = roomBlockTypeOf(b.blockType);
+            const upcoming = blockPhase(b) === "upcoming";
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onBlockClick?.(b)}
+                className="w-full p-2.5 rounded-lg bg-amber-50 border border-amber-300 hover:bg-amber-100 flex items-center justify-between text-xs text-left cursor-pointer active:scale-[0.99] transition-transform"
+              >
+                <span className="truncate">
+                  <span className="font-bold text-amber-950">
+                    {t.icon} {upcoming ? "Sắp khoá" : "Đang khoá"} · {t.label}
+                  </span>
+                  {b.reason && <span className="block text-[11px] text-amber-900/80 truncate">{b.reason}</span>}
+                </span>
+                <span className="font-mono text-[11px] text-amber-900 shrink-0 pl-2">
+                  {formatVn(b.blockedFrom)} → {formatVn(b.blockedTo)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bookings on this date */}
       {room.bookings.length === 0 ? (

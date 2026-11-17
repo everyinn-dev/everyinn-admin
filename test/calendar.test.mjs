@@ -44,7 +44,7 @@ test("a calendar matrix sample conforms to the Booking Core contract (CalendarMa
         name: "Signature 202",
         roomNumber: "202",
         roomClass: "signature",
-        days: [day("2026-12-01"), day("2026-12-02", { closures: [{ id: "blk_1", blockType: "stop_sell", reason: "Đóng bán", from: "2026-12-02T05:00:00.000Z", to: "2026-12-03T05:00:00.000Z", version: 1 }], bookings: 1, holds: 1, occupancyPct: 42 })],
+        days: [day("2026-12-01"), day("2026-12-02", { closures: [{ id: "blk_1", blockType: "stop_sell", reason: "Đóng bán", from: "2026-12-02T05:00:00.000Z", to: "2026-12-03T05:00:00.000Z", version: 1, coverage: "full" }], bookings: 1, holds: 1, occupancyPct: 42 })],
       },
     ],
   };

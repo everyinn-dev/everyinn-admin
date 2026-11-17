@@ -3,6 +3,8 @@ import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
 import { toLegacyRoomBlock, type CoreBlock } from "@/lib/coreMappers";
 
+const BLOCK_TYPES = ["stop_sell", "maintenance", "owner_stay", "deep_cleaning"] as const;
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -47,6 +49,7 @@ export async function POST(req: NextRequest) {
       blockedTo?: string;
       reason?: string;
       note?: string;
+      blockType?: string;
     };
 
     if (!body.roomId || !body.blockedFrom || !body.blockedTo) {
@@ -73,6 +76,8 @@ export async function POST(req: NextRequest) {
         blockedTo: to.toISOString(),
         reason: body.reason?.trim() || undefined,
         note: body.note?.trim() || undefined,
+        // Core enforces the role per type (stop_sell / owner_stay = manager) and validates the enum.
+        blockType: BLOCK_TYPES.includes(body.blockType as (typeof BLOCK_TYPES)[number]) ? body.blockType : undefined,
       },
     });
 
