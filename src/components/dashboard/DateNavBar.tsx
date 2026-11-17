@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { Button } from "../ui/Button";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
 
@@ -261,6 +262,16 @@ export const DateNavBar: React.FC<DateNavBarProps> = ({
               <span>🔒</span>
               <span className="hidden sm:inline">Khóa phòng</span>
             </button>
+          )}
+          {onOpenRoomLockModal && (
+            <Link
+              href="/room-blocks"
+              title="Danh sách khoá phòng: đang khoá, sắp tới, lịch sử"
+              className="px-3 py-2 rounded-xl bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 font-bold text-xs flex items-center gap-1.5 shadow-2xs"
+            >
+              <span>📋</span>
+              <span className="hidden sm:inline">Lịch khoá</span>
+            </Link>
           )}
 
           {/* Refresh button */}
