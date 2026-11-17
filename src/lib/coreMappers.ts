@@ -61,6 +61,7 @@ export interface CoreBlock {
   reason: string | null;
   note: string | null;
   status: "active" | "released";
+  blockType?: "stop_sell" | "maintenance" | "owner_stay" | "deep_cleaning";
   /** Core returns a `{ id, name }` staff reference, not a bare id. */
   createdBy: { id: number; name: string | null } | null;
   createdAt: string;
@@ -363,6 +364,8 @@ export function toGanttBlock(b: CoreBlock): GanttBlockItem & { version: number }
     reason: nz(b.reason),
     note: nz(b.note),
     createdByStaffId: b.createdBy?.id,
+    createdByStaffName: b.createdBy?.name ?? null,
+    blockType: b.blockType ?? "maintenance",
     createdAt: b.createdAt,
     version: b.version,
   };
@@ -379,6 +382,7 @@ export function toLegacyRoomBlock(b: CoreBlock) {
     reason: b.reason,
     note: b.note,
     status: b.status,
+    block_type: b.blockType ?? "maintenance",
     created_by: b.createdBy?.id ?? null,
     created_by_staff_name: b.createdBy?.name ?? null,
     created_at: b.createdAt,

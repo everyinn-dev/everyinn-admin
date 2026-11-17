@@ -367,6 +367,9 @@ export interface GanttBlockItem {
   reason?: string;
   note?: string;
   createdByStaffId?: number;
+  createdByStaffName?: string | null;
+  /** stop_sell | maintenance | owner_stay | deep_cleaning (Booking Core, default maintenance) */
+  blockType?: "stop_sell" | "maintenance" | "owner_stay" | "deep_cleaning";
   createdAt?: string;
 }
 

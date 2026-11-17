@@ -491,6 +491,7 @@ function DashboardContent() {
                       room={room}
                       currentDate={date}
                       onBookingClick={(booking) => setSelectedBooking(booking)}
+                      onBlockClick={(block) => setSelectedBlockData({ block, room })}
                     />
                   ))}
                 </div>
@@ -520,6 +521,7 @@ function DashboardContent() {
           onClose={() => setIsLockModalOpen(false)}
           onSuccess={() => fetchData()}
           rooms={roomsData}
+          isManager={isManager}
         />
 
         {/* LSB-5: live hold (web guest / receptionist) → same commands as the Telegram card */}
@@ -549,6 +551,7 @@ function DashboardContent() {
             room={selectedBlockData.room}
             onClose={() => setSelectedBlockData(null)}
             onBlockDeleted={() => fetchData()}
+            isManager={isManager}
           />
         )}
     </div>

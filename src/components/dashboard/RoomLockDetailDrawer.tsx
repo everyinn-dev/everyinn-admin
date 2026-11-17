@@ -6,19 +6,29 @@ import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
 import { notifyDataChanged } from "@/lib/syncEvents";
+import { blockPhase, canManageBlockType, roomBlockTypeOf } from "@/lib/roomBlocks";
 
 interface RoomLockDetailDrawerProps {
   block: GanttBlockItem | null;
   room?: GanttRoomData;
   onClose: () => void;
   onBlockDeleted: () => void;
+  /** stop_sell / owner_stay can only be reopened by a manager (Booking Core enforces it too). */
+  isManager?: boolean;
 }
+
+const PHASE_BADGE = {
+  upcoming: { label: "Sắp khoá", cls: "bg-sky-50 border-sky-300 text-sky-900" },
+  active: { label: "Đang khoá", cls: "bg-amber-100 border-amber-300 text-amber-900" },
+  ended: { label: "Đã hết hạn", cls: "bg-slate-100 border-slate-300 text-slate-600" },
+} as const;
 
 function formatDateTimeVi(isoString: string): string {
   try {
+    // Always Vietnam time, whatever the device timezone is.
     const d = new Date(isoString);
-    const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-    const date = d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+    const date = d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" });
     return `${time} • ${date}`;
   } catch {
     return isoString;
@@ -45,6 +55,7 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
   room,
   onClose,
   onBlockDeleted,
+  isManager = false,
 }) => {
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -67,7 +78,11 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
 
       if (!res.ok) {
         if (res.status === 409) {
-          toast.warning("Khóa phòng đã được cập nhật hoặc mở bởi phiên làm việc khác. Đang tải lại dữ liệu...", "Xung đột dữ liệu (409)");
+          // VERSION_CONFLICT = edited by someone else; INVALID_STATE = already reopened. Show Core's own reason.
+          toast.warning(
+            data.error || "Khóa phòng đã được cập nhật hoặc mở bởi phiên làm việc khác.",
+            data.code === "INVALID_STATE" ? "Khoá đã được mở trước đó" : "Dữ liệu đã thay đổi",
+          );
           onBlockDeleted();
           notifyDataChanged("ROOM_BLOCKS_CHANGED");
           onClose();
@@ -90,6 +105,9 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
   };
 
   const durationStr = calculateDurationHours(block.blockedFrom, block.blockedTo);
+  const type = roomBlockTypeOf(block.blockType);
+  const phase = PHASE_BADGE[blockPhase(block)];
+  const canRelease = canManageBlockType(block.blockType, isManager);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
@@ -105,8 +123,8 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
                 <h2 className="text-sm font-bold text-slate-900 tracking-tight">
                   Khóa Phòng #{block.id}
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[10px] text-amber-900 font-bold uppercase">
-                  Đang khóa
+                <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase ${phase.cls}`}>
+                  {phase.label}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
@@ -139,12 +157,17 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
 
           {/* Reason & Notes */}
           <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 space-y-2 shadow-xs">
-            <span className="text-amber-900 block text-[10px] uppercase font-bold tracking-wider">
-              Lý do khóa phòng
-            </span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-amber-900 block text-[10px] uppercase font-bold tracking-wider">
+                Lý do khóa phòng
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-white border border-amber-300 text-[10px] font-bold text-amber-900" title={type.hint}>
+                {type.icon} {type.label}
+              </span>
+            </div>
             <div className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
               <span>⚠️</span>
-              <span>{block.reason || "Bảo trì phòng"}</span>
+              <span>{block.reason || type.label}</span>
             </div>
             {block.note && (
               <div className="pt-2 border-t border-amber-200 text-slate-700 text-xs italic bg-white p-2.5 rounded-lg">
@@ -185,10 +208,10 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
 
           {/* Metadata */}
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 space-y-1 text-[11px] shadow-xs">
-            {block.createdByStaffId && (
+            {(block.createdByStaffName || block.createdByStaffId) && (
               <div className="flex items-center justify-between">
                 <span>Nhân viên tạo khóa:</span>
-                <span className="font-mono text-slate-900 font-semibold">NV #{block.createdByStaffId}</span>
+                <span className="text-slate-900 font-semibold">{block.createdByStaffName || `NV #${block.createdByStaffId}`}</span>
               </div>
             )}
             {block.createdAt && (
@@ -216,14 +239,20 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
               >
                 Đóng
               </button>
-              <button
-                type="button"
-                onClick={() => setShowConfirmDelete(true)}
-                className="flex-1 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 font-bold transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <span>🔓</span>
-                <span>Mở khóa phòng</span>
-              </button>
+              {canRelease ? (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(true)}
+                  className="flex-1 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 font-bold transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <span>🔓</span>
+                  <span>Mở khóa phòng</span>
+                </button>
+              ) : (
+                <span className="flex-1 py-2 text-center text-[11px] text-slate-500 italic" title="Đóng bán / Chủ ở do quản lý quyết định">
+                  🔒 Chỉ quản lý được mở khoá loại “{type.label}”
+                </span>
+              )}
             </div>
           ) : (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 space-y-2 animate-in fade-in shadow-xs">
