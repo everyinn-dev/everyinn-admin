@@ -266,7 +266,11 @@ export default function CalendarPage() {
                           </th>
                           {room.days.map((day, d) => {
                             const rate = day.rates[plan];
-                            const closed = day.closures[0];
+                            // Only a closure covering the selling window (12:00→24:00 VN) closes the date; a short repair or the
+                            // morning tail of last night's stop-sell is "partial": the price stays visible with a lock marker.
+                            const closed = day.closures.find((c) => (c.coverage ?? "full") === "full");
+                            const partial = closed ? [] : day.closures.filter((c) => c.coverage === "partial");
+                            const hm = (iso: string) => new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
                             const past = day.date < data.today;
                             const sel = inRect(r, d);
                             return (
@@ -279,6 +283,7 @@ export default function CalendarPage() {
                                   `${room.name} · ${dm(day.date)}`,
                                   rate.override ? `Giá theo lịch ${rate.price?.toLocaleString("vi-VN")}đ (niêm yết ${rate.listPrice?.toLocaleString("vi-VN")}đ)${rate.override.note ? ` — ${rate.override.note}` : ""}` : `Giá niêm yết ${rate.price?.toLocaleString("vi-VN")}đ`,
                                   closed ? `${data.blockTypes.find((b) => b.code === closed.blockType)?.label ?? "Đóng"}: ${closed.reason}` : "",
+                                  ...partial.map((c) => `Khoá một phần (${data.blockTypes.find((b) => b.code === c.blockType)?.label ?? "Khoá"}) ${hm(c.from)}–${hm(c.to)}: ${c.reason}`),
                                   day.bookings ? `${day.bookings} đặt phòng` : "",
                                   day.holds ? `${day.holds} đang giữ` : "",
                                   day.bookable ? "" : "Ngoài cửa sổ đặt trước của khách web",
@@ -297,6 +302,11 @@ export default function CalendarPage() {
                                     {k(rate.price)}
                                   </span>
                                 )}
+                                {partial.length > 0 ? (
+                                  <span className="absolute top-0.5 left-0.5 text-[9px] text-amber-800" aria-label="khoá một phần">
+                                    🔒{hm(partial[0]!.from)}
+                                  </span>
+                                ) : null}
                                 {day.holds > 0 ? <span className="absolute top-0.5 right-0.5 text-[9px]" aria-label="đang giữ">⏳</span> : null}
                                 {day.occupancyPct > 0 ? <span className="absolute left-0 bottom-0 h-1 bg-sky-500" style={{ width: `${day.occupancyPct}%` }} /> : null}
                               </td>

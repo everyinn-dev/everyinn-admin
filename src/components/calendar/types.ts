@@ -12,7 +12,8 @@ export interface CalendarDay {
   date: string;
   bookable: boolean;
   rates: Record<CalendarPlan, CalendarRate>;
-  closures: { id: string; blockType: BlockType; reason: string; from: string; to: string; version: number }[];
+  /** coverage "full" = the date cannot be sold (block covers 12:00→24:00 VN); "partial" = shorter, price still valid. */
+  closures: { id: string; blockType: BlockType; reason: string; from: string; to: string; version: number; coverage?: "full" | "partial" }[];
   bookings: number;
   holds: number;
   occupancyPct: number;
