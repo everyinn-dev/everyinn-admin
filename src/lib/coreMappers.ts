@@ -387,6 +387,7 @@ export function toLegacyRoomBlock(b: CoreBlock) {
     created_by_staff_name: b.createdBy?.name ?? null,
     created_at: b.createdAt,
     released_at: b.releasedAt,
+    released_by_staff_name: b.releasedBy?.name ?? null,
     release_reason: b.releaseReason,
     version: b.version,
   };
@@ -709,6 +710,7 @@ export interface CoreDailyRosterResponse {
   };
   checkins: CoreRosterItem[];
   checkouts: CoreRosterItem[];
+  blocks?: CoreBlock[];
 }
 
 export interface CoreDepositRemindersResponse {
@@ -772,6 +774,7 @@ export function toDailyRosterResponse(core: CoreDailyRosterResponse): DailyRoste
     },
     checkins,
     checkouts,
+    blocks: (core.blocks ?? []).map((b) => ({ ...toGanttBlock(b), roomName: b.roomName })),
   };
 }
 

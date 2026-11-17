@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { getVnToday, formatTimeShort, formatDateTimeShort } from "@/lib/timelineUtils";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
+import { formatVn, roomBlockTypeOf } from "@/lib/roomBlocks";
 
 interface DailyRosterModalProps {
   isOpen: boolean;
@@ -195,6 +196,13 @@ Chúc bạn có một trải nghiệm lưu trú thật ấm cúng và thoải m�
       });
     }
 
+    if (data.blocks?.length) {
+      text += `\n🔒 PHÒNG KHOÁ TRONG NGÀY:\n`;
+      data.blocks.forEach((b, idx) => {
+        text += `${idx + 1}. ${b.roomName ?? b.roomId} — ${roomBlockTypeOf(b.blockType).label}: ${b.reason ?? ""} (${formatVn(b.blockedFrom)} → ${formatVn(b.blockedTo)})\n`;
+      });
+    }
+
     navigator.clipboard.writeText(text);
     toast.success(
       `Đã sao chép báo cáo điều phối ngày ${selectedDate} vào bộ nhớ tạm!`,
@@ -345,6 +353,15 @@ Chúc bạn có một trải nghiệm lưu trú thật ấm cúng và thoải m�
                 {data?.summary.hourlyCount || 0} Giờ • {data?.summary.overnightCount || 0} Đêm • {data?.summary.dayuseCount || 0} Ngày
               </span>
             </div>
+
+            {data?.blocks?.length ? (
+              <div className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 shrink-0 text-amber-900 shadow-xs max-w-full" title={data.blocks.map((b) => `${b.roomName ?? b.roomId}: ${roomBlockTypeOf(b.blockType).label} ${formatVn(b.blockedFrom)} → ${formatVn(b.blockedTo)}`).join("\n")}>
+                <span className="text-[10px] uppercase font-semibold block">Phòng khoá trong ngày</span>
+                <span className="font-bold text-xs">
+                  {data.blocks.map((b) => `${roomBlockTypeOf(b.blockType).icon} ${b.roomName ?? b.roomId} (${formatVn(b.blockedFrom, { hour: "2-digit", minute: "2-digit" })}–${formatVn(b.blockedTo, { hour: "2-digit", minute: "2-digit" })})`).join(" · ")}
+                </span>
+              </div>
+            ) : null}
 
             {data?.summary.doorCodeMissingCount ? (
               <div className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 shrink-0 text-amber-800 shadow-xs">

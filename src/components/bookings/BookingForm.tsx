@@ -21,6 +21,7 @@ import { OvernightFields } from "./OvernightFields";
 import { DayUseFields } from "./DayUseFields";
 import { CustomFields } from "./CustomFields";
 import { RoomSelectorCards } from "./RoomSelectorCards";
+import { useRoomLocks } from "@/lib/useRoomLocks";
 import { PriceSummaryCard } from "./PriceSummaryCard";
 import { PromotionSelector } from "./PromotionSelector";
 import { DepositSection } from "./DepositSection";
@@ -227,6 +228,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   ]);
 
   // Calculate Raw Subtotal (before promotion discount) to feed into PromotionSelector
+  // Room locks overlapping the chosen stay: grey those rooms out before submit (Core still re-checks on save).
+  const lockedRooms = useRoomLocks(calculatedCheckinAt, calculatedCheckoutAt);
+
   const rawPricing = useMemo(() => {
     if (!selectedRoom) return null;
     try {
@@ -788,6 +792,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             rooms={initialRooms}
             selectedRoomId={roomId}
             onSelectRoom={setRoomId}
+            lockedRooms={lockedRooms}
           />
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRoomLocks } from "@/lib/useRoomLocks";
 import React, { useEffect, useMemo, useState } from "react";
 import { Booking, BookingType, GanttBookingItem, PricingRule, Room, SurchargeRule } from "@/types";
 import { Promotion } from "@/types/promotions";
@@ -347,6 +348,9 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const moneyState = moneyEditState({ originalType, originalCustomPrice: originalFields?.customPrice ?? customPrice, customPrice });
   const { customPriceChanged, needsReason: needsMoneyReason } = moneyState;
 
+  // Room locks overlapping the new stay (the booking's current room stays selectable).
+  const lockedRooms = useRoomLocks(calculatedCheckinAt, calculatedCheckoutAt);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -464,8 +468,9 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           className="w-full rounded-xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 shadow-xs"
         >
           {rooms.map((r) => (
-            <option key={r.id} value={r.id}>
+            <option key={r.id} value={r.id} disabled={!!lockedRooms[r.id] && r.id !== roomId} title={lockedRooms[r.id]?.text}>
               {r.name} — {r.room_class === "haven" ? "Haven (Ban công)" : "Signature (Bồn tắm)"} (Tầng {r.floor})
+              {lockedRooms[r.id] ? ` — 🔒 ${lockedRooms[r.id]!.label}` : ""}
             </option>
           ))}
         </select>

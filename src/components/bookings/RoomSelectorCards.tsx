@@ -3,17 +3,21 @@
 import React from "react";
 import { Room } from "@/types";
 import { getRoomTheme } from "@/lib/roomColors";
+import type { RoomLockHint } from "@/lib/useRoomLocks";
 
 interface RoomSelectorCardsProps {
   rooms: Room[];
   selectedRoomId: string;
   onSelectRoom: (roomId: string) => void;
+  /** Rooms locked in the chosen window (maintenance / stop-sell / owner stay / cleaning) — shown disabled. */
+  lockedRooms?: Record<string, RoomLockHint>;
 }
 
 export const RoomSelectorCards: React.FC<RoomSelectorCardsProps> = ({
   rooms,
   selectedRoomId,
   onSelectRoom,
+  lockedRooms = {},
 }) => {
   const havenRooms = rooms.filter((r) => r.room_class === "haven");
   const signatureRooms = rooms.filter((r) => r.room_class === "signature");
@@ -23,12 +27,15 @@ export const RoomSelectorCards: React.FC<RoomSelectorCardsProps> = ({
   const renderRoomCard = (room: Room, index: number) => {
     const isSelected = room.id === selectedRoomId;
     const theme = getRoomTheme(room.room_number, index);
+    const lock = lockedRooms[room.id];
 
     return (
       <button
         key={room.id}
         type="button"
-        onClick={() => onSelectRoom(room.id)}
+        onClick={() => !lock && onSelectRoom(room.id)}
+        disabled={!!lock && !isSelected}
+        title={lock ? `Phòng đang khoá: ${lock.text}` : undefined}
         aria-pressed={isSelected}
         className={`group relative flex flex-col p-3 rounded-2xl border text-left transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
           isSelected
@@ -70,6 +77,12 @@ export const RoomSelectorCards: React.FC<RoomSelectorCardsProps> = ({
             <span className="capitalize">{room.room_class}</span>
           </div>
         </div>
+
+        {lock && (
+          <div className="mt-2 px-2 py-1 rounded-lg bg-amber-50 border border-amber-300 text-[10px] font-semibold text-amber-900 leading-snug">
+            🔒 Đang khoá: {lock.text}
+          </div>
+        )}
 
         {/* Bottom Specs: Sức chứa & Diện tích */}
         <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-slate-600">

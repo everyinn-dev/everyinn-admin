@@ -370,6 +370,8 @@ export interface GanttBlockItem {
   createdByStaffName?: string | null;
   /** stop_sell | maintenance | owner_stay | deep_cleaning (Booking Core, default maintenance) */
   blockType?: "stop_sell" | "maintenance" | "owner_stay" | "deep_cleaning";
+  /** "released" = reopened by staff (history); absent / "active" on the Gantt. */
+  status?: "active" | "released";
   createdAt?: string;
 }
 
@@ -464,6 +466,8 @@ export interface DailyRosterResponse {
   summary: DailyRosterSummary;
   checkins: DailyRosterItem[];
   checkouts: DailyRosterItem[];
+  /** Rooms locked (maintenance / stop-sell / owner stay / deep cleaning) during the day. */
+  blocks?: (GanttBlockItem & { roomName?: string | null })[];
 }
 
 // Pricing calculation models

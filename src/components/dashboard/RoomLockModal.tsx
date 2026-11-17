@@ -59,11 +59,14 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  /** Free rooms for the same window, returned by Core when the chosen room clashes. */
+  const [alternatives, setAlternatives] = useState<{ roomId: string; roomName: string }[]>([]);
 
   // Initialize form when opened
   useEffect(() => {
     if (isOpen) {
       setErrorMsg(null);
+      setAlternatives([]);
       setSelectedRoomId(initialRoomId || (rooms.length > 0 ? rooms[0].id : ""));
       setReasonPreset("Không có tạp vụ ca đêm");
       setCustomReason("");
@@ -144,6 +147,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setAlternatives([]);
 
     if (!selectedRoomId) {
       setErrorMsg("Vui lòng chọn phòng cần khóa.");
@@ -193,6 +197,7 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
       const data = (await res.json()) as any;
 
       if (!res.ok) {
+        setAlternatives(Array.isArray(data.details?.alternatives) ? data.details.alternatives : []);
         setErrorMsg(data.error || "Không thể tạo khóa phòng. Vui lòng thử lại.");
         toast.warning(data.error || "Không thể tạo khóa phòng.");
         return;
@@ -243,7 +248,27 @@ export const RoomLockModal: React.FC<RoomLockModalProps> = ({
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in shadow-xs">
               <span className="text-base leading-none">⚠️</span>
-              <span className="leading-relaxed font-semibold">{errorMsg}</span>
+              <span className="leading-relaxed font-semibold">
+                {errorMsg}
+                {alternatives.length > 0 && (
+                  <span className="mt-2 flex flex-wrap gap-1.5">
+                    {alternatives.map((a) => (
+                      <button
+                        key={a.roomId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoomId(a.roomId);
+                          setErrorMsg(null);
+                          setAlternatives([]);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 text-[11px] font-bold cursor-pointer"
+                      >
+                        Chọn {a.roomName}
+                      </button>
+                    ))}
+                  </span>
+                )}
+              </span>
             </div>
           )}
 
