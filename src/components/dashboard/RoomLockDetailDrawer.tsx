@@ -6,7 +6,14 @@ import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
 import { notifyDataChanged } from "@/lib/syncEvents";
-import { blockPhase, canManageBlockType, roomBlockTypeOf } from "@/lib/roomBlocks";
+import { addDaysStr, blockPhase, canManageBlockType, ROOM_BLOCK_TYPES, roomBlockTypeOf, vnLocalToIso, type RoomBlockType } from "@/lib/roomBlocks";
+import { TIME_SLOTS_30MIN } from "@/lib/timelineUtils";
+
+/** ISO instant → { date, time } on the Vietnam wall clock. */
+function vnParts(iso: string): { date: string; time: string } {
+  const d = new Date(Date.parse(iso) + 7 * 3600 * 1000).toISOString();
+  return { date: d.slice(0, 10), time: d.slice(11, 16) };
+}
 
 interface RoomLockDetailDrawerProps {
   block: GanttBlockItem | null;
@@ -21,6 +28,7 @@ const PHASE_BADGE = {
   upcoming: { label: "Sắp khoá", cls: "bg-sky-50 border-sky-300 text-sky-900" },
   active: { label: "Đang khoá", cls: "bg-amber-100 border-amber-300 text-amber-900" },
   ended: { label: "Đã hết hạn", cls: "bg-slate-100 border-slate-300 text-slate-600" },
+  released: { label: "Đã mở khoá", cls: "bg-emerald-50 border-emerald-300 text-emerald-800" },
 } as const;
 
 function formatDateTimeVi(isoString: string): string {
@@ -60,8 +68,80 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [releaseReason, setReleaseReason] = useState("");
+  // "Gia hạn / Sửa giờ"
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
+  const [toDate, setToDate] = useState("");
+  const [toTime, setToTime] = useState("");
+  const [editReason, setEditReason] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editType, setEditType] = useState<RoomBlockType>("maintenance");
 
   if (!block) return null;
+
+  const openEdit = () => {
+    const end = vnParts(block.blockedTo);
+    setToDate(end.date);
+    setToTime(end.time);
+    setEditReason(block.reason ?? "");
+    setEditNote(block.note ?? "");
+    setEditType((block.blockType ?? "maintenance") as RoomBlockType);
+    setEditErr(null);
+    setEditing(true);
+  };
+
+  /** Quick extend from the current planned end (VN wall clock, 30' slots). */
+  const extendBy = (hours: number) => {
+    const ms = Date.parse(vnLocalToIso(toDate, toTime)) + hours * 3600 * 1000;
+    const p = vnParts(new Date(ms).toISOString());
+    setToDate(p.date);
+    setToTime(p.time);
+  };
+
+  const handleSave = async () => {
+    setEditErr(null);
+    const newTo = vnLocalToIso(toDate, toTime);
+    if (Date.parse(newTo) <= Math.max(Date.now(), Date.parse(block.blockedFrom))) {
+      setEditErr("Giờ mở phòng mới phải sau giờ bắt đầu khoá và sau thời điểm hiện tại.");
+      return;
+    }
+    const payload: Record<string, unknown> = { expectedVersion: block.version };
+    if (newTo !== new Date(block.blockedTo).toISOString()) payload.blockedTo = newTo;
+    if (editReason.trim() !== (block.reason ?? "")) payload.reason = editReason.trim();
+    if (editNote.trim() !== (block.note ?? "")) payload.note = editNote.trim();
+    if (editType !== (block.blockType ?? "maintenance")) payload.blockType = editType;
+    if (Object.keys(payload).length === 1) {
+      setEditing(false);
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch(`/api/room-blocks/${block.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json()) as { error?: string; code?: string; message?: string };
+      if (!res.ok) {
+        setEditErr(data.error || "Không thể cập nhật lịch khoá.");
+        if (data.code === "VERSION_CONFLICT" || data.code === "INVALID_STATE") {
+          onBlockDeleted();
+          notifyDataChanged("ROOM_BLOCKS_CHANGED");
+        }
+        return;
+      }
+      toast.success(data.message || "Đã cập nhật lịch khoá phòng.");
+      onBlockDeleted();
+      notifyDataChanged("ROOM_BLOCKS_CHANGED");
+      onClose();
+    } catch {
+      setEditErr("Lỗi kết nối máy chủ.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleDelete = async () => {
     try {
@@ -71,6 +151,7 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           expectedVersion: block.version,
+          reason: releaseReason.trim() || undefined,
         }),
       });
 
@@ -106,8 +187,12 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
 
   const durationStr = calculateDurationHours(block.blockedFrom, block.blockedTo);
   const type = roomBlockTypeOf(block.blockType);
-  const phase = PHASE_BADGE[blockPhase(block)];
-  const canRelease = canManageBlockType(block.blockType, isManager);
+  const released = block.status === "released";
+  const phase = PHASE_BADGE[released ? "released" : blockPhase(block)];
+  const phaseKey = released ? "ended" : blockPhase(block);
+  // An ended block has nothing to reopen (Core answers 409 BLOCK_ENDED); it stays visible as history.
+  const canRelease = canManageBlockType(block.blockType, isManager) && phaseKey !== "ended";
+  const canEdit = canManageBlockType(block.blockType, isManager) && phaseKey !== "ended";
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
@@ -222,9 +307,79 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
             )}
           </div>
 
+          {/* Gia hạn / Sửa giờ */}
+          {canEdit && !editing && (
+            <button
+              type="button"
+              onClick={openEdit}
+              className="w-full py-2 rounded-xl bg-white border border-amber-300 hover:bg-amber-50 text-amber-900 font-bold text-[11px] cursor-pointer shadow-xs"
+            >
+              ⏱️ Gia hạn / Sửa giờ mở phòng
+            </button>
+          )}
+          {editing && (
+            <div className="p-3.5 rounded-xl bg-white border border-amber-300 space-y-2.5 shadow-xs">
+              <div className="text-[10px] uppercase font-bold text-amber-900">Gia hạn / Sửa lịch khoá</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-semibold">Ngày mở phòng</span>
+                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs" />
+                </label>
+                <label className="space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-semibold">Giờ mở (giờ VN)</span>
+                  <select value={toTime} onChange={(e) => setToTime(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white">
+                    {TIME_SLOTS_30MIN.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[1, 2, 4].map((h) => (
+                  <button key={h} type="button" onClick={() => extendBy(h)} className="px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-300 text-[10px] font-bold text-amber-900 cursor-pointer">
+                    +{h} giờ
+                  </button>
+                ))}
+                <button type="button" onClick={() => { setToDate(addDaysStr(toDate, 1)); setToTime("09:00"); }} className="px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-300 text-[10px] font-bold text-amber-900 cursor-pointer">
+                  09:00 hôm sau
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ROOM_BLOCK_TYPES.map((t) => {
+                  const allowed = canManageBlockType(t.code, isManager);
+                  return (
+                    <button
+                      key={t.code}
+                      type="button"
+                      disabled={!allowed}
+                      onClick={() => setEditType(t.code)}
+                      className={`px-2 py-1 rounded-lg border text-[10px] text-left ${editType === t.code ? "bg-amber-100 border-amber-500 font-bold" : allowed ? "bg-white border-slate-200 cursor-pointer" : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"}`}
+                    >
+                      {t.icon} {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <input value={editReason} onChange={(e) => setEditReason(e.target.value)} placeholder="Lý do khoá" className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs" />
+              <input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Ghi chú (tuỳ chọn)" className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs" />
+              {editErr && <p className="text-[11px] text-rose-700 font-semibold">{editErr}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setEditing(false)} disabled={saving} className="flex-1 py-1.5 rounded-lg bg-white border border-slate-300 text-[11px] font-semibold cursor-pointer">
+                  Huỷ sửa
+                </button>
+                <button type="button" onClick={handleSave} disabled={saving} className="flex-1 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold cursor-pointer flex items-center justify-center">
+                  {saving ? <Spinner size="sm" /> : "Lưu thay đổi"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Business notice */}
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed shadow-xs">
-            💡 <strong className="text-slate-800">Quy tắc nghiệp vụ:</strong> Khi mở khóa phòng, phòng sẽ ngay lập tức chuyển về trạng thái sẵn sàng đón khách mà không cần cộng thêm 1 giờ dọn phòng.
+            💡 <strong className="text-slate-800">Quy tắc nghiệp vụ:</strong> Mở khoá khi đang khoá sẽ chốt giờ kết thúc về hiện tại (lịch sử vẫn được giữ). Khoá đã kết thúc thì phòng tự mở lại.
+            {block.blockType === "owner_stay" ? " Khoá “Chủ ở” giữ thêm 60 phút dọn phòng sau giờ mở, như một lượt khách." : " Khoá loại này không cộng thêm giờ dọn phòng."}
           </div>
         </div>
 
@@ -239,7 +394,11 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
               >
                 Đóng
               </button>
-              {canRelease ? (
+              {phaseKey === "ended" ? (
+                <span className="flex-1 py-2 text-center text-[11px] text-slate-500 italic">
+                  {released ? "Lịch khoá đã được mở — chỉ xem." : "Lịch khoá đã kết thúc — phòng đã tự mở lại."}
+                </span>
+              ) : canRelease ? (
                 <button
                   type="button"
                   onClick={() => setShowConfirmDelete(true)}
@@ -259,6 +418,12 @@ export const RoomLockDetailDrawer: React.FC<RoomLockDetailDrawerProps> = ({
               <p className="text-rose-900 font-bold text-[11px]">
                 Bạn có chắc chắn muốn mở khóa phòng {room ? room.name : block.roomId} ngay bây giờ?
               </p>
+              <input
+                value={releaseReason}
+                onChange={(e) => setReleaseReason(e.target.value)}
+                placeholder="Lý do mở sớm (tuỳ chọn), vd: đã sửa xong"
+                className="w-full px-2 py-1.5 rounded-lg border border-rose-200 bg-white text-[11px]"
+              />
               <div className="flex items-center gap-2">
                 <button
                   type="button"

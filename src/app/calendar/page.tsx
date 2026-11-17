@@ -119,12 +119,21 @@ export default function CalendarPage() {
     return () => window.removeEventListener("pointerup", up);
   }, [dragging]);
 
-  const closuresInSel = useMemo(() => {
+  type SelClosure = { id: string; version: number; blockType: string; reason: string; from: string; to: string; roomNumber: string };
+  const closuresInSel = useMemo<SelClosure[]>(() => {
     if (!selection) return [];
-    const seen = new Map<string, { id: string; version: number }>();
-    for (const room of selection.rooms) for (const day of room.days) if (day.date >= selection.from && day.date <= selection.to) for (const c of day.closures) seen.set(c.id, { id: c.id, version: c.version });
+    const seen = new Map<string, SelClosure>();
+    for (const room of selection.rooms)
+      for (const day of room.days)
+        if (day.date >= selection.from && day.date <= selection.to)
+          for (const c of day.closures) seen.set(c.id, { id: c.id, version: c.version, blockType: c.blockType, reason: c.reason, from: c.from, to: c.to, roomNumber: room.roomNumber });
     return [...seen.values()];
   }, [selection]);
+  // "Mở bán lại" reopens stop-sells by default; maintenance / owner stay / cleaning must be ticked on purpose.
+  const [reopenIds, setReopenIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setReopenIds(new Set(closuresInSel.filter((c) => c.blockType === "stop_sell").map((c) => c.id)));
+  }, [closuresInSel]);
   const overridesInSel = useMemo(() => {
     if (!selection) return [];
     const scopes = new Map<string, { roomClass: string; roomId: string | null; plans: Set<CalendarPlan> }>();
@@ -151,13 +160,22 @@ export default function CalendarPage() {
   };
 
   const reopen = async () => {
+    const chosen = closuresInSel.filter((c) => reopenIds.has(c.id));
+    if (chosen.length === 0) {
+      toast.warning("Chưa chọn lịch khoá nào để mở.");
+      return;
+    }
     setBusy(true);
     try {
-      for (const c of closuresInSel) {
-        const res = await fetch(`/api/room-blocks/${encodeURIComponent(c.id)}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: c.version, reason: "Mở bán lại từ Lịch giá & phòng" }) });
-        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Không mở bán lại được.");
-      }
-      toast.success(`Đã mở bán lại ${closuresInSel.length} lịch đóng.`);
+      // One atomic Core batch: either every chosen block reopens or none does.
+      const res = await fetch("/api/room-blocks/release-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocks: chosen.map((c) => ({ id: c.id, expectedVersion: c.version })), reason: "Mở bán lại từ Lịch giá & phòng" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? "Không mở bán lại được.");
+      toast.success(data.message ?? `Đã mở bán lại ${chosen.length} lịch đóng.`);
       done();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không mở bán lại được.");
@@ -336,9 +354,37 @@ export default function CalendarPage() {
                 </p>
                 {confirm ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-slate-700">
-                      {confirm === "reopen" ? `Mở bán lại ${closuresInSel.length} lịch đóng (cả phần nằm ngoài vùng chọn)?` : "Về giá niêm yết cho vùng đã chọn?"}
-                    </span>
+                    {confirm === "reopen" ? (
+                      <div className="w-full space-y-1 max-h-48 overflow-y-auto">
+                        <p className="text-sm text-slate-700">Chọn lịch khoá cần mở (mở cả lịch, kể cả phần nằm ngoài vùng chọn):</p>
+                        {closuresInSel.map((c) => {
+                          const label = data?.blockTypes.find((b) => b.code === c.blockType)?.label ?? c.blockType;
+                          const hm = (iso: string) => new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+                          return (
+                            <label key={c.id} className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={reopenIds.has(c.id)}
+                                onChange={(e) =>
+                                  setReopenIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(c.id);
+                                    else next.delete(c.id);
+                                    return next;
+                                  })
+                                }
+                              />
+                              <span>
+                                <b>{c.roomNumber}</b> · {label} · {hm(c.from)} → {hm(c.to)}
+                                {c.reason && c.reason !== label ? <span className="text-slate-500"> — {c.reason}</span> : null}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-700">Về giá niêm yết cho vùng đã chọn?</span>
+                    )}
                     <button type="button" disabled={busy} onClick={confirm === "reopen" ? reopen : backToList} className="h-10 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">
                       Đồng ý
                     </button>

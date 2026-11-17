@@ -184,6 +184,7 @@ test("Consumer contract: Daily Roster and RosterItem match schema and map cleanl
     },
     checkins: [sampleRosterItem],
     checkouts: [],
+    blocks: [],
   };
 
   const rosterErrors = bookingValidator.validateSchema("#/components/schemas/Roster", sampleRoster);
