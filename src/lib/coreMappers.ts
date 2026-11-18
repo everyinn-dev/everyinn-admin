@@ -438,6 +438,52 @@ export function toLegacyMemberResponse(c: CoreCustomer) {
   };
 }
 
+/** CDP `POST /internal/v1/customers/search` hit (contracts/cdp-core.openapi.json CustomerSearchHit). */
+export interface CoreCustomerSearchHit {
+  customerId: string;
+  fullName: string | null;
+  phone: string | null;
+  phoneNational: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  zalo: string | null;
+  tier: CoreTier;
+  lifetimeBookingCount: number;
+  noShowCount: number;
+  isBlocked: boolean;
+  lastBookingAt: string | null;
+  lastRoomClass: string | null;
+  matchedField: "facebook" | "instagram" | "zalo" | "name" | "phone" | null;
+  matchedValue: string | null;
+  version: number;
+}
+
+/** Search hit → dropdown row + the legacy `Member` shape the booking forms autofill from. */
+export function toMemberSearchHit(h: CoreCustomerSearchHit) {
+  return {
+    customerId: h.customerId,
+    matchedField: h.matchedField,
+    matchedValue: h.matchedValue,
+    lastBookingAt: h.lastBookingAt,
+    lastRoomClass: h.lastRoomClass,
+    member: {
+      phone: h.phoneNational ?? h.phone ?? "",
+      customerId: h.customerId,
+      fullName: h.fullName,
+      instagram: h.instagram,
+      facebook: h.facebook,
+      zalo: h.zalo,
+      totalBookings: h.lifetimeBookingCount,
+      loyaltyTier: toLegacyTier(h.tier),
+      preferredRoomClass: h.lastRoomClass,
+      lastBookedAt: h.lastBookingAt,
+      isBlocked: h.isBlocked ? 1 : 0,
+      noShowCount: h.noShowCount,
+      version: h.version,
+    },
+  };
+}
+
 export function toLegacyCdpTiers(rules: CoreLoyaltyRules) {
   const out: Record<string, { min_spent: number; min_bookings: number }> = {};
   for (const t of rules.tierRules.tiers) {

@@ -3,7 +3,6 @@
 import React, { useMemo, useState } from "react";
 import type {
   LoyaltyTier,
-  Member,
   PricingRule,
   Room,
   SurchargeRule,
@@ -12,6 +11,8 @@ import type { Promotion } from "@/types/promotions";
 import type { CoreHoldDto } from "@/lib/coreMappers";
 import { calculatePrice } from "@/lib/pricing";
 import { PhoneLookupField } from "../PhoneLookupField";
+import { CustomerSearchCombobox } from "../CustomerSearchCombobox";
+import { useGuestAutofill } from "../useGuestAutofill";
 import { PromotionSelector } from "../PromotionSelector";
 import { DepositSection } from "../DepositSection";
 import { PriceSummaryCard } from "../PriceSummaryCard";
@@ -52,12 +53,20 @@ export const HoldBookingFormStep: React.FC<HoldBookingFormStepProps> = ({
 }) => {
   const existingDraft = hold.checkoutDraft;
 
-  const [phone, setPhone] = useState<string>(existingDraft?.guest.phoneRaw || "");
-  const [name, setName] = useState<string>(existingDraft?.guest.name || "");
-  const [instagram, setInstagram] = useState<string>(existingDraft?.guest.instagram || "");
-  const [facebook, setFacebook] = useState<string>(existingDraft?.guest.facebook || "");
-  const [zalo, setZalo] = useState<string>(existingDraft?.guest.zalo || "");
-  const [foundMember, setFoundMember] = useState<Member | null>(null);
+  // Guest block: one source of truth for the social-search dropdown and the phone lookup.
+  const guest = useGuestAutofill({
+    phone: existingDraft?.guest.phoneRaw || "",
+    name: existingDraft?.guest.name || "",
+    instagram: existingDraft?.guest.instagram || "",
+    facebook: existingDraft?.guest.facebook || "",
+    zalo: existingDraft?.guest.zalo || "",
+  });
+  const { phone, name, instagram, facebook, zalo } = guest.fields;
+  const setName = (v: string) => guest.setField("name", v);
+  const setInstagram = (v: string) => guest.setField("instagram", v);
+  const setFacebook = (v: string) => guest.setField("facebook", v);
+  const setZalo = (v: string) => guest.setField("zalo", v);
+  const foundMember = guest.member;
 
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number>(
@@ -280,19 +289,21 @@ export const HoldBookingFormStep: React.FC<HoldBookingFormStepProps> = ({
               1. Thông Tin Khách Hàng (Mini CDP)
             </h3>
 
+            <CustomerSearchCombobox
+              selected={foundMember}
+              onSelect={guest.selectMember}
+              undoLabel={guest.undoLabel}
+              onUndo={guest.undoAutofill}
+            />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <PhoneLookupField
                 phone={phone}
-                onChangePhone={setPhone}
-                onMemberFound={(member) => {
-                  setFoundMember(member);
-                  const memberName = member.full_name || member.fullName;
-                  if (memberName) setName(memberName);
-                  if (member.instagram) setInstagram(member.instagram);
-                  if (member.facebook) setFacebook(member.facebook);
-                  if (member.zalo) setZalo(member.zalo);
-                }}
-                onMemberNotFound={() => setFoundMember(null)}
+                onChangePhone={(p) => guest.setField("phone", p)}
+                member={foundMember}
+                onMemberFound={guest.selectMember}
+                onMemberNotFound={guest.memberNotFound}
+                onPhoneChanged={guest.phoneChanged}
               />
 
               <Input
