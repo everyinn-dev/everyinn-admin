@@ -14,7 +14,9 @@ import {
   SurchargeRule,
 } from "@/types";
 import { calculatePrice } from "@/lib/pricing";
-import { PhoneLookupField } from "./PhoneLookupField";
+import { lookupMemberByPhone, PhoneLookupField } from "./PhoneLookupField";
+import { CustomerSearchCombobox } from "./CustomerSearchCombobox";
+import { useGuestAutofill } from "./useGuestAutofill";
 import { BookingTypeTabs } from "./BookingTypeTabs";
 import { HourlyFields } from "./HourlyFields";
 import { OvernightFields } from "./OvernightFields";
@@ -60,14 +62,16 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const defaultDate =
     queryDate || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
-  const [phone, setPhone] = useState(queryPhone || "");
-  const [name, setName] = useState(queryName || "");
-  const [instagram, setInstagram] = useState("");
-  const [facebook, setFacebook] = useState("");
-  const [zalo, setZalo] = useState("");
+  // Guest block: one source of truth for the social-search dropdown and the phone lookup.
+  const guest = useGuestAutofill({ phone: queryPhone || "", name: queryName || "" });
+  const { phone, name, instagram, facebook, zalo } = guest.fields;
+  const setName = (v: string) => guest.setField("name", v);
+  const setInstagram = (v: string) => guest.setField("instagram", v);
+  const setFacebook = (v: string) => guest.setField("facebook", v);
+  const setZalo = (v: string) => guest.setField("zalo", v);
+  const foundMember = guest.member;
   // Guest count state (Haven max 2, Signature max 4)
   const [numGuests, setNumGuests] = useState<number>(2);
-  const [foundMember, setFoundMember] = useState<Member | null>(null);
   const [updatingSocial, setUpdatingSocial] = useState(false);
   const [socialUpdateFeedback, setSocialUpdateFeedback] = useState<string | null>(null);
 
@@ -279,34 +283,27 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     };
   }, [rawPricing, discountAmount]);
 
-  // CDP Auto-fill callback (Phone lookup found returning member)
+  // CDP auto-fill (phone lookup or social search): refill the whole guest block from the profile.
   const handleMemberFound = (member: Member) => {
-    setFoundMember(member);
-    const memberName = member.full_name || member.fullName;
-    if (memberName) {
-      setName(memberName);
-    }
-    setInstagram(member.instagram || "");
-    setFacebook(member.facebook || "");
-    setZalo(member.zalo || "");
+    guest.selectMember(member);
+    setSocialUpdateFeedback(null);
   };
 
   const handleMemberNotFound = () => {
-    setFoundMember(null);
+    guest.memberNotFound();
+    setSocialUpdateFeedback(null);
   };
 
   // Prefill phone lookup if navigated from Rebook button
   useEffect(() => {
     if (queryPhone && queryPhone.trim().length >= 9) {
-      fetch(`/api/members/${queryPhone.trim()}`)
-        .then((res) => res.json() as any)
-        .then((data) => {
-          if (data && data.found && data.member) {
-            handleMemberFound(data.member);
-          }
+      lookupMemberByPhone(queryPhone)
+        .then((r) => {
+          if (r.member) handleMemberFound(r.member);
         })
         .catch((err) => console.error("Prefill phone lookup error:", err));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryPhone]);
 
   // Direct social update for returning guests by phone key
@@ -344,17 +341,14 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         toast.error(errorText, "Lỗi cập nhật mạng xã hội");
         throw new Error(errorText);
       }
-      setFoundMember((prev) =>
-        prev
-          ? {
-              ...prev,
-              instagram: cleanIg,
-              facebook: cleanFb,
-              zalo: cleanZalo,
-              full_name: name.trim() || prev.full_name,
-            }
-          : null
-      );
+      guest.profileSaved((prev) => ({
+        ...prev,
+        ...(data.member ?? {}),
+        instagram: cleanIg,
+        facebook: cleanFb,
+        zalo: cleanZalo,
+        full_name: name.trim() || prev.full_name,
+      }));
       const msg = "Đã lưu cập nhật MXH (Insta/FB/Zalo) vào hồ sơ khách theo SĐT!";
       setSocialUpdateFeedback(msg);
       toast.success(msg, "Cập nhật CDP");
@@ -547,19 +541,26 @@ export const BookingForm: React.FC<BookingFormProps> = ({
           </span>
         </div>
 
+        {/* Row 0: returning-guest search by FB / IG / Zalo name, full name or phone */}
+        <CustomerSearchCombobox
+          selected={foundMember}
+          onSelect={handleMemberFound}
+          undoLabel={guest.undoLabel}
+          onUndo={guest.undoAutofill}
+        />
+
         {/* Row 1: Phone + Name */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <PhoneLookupField
             phone={phone}
             onChangePhone={(p) => {
-              setPhone(p);
-              if (foundMember && p.trim() !== foundMember.phone) {
-                setFoundMember(null);
-                setSocialUpdateFeedback(null);
-              }
+              guest.setField("phone", p);
+              setSocialUpdateFeedback(null);
             }}
+            member={foundMember}
             onMemberFound={handleMemberFound}
             onMemberNotFound={handleMemberNotFound}
+            onPhoneChanged={guest.phoneChanged}
           />
 
           <Input
