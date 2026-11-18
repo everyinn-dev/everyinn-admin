@@ -147,6 +147,10 @@ export interface StaffSession {
 
 export interface Member {
   phone: string;
+  /** CDP customer id (present on every Core-backed member response). */
+  customerId?: string;
+  /** CDP optimistic version (profile edits / phone change). */
+  version?: number;
   full_name?: string;
   fullName?: string;
   total_bookings: number;
