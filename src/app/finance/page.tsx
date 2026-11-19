@@ -6,7 +6,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/apiClient";
 import { getVnCurrentMonth } from "@/lib/timelineUtils";
-import type { RevenueMatrix } from "@/types/finance";
+import { BASIS_OPTIONS, cellAt, columnAt, summarize } from "@/lib/financeView";
+import type { RevenueBasis, RevenueCell, RevenueMatrix } from "@/types/finance";
 
 const MAX_MONTHS = 24;
 const DEFAULT_MONTHS_BACK = 3;
@@ -14,6 +15,28 @@ const DEFAULT_MONTHS_BACK = 3;
 const moneyFmt = new Intl.NumberFormat("vi-VN");
 const formatMoney = (v: number) => `${moneyFmt.format(v)} đ`;
 const cellMoney = (v: number) => (v === 0 ? "-" : formatMoney(v));
+const pct = (v: number | null) => (v === null ? "-" : `${(v * 100).toFixed(1)}%`);
+
+/** Small breakdown under a cell total (only the non-zero parts). */
+function CellParts({ c }: { c: RevenueCell }) {
+  const parts: [string, number, string][] = [
+    ["Phòng", c.room, "text-slate-500"],
+    ["Phụ phí", c.charges, "text-sky-700"],
+    ["Giữ lại", c.retained, "text-amber-700"],
+    ["Điều chỉnh", c.restate, "text-rose-700"],
+  ];
+  const shown = parts.filter(([, v]) => v !== 0);
+  if (shown.length <= 1 && c.restate === 0) return null;
+  return (
+    <span className="mt-0.5 block text-[10px] leading-tight font-normal">
+      {shown.map(([label, v, cls]) => (
+        <span key={label} className={`block ${cls}`}>
+          {label}: {moneyFmt.format(v)}
+        </span>
+      ))}
+    </span>
+  );
+}
 /** YYYY-MM → MM/YYYY */
 const monthLabel = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
 
@@ -72,6 +95,8 @@ export default function FinancePage() {
   const currentYear = Number(currentMonth.slice(0, 4));
   const years = useMemo(() => Array.from({ length: 6 }, (_, i) => currentYear - 4 + i), [currentYear]);
 
+  const [basis, setBasis] = useState<RevenueBasis>("checkin");
+  const [showParts, setShowParts] = useState(true);
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(currentMonth);
   const [data, setData] = useState<RevenueMatrix | null>(null);
@@ -91,13 +116,13 @@ export default function FinancePage() {
   const load = useCallback(
     async (force = false) => {
       if (rangeError) return;
-      const key = `${from}|${to}`;
+      const key = `${from}|${to}|${basis}`;
       setLoading(true);
       setError(null);
       try {
         const headers: Record<string, string> = {};
         if (!force && etagRef.current?.key === key) headers["If-None-Match"] = etagRef.current.etag;
-        const res = await apiFetch(`/api/finance/revenue-matrix?from=${from}&to=${to}`, { headers, cache: "no-store" });
+        const res = await apiFetch(`/api/finance/revenue-matrix?from=${from}&to=${to}&basis=${basis}`, { headers, cache: "no-store" });
         if (res.status === 304) return;
         const body = (await res.json().catch(() => null)) as (Partial<RevenueMatrix> & { error?: string }) | null;
         if (!res.ok) {
@@ -114,7 +139,7 @@ export default function FinancePage() {
         setLoading(false);
       }
     },
-    [from, to, rangeError],
+    [from, to, basis, rangeError],
   );
 
   useEffect(() => {
@@ -135,6 +160,9 @@ export default function FinancePage() {
   const shade = (v: number) => (v > 0 && maxCell > 0 ? `rgba(16, 185, 129, ${(0.06 + (v / maxCell) * 0.22).toFixed(3)})` : undefined);
 
   const stickyCol = "sticky left-0 z-10";
+  const summary = useMemo(() => (data ? summarize(data) : null), [data]);
+  const lockedAt = (i: number) => data?.monthMeta?.[i]?.locked ?? false;
+  const anyRestate = useMemo(() => (data ? data.months.some((_m, i) => columnAt(data, i).restate !== 0) : false), [data]);
 
   return (
     <AdminShell>
@@ -142,13 +170,32 @@ export default function FinancePage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Báo cáo doanh thu theo phòng</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Doanh thu = giá trị các đơn <b>đã xác nhận</b>, theo tháng <b>check-in</b>. Đơn huỷ / no-show không tính vào doanh thu;
-            số tiền khách sạn <b>giữ lại</b> từ các đơn đó (đã thu − đã hoàn) được báo riêng ở dòng “Thu giữ từ huỷ / No-show”.
+            Doanh thu = <b>tiền phòng</b> của đơn đã xác nhận (sau ưu đãi & loyalty) + <b>phụ phí lúc ở</b> tính vào ngày ghi nhận +{" "}
+            <b>tiền giữ lại</b> từ đơn huỷ / no-show tính vào ngày huỷ. Tháng đã qua ngày 05 của tháng sau được <b>khoá sổ</b> 🔒; thay đổi
+            sau đó ghi vào dòng “Điều chỉnh kỳ đã khoá” của tháng đang mở. “Còn phải thu” chỉ để đối soát, không phải doanh thu.
           </p>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xs">
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cách tính</span>
+            <div role="radiogroup" aria-label="Cách tính doanh thu" className="flex rounded-lg border border-slate-300 overflow-hidden">
+              {BASIS_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={basis === o.value}
+                  title={o.hint}
+                  onClick={() => setBasis(o.value)}
+                  className={`px-3 py-2 text-sm font-semibold ${basis === o.value ? "bg-emerald-600 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <MonthPicker label="Từ tháng" value={from} onChange={setFrom} years={years} />
           <MonthPicker label="Đến tháng" value={to} onChange={setTo} years={years} />
           <div className="flex flex-wrap gap-1.5">
@@ -161,6 +208,9 @@ export default function FinancePage() {
             <Button size="sm" variant="outline" onClick={() => presetYear(currentYear - 1)}>
               Năm {currentYear - 1}
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowParts((v) => !v)}>
+              {showParts ? "Ẩn chi tiết ô" : "Hiện chi tiết ô"}
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => load(true)} isLoading={loading}>
               Làm mới
             </Button>
@@ -171,26 +221,60 @@ export default function FinancePage() {
         {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
         {/* Summary */}
-        {data && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5">
-              <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Tổng doanh thu</p>
-              <p className="mt-1 text-xl font-bold text-emerald-900 tabular-nums">{formatMoney(data.grandTotal)}</p>
+        {data && summary && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5">
+                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Tổng doanh thu</p>
+                <p className="mt-1 text-xl font-bold text-emerald-900 tabular-nums">{formatMoney(summary.total)}</p>
+                <p className="text-[11px] text-emerald-800/80">{BASIS_OPTIONS.find((o) => o.value === basis)?.label}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tiền phòng</p>
+                <p className="mt-1 text-xl font-bold text-slate-900 tabular-nums">{formatMoney(summary.room)}</p>
+                <p className="text-[11px] text-slate-500">{moneyFmt.format(summary.units)} đêm / lượt bán</p>
+              </div>
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3.5">
+                <p className="text-[11px] font-bold text-sky-800 uppercase tracking-wider">Phụ phí lúc ở</p>
+                <p className="mt-1 text-xl font-bold text-sky-900 tabular-nums">{formatMoney(summary.charges)}</p>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
+                <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Giữ lại từ huỷ / No-show</p>
+                <p className="mt-1 text-xl font-bold text-amber-900 tabular-nums">{formatMoney(summary.retained)}</p>
+                {summary.restate !== 0 && <p className="text-[11px] text-rose-700">Điều chỉnh kỳ đã khoá: {formatMoney(summary.restate)}</p>}
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Số đơn</p>
-              <p className="mt-1 text-xl font-bold text-slate-900 tabular-nums">{moneyFmt.format(data.bookingCount)}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
-              <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Thu giữ từ huỷ / No-show</p>
-              <p className="mt-1 text-xl font-bold text-amber-900 tabular-nums">{formatMoney(data.retained?.grandTotal ?? 0)}</p>
-              <p className="text-[11px] text-amber-800/80">{moneyFmt.format(data.retained?.bookingCount ?? 0)} đơn giữ tiền</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Khoảng thời gian</p>
-              <p className="mt-1 text-xl font-bold text-slate-900">
-                {monthLabel(data.from)} – {monthLabel(data.to)}
-              </p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {basis === "night" && (
+                <>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TB / ngày-phòng có khách</p>
+                    <p className="mt-1 text-lg font-bold text-slate-900 tabular-nums">{summary.perOccupiedDay === null ? "-" : formatMoney(summary.perOccupiedDay)}</p>
+                    <p className="text-[11px] text-slate-500">{moneyFmt.format(summary.occupiedDays)} ngày-phòng · công suất {pct(summary.occupancy)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Giá phòng bình quân (ADR)</p>
+                    <p className="mt-1 text-lg font-bold text-slate-900 tabular-nums">{summary.adr === null ? "-" : formatMoney(summary.adr)}</p>
+                  </div>
+                </>
+              )}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Còn phải thu (đối soát)</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 tabular-nums">{formatMoney(summary.receivable)}</p>
+                <p className="text-[11px] text-slate-500">Đơn đang hiệu lực, theo tháng check-in</p>
+              </div>
+              {summary.overpaid > 0 && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3.5">
+                  <p className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Thu thừa — đang nợ khách</p>
+                  <p className="mt-1 text-lg font-bold text-rose-900 tabular-nums">{formatMoney(summary.overpaid)}</p>
+                </div>
+              )}
+              <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Khoảng thời gian</p>
+                <p className="mt-1 text-lg font-bold text-slate-900">
+                  {monthLabel(data.from)} – {monthLabel(data.to)}
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -209,8 +293,13 @@ export default function FinancePage() {
                   <th className={`${stickyCol} top-0 z-30 bg-slate-100 border-b border-r border-slate-200 px-4 py-2.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider`}>
                     Phòng
                   </th>
-                  {data.months.map((m) => (
-                    <th key={m} className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200 px-4 py-2.5 text-right text-xs font-bold text-slate-600 whitespace-nowrap">
+                  {data.months.map((m, i) => (
+                    <th
+                      key={m}
+                      title={lockedAt(i) ? "Đã khoá sổ — số liệu cố định" : "Đang mở — số liệu còn thay đổi"}
+                      className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200 px-4 py-2.5 text-right text-xs font-bold text-slate-600 whitespace-nowrap"
+                    >
+                      {lockedAt(i) ? "🔒 " : ""}
                       {monthLabel(m)}
                     </th>
                   ))}
@@ -220,7 +309,7 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {data.rooms.map((r) => (
+                {data.rooms.map((r, ri) => (
                   <tr key={r.roomId} className="group">
                     <th scope="row" className={`${stickyCol} bg-white group-hover:bg-slate-50 border-b border-r border-slate-100 px-4 py-2 text-left font-bold text-slate-800 whitespace-nowrap`}>
                       <span className="flex items-center gap-2">
@@ -232,9 +321,10 @@ export default function FinancePage() {
                       <td
                         key={data.months[i]}
                         style={{ backgroundColor: shade(v) }}
-                        className={`border-b border-slate-100 px-4 py-2 text-right whitespace-nowrap ${v === 0 ? "text-slate-300" : "text-slate-800"}`}
+                        className={`border-b border-slate-100 px-4 py-2 text-right align-top whitespace-nowrap ${v === 0 ? "text-slate-300" : "text-slate-800"}`}
                       >
                         {cellMoney(v)}
+                        {showParts && <CellParts c={cellAt(data, ri, i)} />}
                       </td>
                     ))}
                     <td className="border-b border-l border-slate-200 bg-emerald-50/60 px-4 py-2 text-right font-bold text-emerald-900 whitespace-nowrap">
@@ -244,21 +334,30 @@ export default function FinancePage() {
                 ))}
               </tbody>
               <tfoot>
-                {data.retained && (
-                  <tr>
-                    <th className={`${stickyCol} bg-amber-50 border-t border-r border-amber-200 px-4 py-2 text-left text-xs font-bold text-amber-800 whitespace-nowrap`}>
-                      Thu giữ từ huỷ / No-show
-                    </th>
-                    {data.retained.columnTotals.map((v, i) => (
-                      <td key={data.months[i]} className={`bg-amber-50 border-t border-amber-200 px-4 py-2 text-right whitespace-nowrap ${v === 0 ? "text-amber-300" : "font-semibold text-amber-900"}`}>
-                        {cellMoney(v)}
-                      </td>
-                    ))}
-                    <td className="bg-amber-100 border-t border-l border-amber-200 px-4 py-2 text-right font-bold text-amber-900 whitespace-nowrap">
-                      {cellMoney(data.retained.grandTotal)}
+                {(
+                  [
+                    ["Tiền phòng", "room", "bg-white text-slate-700"],
+                    ["Phụ phí lúc ở", "charges", "bg-sky-50 text-sky-900"],
+                    ["Giữ lại từ huỷ / No-show", "retained", "bg-amber-50 text-amber-900"],
+                    ...(anyRestate ? [["Điều chỉnh kỳ đã khoá", "restate", "bg-rose-50 text-rose-900"]] : []),
+                    ["Còn phải thu (đối soát)", "receivable", "bg-slate-50 text-slate-500 italic"],
+                  ] as [string, keyof RevenueCell, string][]
+                ).map(([label, key, cls]) => (
+                  <tr key={key}>
+                    <th className={`${stickyCol} ${cls} border-t border-r border-slate-200 px-4 py-2 text-left text-xs font-bold whitespace-nowrap`}>{label}</th>
+                    {data.months.map((m, i) => {
+                      const v = columnAt(data, i)[key];
+                      return (
+                        <td key={m} className={`${cls} border-t border-slate-200 px-4 py-2 text-right whitespace-nowrap ${v === 0 ? "opacity-40" : "font-semibold"}`}>
+                          {cellMoney(v)}
+                        </td>
+                      );
+                    })}
+                    <td className={`${cls} border-t border-l border-slate-200 px-4 py-2 text-right font-bold whitespace-nowrap`}>
+                      {cellMoney(summary ? summary[key] : 0)}
                     </td>
                   </tr>
-                )}
+                ))}
                 <tr>
                   <th className={`${stickyCol} bottom-0 z-30 bg-slate-100 border-t-2 border-r border-slate-300 px-4 py-2.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider`}>
                     Tổng cộng
