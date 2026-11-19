@@ -4,6 +4,7 @@ import { toHttpError } from "@/lib/apiError";
 import { intentKey } from "@/lib/bffIdempotency";
 import { toLegacyBookingRow, type CoreBookingEnvelope } from "@/lib/coreMappers";
 import { ENTRY_LABELS, planLedgerAction, type LedgerEntry } from "@/lib/ledger";
+import type { CoreBookingDto } from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,11 +35,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const plan = planLedgerAction((await req.json()) as Record<string, unknown>);
     if (!plan.ok) return Response.json({ error: plan.error, code: "VALIDATION_FAILED", details: { field: plan.field } }, { status: 400 });
-    if ((plan.kind === "reverse" || plan.body.entryType === "adjustment") && staff.role !== "manager") {
+    if ((plan.kind === "reverse" || (plan.kind === "entry" && plan.body.entryType === "adjustment")) && staff.role !== "manager") {
       return Response.json({ error: "Chỉ quản lý được điều chỉnh hoặc đảo bút toán.", code: "FORBIDDEN_ROLE" }, { status: 403 });
     }
 
     const base = `/internal/v1/bookings/${encodeURIComponent(id)}/financial-entries`;
+    if (plan.kind === "transfer") {
+      // B10: one Core transaction moves the money (refund here, payment on the target), both legs linked.
+      const t = await bookingCore.post<{ transferId: string; entries: LedgerEntry[]; booking: CoreBookingDto; targetBooking: CoreBookingDto }>(`${base}/transfer`, {
+        staff,
+        idempotencyKey: intentKey(req, "booking-ledger-transfer"),
+        body: plan.body,
+      });
+      return Response.json(
+        {
+          success: true,
+          message: `Đã chuyển ${plan.body.amount.toLocaleString("vi-VN")} đ sang đơn ${plan.body.toBookingId}.`,
+          transferId: t.data?.transferId ?? null,
+          booking: t.data?.booking ? toLegacyBookingRow(t.data.booking) : null,
+          targetBooking: t.data?.targetBooking ? toLegacyBookingRow(t.data.targetBooking) : null,
+        },
+        { status: 201, headers: NO_STORE },
+      );
+    }
     const res =
       plan.kind === "reverse"
         ? await bookingCore.post<CoreBookingEnvelope & { entry: LedgerEntry }>(`${base}/${encodeURIComponent(plan.entryId)}/reverse`, {

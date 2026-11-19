@@ -5,7 +5,7 @@
  */
 import { vnLocalInputToIso } from "./vnTime.ts";
 
-export const LEDGER_ACTIONS = ["payment", "refund", "adjustment", "reverse"] as const;
+export const LEDGER_ACTIONS = ["payment", "refund", "adjustment", "reverse", "transfer"] as const;
 export type LedgerAction = (typeof LEDGER_ACTIONS)[number];
 
 export const PAYMENT_METHODS = [
@@ -30,6 +30,10 @@ export interface LedgerEntry {
   actor: { id: number; name: string | null } | null;
   occurredAt: string;
   createdAt: string;
+  externalRef?: string | null;
+  /** B10: both legs of a transfer between bookings share it. */
+  transferId?: string | null;
+  counterpartBookingId?: string | null;
 }
 
 export const ENTRY_LABELS: Record<LedgerEntry["entryType"], string> = {
@@ -42,9 +46,15 @@ export const ENTRY_LABELS: Record<LedgerEntry["entryType"], string> = {
 
 export const methodLabel = (m: string) => PAYMENT_METHODS.find((x) => x.value === m)?.label ?? m;
 
-/** Each entry is reversible once; a reversal itself is not. */
+/** "Chuyển sang đơn X" / "Nhận từ đơn X" for transfer legs, the plain type label otherwise. */
+export function entryLabel(e: LedgerEntry): string {
+  if (e.transferId && e.counterpartBookingId) return e.amount < 0 ? `Chuyển sang đơn ${e.counterpartBookingId}` : `Nhận từ đơn ${e.counterpartBookingId}`;
+  return ENTRY_LABELS[e.entryType];
+}
+
+/** Each entry is reversible once; a reversal itself is not; a transfer leg never alone (transfer back instead). */
 export function canReverse(entry: LedgerEntry, all: readonly LedgerEntry[]): boolean {
-  return entry.entryType !== "reversal" && !all.some((e) => e.reversesEntryId === entry.id);
+  return entry.entryType !== "reversal" && !entry.transferId && !all.some((e) => e.reversesEntryId === entry.id);
 }
 
 export interface LedgerBalance {
@@ -68,6 +78,7 @@ export function balanceOf(b: { totalPrice: number; paidAmount?: number | null; r
 export type LedgerPlan =
   | { ok: true; kind: "entry"; body: { entryType: "payment" | "refund" | "adjustment"; amount: number; method: PaymentMethod; reason?: string; reference?: string; occurredAt?: string } }
   | { ok: true; kind: "reverse"; entryId: string; body: { reason: string } }
+  | { ok: true; kind: "transfer"; body: { toBookingId: string; amount: number; reason: string; method: PaymentMethod } }
   | { ok: false; error: string; field?: string };
 
 /**
@@ -84,6 +95,16 @@ export function planLedgerAction(input: Record<string, unknown>, nowMs = Date.no
     if (!entryId) return { ok: false, error: "Thiếu bút toán cần đảo.", field: "entryId" };
     if (!reason) return { ok: false, error: "Vui lòng nhập lý do đảo bút toán.", field: "reason" };
     return { ok: true, kind: "reverse", entryId, body: { reason } };
+  }
+
+  if (action === "transfer") {
+    const toBookingId = typeof input.toBookingId === "string" ? input.toBookingId.trim().toUpperCase() : "";
+    const amt = Math.round(Number(input.amount));
+    if (!/^EI-[A-Z0-9-]{4,40}$/.test(toBookingId)) return { ok: false, error: "Nhập mã đơn nhận tiền (VD: EI-20261110-E274).", field: "toBookingId" };
+    if (!Number.isFinite(amt) || amt <= 0) return { ok: false, error: "Vui lòng nhập số tiền lớn hơn 0.", field: "amount" };
+    if (!reason) return { ok: false, error: "Vui lòng nhập lý do chuyển tiền.", field: "reason" };
+    const m = typeof input.method === "string" && PAYMENT_METHODS.some((x) => x.value === input.method) ? (input.method as PaymentMethod) : "other";
+    return { ok: true, kind: "transfer", body: { toBookingId, amount: amt, reason, method: m } };
   }
 
   const amount = Math.round(Number(input.amount));

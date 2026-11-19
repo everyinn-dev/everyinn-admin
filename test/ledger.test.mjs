@@ -48,3 +48,20 @@ test("edit pricing: the balance hint follows the chosen mode — B6", () => {
   assert.deepEqual(balanceHint(q, "keep_agreed"), { kind: "collect", amount: 500000 });
   assert.deepEqual(balanceHint(q, "current_rates"), { kind: "refund", amount: 100000 });
 });
+
+test("ledger: transfer to another booking — B10", async () => {
+  const { entryLabel } = await import("../src/lib/ledger.ts");
+  assert.deepEqual(planLedgerAction({ action: "transfer", toBookingId: " ei-20261110-e274 ", amount: "700000", reason: "Tạo lại đơn" }, NOW), {
+    ok: true,
+    kind: "transfer",
+    body: { toBookingId: "EI-20261110-E274", amount: 700000, reason: "Tạo lại đơn", method: "other" },
+  });
+  assert.equal(planLedgerAction({ action: "transfer", toBookingId: "abc", amount: 1, reason: "x" }, NOW).ok, false);
+  assert.equal(planLedgerAction({ action: "transfer", toBookingId: "EI-20261110-E274", amount: 0, reason: "x" }, NOW).ok, false);
+  assert.equal(planLedgerAction({ action: "transfer", toBookingId: "EI-20261110-E274", amount: 5 }, NOW).ok, false); // reason required
+  const out = { id: "o", entryType: "refund", amount: -700000, transferId: "trf_1", counterpartBookingId: "EI-B", reversesEntryId: null };
+  const inn = { id: "i", entryType: "payment", amount: 700000, transferId: "trf_1", counterpartBookingId: "EI-A", reversesEntryId: null };
+  assert.equal(entryLabel(out), "Chuyển sang đơn EI-B");
+  assert.equal(entryLabel(inn), "Nhận từ đơn EI-A");
+  assert.equal(canReverse(out, [out]), false); // legs are never reversed alone
+});
