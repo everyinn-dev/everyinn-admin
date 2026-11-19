@@ -275,7 +275,34 @@ function DashboardContent() {
     return { all, haven, signature };
   }, [roomsData]);
 
-  // Statistics calculation: Đồng bộ chuẩn công thức Báo cáo tài chính (Finance Report) & Đơn hôm nay
+  // Month revenue comes from Booking Core's revenue matrix (EI-FINANCE-ONTOLOGY-001 ĐN1: room by check-in month +
+  // stay charges by day + retained on the closure day) — never recomputed here. Refetched when the gantt data changes.
+  const [monthRevenue, setMonthRevenue] = useState<number | null>(null);
+  // ETag per month: the gantt polls often, an unchanged ledger answers 304 without Core recomputing anything.
+  const revenueEtagRef = useRef<{ month: string; etag: string } | null>(null);
+  useEffect(() => {
+    if (!isManager || viewMode !== "month") return;
+    let cancelled = false;
+    const headers: Record<string, string> = {};
+    if (revenueEtagRef.current?.month === month) headers["If-None-Match"] = revenueEtagRef.current.etag;
+    apiFetch(`/api/finance/revenue-matrix?from=${month}&to=${month}&basis=checkin`, { headers, cache: "no-store" })
+      .then(async (res) => {
+        if (res.status === 304 || cancelled) return;
+        if (!res.ok) return setMonthRevenue(null);
+        const body = (await res.json()) as { grandTotal?: number };
+        const etag = res.headers.get("ETag");
+        revenueEtagRef.current = etag ? { month, etag } : null;
+        if (!cancelled) setMonthRevenue(typeof body?.grandTotal === "number" ? body.grandTotal : null);
+      })
+      .catch(() => {
+        if (!cancelled) setMonthRevenue(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isManager, viewMode, month, roomsData]);
+
+  // Statistics calculation: Đơn hôm nay + giá trị đơn nhận phòng trong ngày (xem theo ngày)
   const stats = useMemo(() => {
     let todayBookingsCount = 0;
     let totalRevenue = 0;
@@ -355,10 +382,14 @@ function DashboardContent() {
           {isManager && (
             <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
-                {viewMode === "month" ? "Doanh thu tháng này" : "Doanh thu ngày"}
+                {viewMode === "month" ? "Doanh thu tháng (theo check-in)" : "Giá trị đơn nhận phòng trong ngày"}
               </span>
               <span className="text-base font-extrabold text-teal-700 font-mono tabular-nums">
-                {stats.totalRevenue.toLocaleString("vi-VN")} đ
+                {viewMode === "month"
+                  ? monthRevenue === null
+                    ? "…"
+                    : `${monthRevenue.toLocaleString("vi-VN")} đ`
+                  : `${stats.totalRevenue.toLocaleString("vi-VN")} đ`}
               </span>
             </div>
           )}
