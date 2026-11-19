@@ -49,12 +49,40 @@ test("UI-consumed DTOs match the contract (settings, escalation, conversation, d
     burstWaitSeconds: 60,
     takeoverMinutes: 120,
     autoCheckinWindowHours: 8,
-    manualReminderLeadHours: 6,
+    manualReminderLeadHours: 4,
     dailyNeuronBudget: 20000,
     toolSwitches: { ask_owner: true },
+    opsReminders: {
+      enabled: true,
+      dailyBriefTime: "07:30",
+      hkDailyTime: "07:30",
+      nightBeforeTime: "20:00",
+      nightBeforeEndHour: 11,
+      checkinLeadHours: 4,
+      hkLeadMinutes: 60,
+      enableM1: true,
+      enableM2: true,
+      enableM3: true,
+      enableM4: true,
+      enableM5: true,
+    },
     version: 1,
   };
   assert.deepEqual(v.validateSchema("#/components/schemas/Settings", settings), []);
+
+  const opsState = {
+    bookingId: "EI-261119-101",
+    checkinGuideStatus: "sent_manual",
+    checkinGuideSentAt: "2026-11-19T05:00:00.000Z",
+    checkinGuideSentById: 101,
+    checkinGuideSentByName: "Lễ Tân A",
+    hkStatus: "cleaning",
+    hkUpdatedAt: "2026-11-19T05:30:00.000Z",
+    hkUpdatedById: 101,
+    hkUpdatedByName: "Lễ Tân A",
+    updatedAt: "2026-11-19T05:30:00.000Z",
+  };
+  assert.deepEqual(v.validateSchema("#/components/schemas/BookingOpsState", opsState), []);
 
   const esc = {
     id: "esc_1",

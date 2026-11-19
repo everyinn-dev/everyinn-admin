@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { agentApi, AgentApiError, type AgentSettings } from "@/lib/agentApi";
+import { agentApi, AgentApiError, type AgentSettings, type OpsRemindersConfig } from "@/lib/agentApi";
 import { useToast } from "@/components/ui/Toast";
 import { useAdminStaff } from "@/components/layout/AdminShell";
 import { DoorCodesPanel } from "@/components/door-codes/DoorCodesPanel";
@@ -704,6 +704,239 @@ function MetaAccessCard({ settings, onSaved }: { settings: AgentSettings; onSave
   );
 }
 
+const DEFAULT_OPS_REMINDERS: OpsRemindersConfig = {
+  enabled: true,
+  dailyBriefTime: "07:30",
+  hkDailyTime: "07:30",
+  nightBeforeTime: "20:00",
+  nightBeforeEndHour: 11,
+  checkinLeadHours: 4,
+  hkLeadMinutes: 60,
+  enableM1: true,
+  enableM2: true,
+  enableM3: true,
+  enableM4: true,
+  enableM5: true,
+};
+
+function OpsRemindersCard({ settings, onSaved }: { settings: AgentSettings; onSaved: (s: AgentSettings) => void }) {
+  const toast = useToast();
+  const err = useErr();
+  const [ops, setOps] = useState<OpsRemindersConfig>(settings.opsReminders ?? DEFAULT_OPS_REMINDERS);
+  const [syncedSettings, setSyncedSettings] = useState(settings);
+  const [saving, setSaving] = useState(false);
+  const [triggering, setTriggering] = useState<string | null>(null);
+
+  if (syncedSettings !== settings) {
+    setSyncedSettings(settings);
+    setOps(settings.opsReminders ?? DEFAULT_OPS_REMINDERS);
+  }
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await agentApi<{ settings: AgentSettings }>("settings", {
+        method: "PUT",
+        body: { expectedVersion: settings.version, opsReminders: ops },
+      });
+      if (res.data) onSaved(res.data.settings);
+      toast.success("Đã lưu cấu hình nhắc vận hành Telegram.");
+    } catch (e) {
+      if (e instanceof AgentApiError && e.status === 409) {
+        toast.warning("Cấu hình vừa được người khác cập nhật — đã tải lại.");
+        const r = await agentApi<{ settings: AgentSettings }>("settings");
+        if (r.data) onSaved(r.data.settings);
+      } else {
+        err(e, "Không lưu được cấu hình nhắc vận hành.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const triggerTest = async (kind: "daily_ops" | "hk_daily" | "checkin_20h", labelText: string) => {
+    setTriggering(kind);
+    try {
+      const res = await agentApi<{ date: string; messageCount: number }>("ops/telegram/trigger", {
+        method: "POST",
+        body: { kind },
+      });
+      toast.success(`Đã gửi ${labelText} ngày ${res.data?.date ?? ""} (${res.data?.messageCount ?? 0} tin) lên nhóm Telegram.`);
+    } catch (e) {
+      err(e, `Không gửi được ${labelText}.`);
+    } finally {
+      setTriggering(null);
+    }
+  };
+
+  return (
+    <div className={`${card} lg:col-span-2`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-black text-slate-800">Nhắc lịch vận hành Telegram (M1–M5)</p>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Tự động báo tổng quan ngày, lịch dọn phòng theo giờ và nhắc gửi hướng dẫn nhận phòng vào nhóm Telegram hiện tại (bao gồm đơn Web UAT; M4 vẫn nhắc đúng mốc -4h nếu chưa đánh dấu gửi).
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={ops.enabled}
+            onChange={(e) => setOps({ ...ops, enabled: e.target.checked })}
+          />
+          <span>Bật hệ thống nhắc tự động</span>
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+            <input type="checkbox" checked={ops.enableM1} onChange={(e) => setOps({ ...ops, enableM1: e.target.checked })} />
+            <span>M1 · Tổng quan in/out &amp; ghi chú</span>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold text-slate-500">Giờ gửi sáng (HH:MM)</span>
+            <input
+              type="text"
+              maxLength={5}
+              className={input}
+              value={ops.dailyBriefTime}
+              onChange={(e) => setOps({ ...ops, dailyBriefTime: e.target.value })}
+              placeholder="07:30"
+            />
+          </label>
+        </div>
+
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+            <input type="checkbox" checked={ops.enableM2} onChange={(e) => setOps({ ...ops, enableM2: e.target.checked })} />
+            <span>M2 · Lịch dọn phòng theo giờ</span>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold text-slate-500">Giờ gửi sáng (HH:MM)</span>
+            <input
+              type="text"
+              maxLength={5}
+              className={input}
+              value={ops.hkDailyTime}
+              onChange={(e) => setOps({ ...ops, hkDailyTime: e.target.value })}
+              placeholder="07:30"
+            />
+          </label>
+        </div>
+
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+            <input type="checkbox" checked={ops.enableM3} onChange={(e) => setOps({ ...ops, enableM3: e.target.checked })} />
+            <span>M3 · Nhắc đêm trước (sáng mai 00h–11h)</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-500">Giờ gửi (HH:MM)</span>
+              <input
+                type="text"
+                maxLength={5}
+                className={input}
+                value={ops.nightBeforeTime}
+                onChange={(e) => setOps({ ...ops, nightBeforeTime: e.target.value })}
+                placeholder="20:00"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-500">Đến giờ sáng</span>
+              <input
+                type="number"
+                min={1}
+                max={23}
+                className={input}
+                value={ops.nightBeforeEndHour}
+                onChange={(e) => setOps({ ...ops, nightBeforeEndHour: Number(e.target.value) })}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+            <input type="checkbox" checked={ops.enableM4} onChange={(e) => setOps({ ...ops, enableM4: e.target.checked })} />
+            <span>M4 · Nhắc gửi hướng dẫn trước check-in</span>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold text-slate-500">Nhắc trước ít nhất (giờ)</span>
+            <input
+              type="number"
+              min={1}
+              max={24}
+              className={input}
+              value={ops.checkinLeadHours}
+              onChange={(e) => setOps({ ...ops, checkinLeadHours: Number(e.target.value) })}
+            />
+          </label>
+        </div>
+
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+            <input type="checkbox" checked={ops.enableM5} onChange={(e) => setOps({ ...ops, enableM5: e.target.checked })} />
+            <span>M5 · Nhắc dọn từng phòng trước checkout</span>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold text-slate-500">Nhắc trước (phút)</span>
+            <input
+              type="number"
+              min={15}
+              max={240}
+              className={input}
+              value={ops.hkLeadMinutes}
+              onChange={(e) => setOps({ ...ops, hkLeadMinutes: Number(e.target.value) })}
+            />
+          </label>
+        </div>
+
+        <div className="p-3 rounded-xl border border-slate-200 bg-white space-y-2 flex flex-col justify-between">
+          <span className="text-xs font-bold text-slate-700">Gửi ngay lên Telegram (Quản lý)</span>
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              disabled={triggering !== null}
+              onClick={() => triggerTest("daily_ops", "M1 Tổng quan")}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 text-left disabled:opacity-50 cursor-pointer"
+            >
+              {triggering === "daily_ops" ? "Đang gửi M1..." : "Gửi M1 tổng quan hôm nay (/lich)"}
+            </button>
+            <button
+              type="button"
+              disabled={triggering !== null}
+              onClick={() => triggerTest("hk_daily", "M2 Dọn phòng")}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 text-left disabled:opacity-50 cursor-pointer"
+            >
+              {triggering === "hk_daily" ? "Đang gửi M2..." : "Gửi M2 lịch dọn hôm nay (/don)"}
+            </button>
+            <button
+              type="button"
+              disabled={triggering !== null}
+              onClick={() => triggerTest("checkin_20h", "M3 Nhắc sáng mai")}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 text-left disabled:opacity-50 cursor-pointer"
+            >
+              {triggering === "checkin_20h" ? "Đang gửi M3..." : "Gửi M3 danh sách sáng mai"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer`}
+        >
+          {saving ? "Đang lưu..." : "Lưu lịch nhắc Telegram"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab 5: tool switches + Telegram staff mapping ───────────────────────────────────────────
 function ToolsTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (s: AgentSettings) => void }) {
   const toast = useToast();
@@ -758,6 +991,7 @@ function ToolsTab({ settings, onSaved }: { settings: AgentSettings; onSaved: (s:
         </button>
       </div>
       <MetaAccessCard settings={settings} onSaved={onSaved} />
+      <OpsRemindersCard settings={settings} onSaved={onSaved} />
       <div className="lg:col-span-2 flex justify-between items-center">
         <Link href="/agent-inbox" className="text-xs font-bold text-emerald-700 underline">
           → Chat thử với AI trong Hộp thư (Sandbox)

@@ -127,13 +127,15 @@ export function isManagerOnlyDoorCodeRoute(method: string, path: string): boolea
 }
 
 /**
- * On /api/agent/*, receptionists may only read/resolve door codes; AI Inbox, AI Config,
- * door-code mutations, and door-code audit logs all require manager privileges.
+ * On /api/agent/*, receptionists may read/resolve door codes and perform daily operational check-in /
+ * housekeeping actions; AI Inbox, AI Config, door-code mutations, Telegram triggers, and audit logs require manager.
  */
 export function isReceptionistAllowedAgentRoute(method: string, path: string): boolean {
   if (method === "GET" && /^door-codes$/.test(path)) return true;
   if (method === "GET" && /^bookings\/[^/]+\/door-code$/.test(path)) return true;
   if (method === "POST" && /^door-codes\/resolve-batch$/.test(path)) return true;
+  if (method === "POST" && /^ops\/booking-state\/batch$/.test(path)) return true;
+  if (method === "POST" && /^ops\/bookings\/[^/]+\/(guide-message|guide-sent|housekeeping)$/.test(path)) return true;
   return false;
 }
 

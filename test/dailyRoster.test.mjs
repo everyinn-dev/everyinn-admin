@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bookingCore, setTestFetcher } from "../src/lib/cores.ts";
 import { toDailyRosterResponse } from "../src/lib/coreMappers.ts";
+import { applyDoorCodes, applyOpsStates } from "../src/lib/rosterDoorCodes.ts";
+import { chunkArray } from "../src/lib/doorCodeUtils.ts";
+import { formatDateTimeShort, formatTimeShort } from "../src/lib/timelineUtils.ts";
 import { FakeCore } from "./helpers/fakeCore.mjs";
 
 const sampleCheckinItem = {
@@ -175,4 +178,133 @@ test("bookingCore daily roster supports ETag 304 Not Modified", async () => {
   } finally {
     setTestFetcher(null);
   }
+});
+
+test("maps enriched roster fields, housekeepingTasks (owner_stay + urgent), 2-way ops state, >20 chunking, and VN timezone formatting", () => {
+  const mapped = toDailyRosterResponse({
+    date: "2026-11-19",
+    summary: {
+      totalCheckins: 2,
+      totalCheckouts: 1,
+      hourlyCount: 1,
+      overnightCount: 1,
+      dayuseCount: 0,
+      customCount: 0,
+      loyaltyPendingCount: 0,
+    },
+    checkins: [
+      {
+        ...sampleCheckinItem,
+        id: "EI-CONF",
+        numGuests: 3,
+        remainingAmount: 220000,
+        isDeposit: true,
+        depositStatus: "deposit_paid",
+        channel: "web",
+        status: "confirmed",
+      },
+      {
+        ...sampleCheckinItem,
+        id: "EI-PEND",
+        numGuests: 2,
+        remainingAmount: 320000,
+        status: "pending",
+      },
+    ],
+    checkouts: [
+      {
+        ...sampleCheckoutItem,
+        nextCheckin: {
+          id: "EI-CONF",
+          guestName: "Trần Thị C",
+          checkinAt: "2026-11-19T04:00:00.000Z", // 11:00 VN
+          numGuests: 3,
+          bookingType: "hourly",
+          status: "confirmed",
+          note: "Chuẩn bị 3 khăn",
+          closingNote: null,
+          gapMinutes: 60,
+        },
+      },
+    ],
+    housekeepingTasks: [
+      {
+        refId: "blk_owner_1",
+        kind: "owner_stay",
+        roomId: "haven-101",
+        roomName: "Haven 101",
+        roomNumber: "101",
+        roomClass: "haven",
+        guestName: "Chủ nhà ở",
+        bookingType: null,
+        checkoutAt: "2026-11-19T03:00:00.000Z", // 10:00 VN
+        turnoverStartAt: "2026-11-19T03:00:00.000Z",
+        turnoverEndAt: "2026-11-19T04:00:00.000Z",
+        lateCheckoutHours: 0,
+        note: "Thay ga",
+        closingNote: null,
+        nextCheckin: {
+          id: "EI-CONF",
+          guestName: "Trần Thị C",
+          checkinAt: "2026-11-19T04:30:00.000Z",
+          numGuests: 3,
+          bookingType: "hourly",
+          status: "confirmed",
+          note: "Thêm gối",
+          closingNote: null,
+          gapMinutes: 90,
+        },
+        urgent: true,
+      },
+    ],
+  });
+
+  assert.equal(mapped.checkins[0].numGuests, 3);
+  assert.equal(mapped.checkins[0].remainingAmount, 220000);
+  assert.equal(mapped.checkins[0].channel, "web");
+  assert.equal(mapped.housekeepingTasks.length, 1);
+  assert.equal(mapped.housekeepingTasks[0].kind, "owner_stay");
+  assert.equal(mapped.housekeepingTasks[0].urgent, true);
+
+  // Pending check-in without door code is NOT counted as missing confirmed code
+  const withCodes = applyDoorCodes(mapped, [
+    { bookingId: "EI-CONF", resolved: { missing: ["lockbox"] }, gateCode: "2580#", lockboxCode: null },
+  ]);
+  assert.equal(withCodes.summary.doorCodeMissingCount, 1);
+  assert.deepEqual(withCodes.checkins[0].doorCodeMissing, ["lockbox"]);
+
+  // 2-way ops state merges guide_sent and housekeeping status
+  const withOps = applyOpsStates(withCodes, {
+    "EI-CONF": {
+      bookingId: "EI-CONF",
+      checkinGuideStatus: "sent_manual",
+      checkinGuideSentAt: "2026-11-19T02:00:00.000Z",
+      checkinGuideSentByName: "Lễ Tân A",
+      hkStatus: "pending",
+      hkUpdatedAt: null,
+      hkUpdatedByName: null,
+    },
+    blk_owner_1: {
+      bookingId: "blk_owner_1",
+      checkinGuideStatus: "pending",
+      checkinGuideSentAt: null,
+      checkinGuideSentByName: null,
+      hkStatus: "done",
+      hkUpdatedAt: "2026-11-19T03:45:00.000Z",
+      hkUpdatedByName: "Quản Lý",
+    },
+  });
+  assert.equal(withOps.checkins[0].checkinGuideStatus, "sent_manual");
+  assert.equal(withOps.summary.guideUnsentCount, 0);
+  assert.equal(withOps.summary.pendingCheckinsCount, 1);
+  assert.equal(withOps.summary.hkDoneCount, 1);
+  assert.equal(withOps.summary.hkUrgentCount, 0); // already done!
+
+  // Chunking >20 stays covers 25 items cleanly (20 + 5)
+  const chunks = chunkArray(Array.from({ length: 25 }, (_, i) => i), 20);
+  assert.deepEqual(chunks.map((c) => c.length), [20, 5]);
+
+  // Explicit Asia/Ho_Chi_Minh timezone formatting
+  assert.equal(formatTimeShort("2026-11-19T07:30:00.000Z"), "14:30");
+  assert.equal(formatDateTimeShort("2026-11-19T17:15:00.000Z"), "20/11 00:15");
 });

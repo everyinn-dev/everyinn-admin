@@ -97,10 +97,15 @@ test("isManagerOnlyDoorCodeRoute allows receptionist reads and blocks writes & a
   assert.equal(isManagerOnlyDoorCodeRoute("DELETE", "bookings/EI-100/door-code"), true);
   assert.equal(isManagerOnlyDoorCodeRoute("GET", "door-codes/audit"), true);
 
-  // Full /api/agent/* boundary for receptionist: ONLY door-code read/resolve allowed
+  // /api/agent/* boundary for receptionist: door-code read/resolve + daily ops state/guide/housekeeping actions
   assert.equal(isReceptionistAllowedAgentRoute("GET", "door-codes"), true);
   assert.equal(isReceptionistAllowedAgentRoute("GET", "bookings/EI-100/door-code"), true);
   assert.equal(isReceptionistAllowedAgentRoute("POST", "door-codes/resolve-batch"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "ops/booking-state/batch"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "ops/bookings/EI-100/guide-message"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "ops/bookings/EI-100/guide-sent"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "ops/bookings/EI-100/housekeeping"), true);
+  assert.equal(isReceptionistAllowedAgentRoute("POST", "ops/telegram/trigger"), false);
   assert.equal(isReceptionistAllowedAgentRoute("GET", "settings"), false);
   assert.equal(isReceptionistAllowedAgentRoute("PUT", "settings"), false);
   assert.equal(isReceptionistAllowedAgentRoute("GET", "conversations"), false);

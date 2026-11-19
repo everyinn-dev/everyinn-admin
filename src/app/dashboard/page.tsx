@@ -12,6 +12,7 @@ import { RoomLockModal } from "@/components/dashboard/RoomLockModal";
 import { RoomLockDetailDrawer } from "@/components/dashboard/RoomLockDetailDrawer";
 import { HoldSessionDrawer } from "@/components/dashboard/HoldSessionDrawer";
 import { DoorCodesModal } from "@/components/door-codes/DoorCodesModal";
+import { DailyRosterModal } from "@/components/bookings/DailyRosterModal";
 import { Spinner } from "@/components/ui/Spinner";
 import { GanttBlockItem, GanttBookingItem, GanttHoldItem, GanttRoomData } from "@/types";
 import { getVnToday, getVnCurrentMonth } from "@/lib/timelineUtils";
@@ -51,6 +52,8 @@ function DashboardContent() {
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
   const [selectedHold, setSelectedHold] = useState<{ hold: GanttHoldItem; room: GanttRoomData } | null>(null);
   const [isDoorCodesModalOpen, setIsDoorCodesModalOpen] = useState(false);
+  const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
+  const [rosterRefreshSignal, setRosterRefreshSignal] = useState(0);
   const [selectedBlockData, setSelectedBlockData] = useState<{
     block: GanttBlockItem;
     room: GanttRoomData;
@@ -302,10 +305,12 @@ function DashboardContent() {
     };
   }, [isManager, viewMode, month, roomsData]);
 
-  // Statistics calculation: Đơn hôm nay + giá trị đơn nhận phòng trong ngày (xem theo ngày)
+  // Statistics calculation: Đơn hôm nay + điều phối nhận/dọn + doanh thu
   const stats = useMemo(() => {
     let todayBookingsCount = 0;
     let totalRevenue = 0;
+    let rosterInsCount = 0;
+    let rosterOutsCount = 0;
     const seenBookingIds = new Set<string>();
 
     // Target day boundaries (Vietnam time UTC+7)
@@ -319,20 +324,26 @@ function DashboardContent() {
         if (seenBookingIds.has(b.id)) return;
         seenBookingIds.add(b.id);
 
+        const start = new Date(b.checkinAt).getTime();
+        const end = new Date(b.checkoutAt).getTime();
+
         // 1. Số booking hôm nay: các booking không hủy, có hoạt động lưu trú trong ngày hôm nay (hoặc ngày đang chọn)
         if (b.status !== "cancelled") {
-          const start = new Date(b.checkinAt).getTime();
-          const end = new Date(b.checkoutAt).getTime();
           if (start < targetDayEndMs && end > targetDayStartMs) {
             todayBookingsCount++;
           }
+          if (start >= targetDayStartMs && start < targetDayEndMs) {
+            rosterInsCount++;
+          }
         }
 
-        // 2. Doanh thu theo chuẩn Báo cáo tài chính (Finance Report):
-        // Quy tắc: Chỉ tính đơn có status === 'confirmed'
-        // Tính theo tháng/ngày check-in theo giờ Việt Nam (Asia/Ho_Chi_Minh UTC+7)
+        // 2. Doanh thu & lượt dọn checkout trong ngày (confirmed)
         if (b.status === "confirmed") {
-          const checkinMs = new Date(b.checkinAt).getTime();
+          if (end >= targetDayStartMs && end < targetDayEndMs) {
+            rosterOutsCount++;
+          }
+
+          const checkinMs = start;
           const vnCheckinIso = new Date(checkinMs + 7 * 3600 * 1000).toISOString();
           const vnCheckinMonth = vnCheckinIso.slice(0, 7); // YYYY-MM
           const vnCheckinDate = vnCheckinIso.slice(0, 10); // YYYY-MM-DD
@@ -348,14 +359,23 @@ function DashboardContent() {
           }
         }
       });
+
+      (room.blocks ?? []).forEach((bl) => {
+        if (bl.blockType === "owner_stay" && bl.status !== "released") {
+          const endMs = new Date(bl.blockedTo).getTime();
+          if (endMs >= targetDayStartMs && endMs < targetDayEndMs) {
+            rosterOutsCount++;
+          }
+        }
+      });
     });
 
-    return { todayBookingsCount, totalRevenue };
+    return { todayBookingsCount, totalRevenue, rosterInsCount, rosterOutsCount };
   }, [roomsData, viewMode, month, date, vnToday]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Page Title & Quick Summary Stats (Synchronized with Tab) */}
+      {/* Page Title & Quick Summary Stats (Order: Số booking hôm nay -> Mã cửa -> Điều phối ngày -> Doanh Thu) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -368,23 +388,65 @@ function DashboardContent() {
           </p>
         </div>
 
-        {/* Quick Metrics: Số booking hôm nay, Doanh thu (chỉ Manager) & Nút Mã cửa */}
-        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
-          <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
-            <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
-              {viewMode === "day" && date !== vnToday ? "Số booking trong ngày" : "Số booking hôm nay"}
+        {/* Quick Action Strip: Số booking hôm nay -> Mã cửa (thu gọn >=30%) -> Điều phối ngày -> Doanh Thu */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* 1. Số booking hôm nay */}
+          <div className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0 min-h-[44px] flex flex-col justify-center">
+            <span className="text-slate-500 block text-xs font-semibold leading-tight">
+              {viewMode === "day" && date !== vnToday ? "Booking trong ngày" : "Số booking hôm nay"}
             </span>
-            <span className="text-base font-extrabold text-amber-700 font-mono tabular-nums">
+            <span className="text-sm sm:text-base font-extrabold text-amber-700 font-mono tabular-nums leading-tight">
               {stats.todayBookingsCount} đơn
             </span>
           </div>
 
+          {/* 2. Mã cửa (thu gọn ngang >= 30% so với nút cũ) */}
+          <button
+            type="button"
+            onClick={() => setIsDoorCodesModalOpen(true)}
+            aria-label="Mở quản lý và tra cứu mã cửa"
+            className="min-h-[44px] px-3 py-2 rounded-xl bg-white hover:bg-emerald-50/70 active:scale-[0.98] border border-slate-200 hover:border-emerald-300 text-slate-800 hover:text-emerald-900 shadow-2xs shrink-0 transition-all cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+          >
+            <svg className="w-4 h-4 text-emerald-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+              />
+            </svg>
+            <span className="text-xs sm:text-sm font-bold">Mã cửa</span>
+          </button>
+
+          {/* 3. Điều phối ngày (mở nhanh DailyRosterModal) */}
+          <button
+            type="button"
+            onClick={() => setIsRosterModalOpen(true)}
+            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] border border-emerald-700/30 text-white text-left shadow-xs shrink-0 transition-all cursor-pointer inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+          >
+            <svg className="w-4 h-4 text-emerald-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            <div className="leading-tight">
+              <span className="block text-xs sm:text-sm font-bold whitespace-nowrap">Điều phối ngày</span>
+              <span className="block text-xs text-emerald-100 tabular-nums whitespace-nowrap">
+                {stats.rosterInsCount} nhận · {stats.rosterOutsCount} dọn
+              </span>
+            </div>
+          </button>
+
+          {/* 4. Doanh Thu (chỉ Manager) */}
           {isManager && (
-            <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0">
-              <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
+            <div className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs shrink-0 min-h-[44px] flex flex-col justify-center">
+              <span className="text-slate-500 block text-xs font-semibold leading-tight">
                 {viewMode === "month" ? "Doanh thu tháng (theo check-in)" : "Giá trị đơn nhận phòng trong ngày"}
               </span>
-              <span className="text-base font-extrabold text-teal-700 font-mono tabular-nums">
+              <span className="text-sm sm:text-base font-extrabold text-teal-700 font-mono tabular-nums leading-tight">
                 {viewMode === "month"
                   ? monthRevenue === null
                     ? "…"
@@ -393,34 +455,6 @@ function DashboardContent() {
               </span>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={() => setIsDoorCodesModalOpen(true)}
-            className="group px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 active:scale-[0.98] border border-emerald-200 hover:border-emerald-300 text-left text-xs shadow-2xs shrink-0 transition-all cursor-pointer flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
-          >
-            <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-emerald-700 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                />
-              </svg>
-            </span>
-            <div>
-              <span className="text-emerald-800 block text-[10px] uppercase font-bold tracking-wider">
-                Mã cửa
-              </span>
-              <span className="text-sm font-extrabold text-emerald-950 flex items-center gap-1">
-                <span>{isManager ? "Cài đặt & tra cứu" : "Tra cứu & copy"}</span>
-                <svg className="w-3.5 h-3.5 text-emerald-700 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M9 5l7 7-7 7" />
-                </svg>
-              </span>
-            </div>
-          </button>
         </div>
       </div>
 
@@ -538,10 +572,12 @@ function DashboardContent() {
             onClose={() => setSelectedBooking(null)}
             onBookingCancelled={() => {
               fetchData();
+              setRosterRefreshSignal((n) => n + 1);
             }}
             onBookingUpdated={(updated) => {
               setSelectedBooking(updated);
               fetchData();
+              setRosterRefreshSignal((n) => n + 1);
             }}
           />
         )}
@@ -550,7 +586,10 @@ function DashboardContent() {
         <RoomLockModal
           isOpen={isLockModalOpen}
           onClose={() => setIsLockModalOpen(false)}
-          onSuccess={() => fetchData()}
+          onSuccess={() => {
+            fetchData();
+            setRosterRefreshSignal((n) => n + 1);
+          }}
           rooms={roomsData}
           isManager={isManager}
         />
@@ -561,7 +600,10 @@ function DashboardContent() {
             hold={selectedHold.hold}
             room={selectedHold.room}
             onClose={() => setSelectedHold(null)}
-            onChanged={() => fetchData(true)}
+            onChanged={() => {
+              fetchData(true);
+              setRosterRefreshSignal((n) => n + 1);
+            }}
           />
         )}
 
@@ -573,6 +615,17 @@ function DashboardContent() {
           initialDate={viewMode === "day" ? date : vnToday}
           preloadedDate={viewMode === "day" ? date : undefined}
           preloadedRooms={viewMode === "day" ? roomsData : undefined}
+          onChanged={() => setRosterRefreshSignal((n) => n + 1)}
+        />
+
+        {/* Quick Daily Operations Modal (Điều phối ngày) */}
+        <DailyRosterModal
+          isOpen={isRosterModalOpen}
+          onClose={() => setIsRosterModalOpen(false)}
+          initialDate={viewMode === "day" ? date : vnToday}
+          refreshSignal={rosterRefreshSignal}
+          onSelectBooking={(booking) => setSelectedBooking(booking)}
+          onOpenDoorCodes={() => setIsDoorCodesModalOpen(true)}
         />
 
         {/* Room Lock Detail Drawer */}
@@ -581,7 +634,10 @@ function DashboardContent() {
             block={selectedBlockData.block}
             room={selectedBlockData.room}
             onClose={() => setSelectedBlockData(null)}
-            onBlockDeleted={() => fetchData()}
+            onBlockDeleted={() => {
+              fetchData();
+              setRosterRefreshSignal((n) => n + 1);
+            }}
             isManager={isManager}
           />
         )}

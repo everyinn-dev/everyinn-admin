@@ -711,6 +711,37 @@ export function toLegacyBookingRow(d: CoreBookingDto): Booking {
 
 // ───────────────────────── Daily Roster & Deposit Reminders (A-W3) ─────────────────────────
 
+export interface CoreRosterNextCheckin {
+  id: string;
+  guestName: string;
+  checkinAt: string;
+  numGuests: number;
+  bookingType: BookingType;
+  status: "pending" | "confirmed";
+  note: string | null;
+  closingNote: string | null;
+  gapMinutes: number;
+}
+
+export interface CoreRosterHousekeepingTask {
+  refId: string;
+  kind: "booking_checkout" | "owner_stay";
+  roomId: string;
+  roomName: string | null;
+  roomNumber: string | null;
+  roomClass: RoomClass;
+  guestName: string;
+  bookingType: BookingType | null;
+  checkoutAt: string;
+  turnoverStartAt: string;
+  turnoverEndAt: string;
+  lateCheckoutHours: number;
+  note: string | null;
+  closingNote: string | null;
+  nextCheckin: CoreRosterNextCheckin | null;
+  urgent: boolean;
+}
+
 export interface CoreRosterItem {
   id: string;
   roomId: string;
@@ -722,21 +753,27 @@ export interface CoreRosterItem {
   instagram: string | null;
   facebook: string | null;
   zalo: string | null;
+  numGuests?: number;
   bookingType: BookingType;
   ratePlanCode: string;
   checkinAt: string;
   checkoutAt: string;
   turnoverStartAt: string;
   turnoverEndAt: string;
+  earlyCheckinHours?: number;
   lateCheckoutHours: number;
   totalPrice: number;
   remainingAmount: number;
+  isDeposit?: boolean;
+  depositStatus?: "none" | "deposit_paid" | "fully_paid";
+  channel?: string | null;
   status: BookingStatus;
   loyaltySyncStatus: "not_applicable" | "pending" | "synced";
   loyaltyTier: string | null;
   loyaltyStep: number | null;
   closingNote: string | null;
   note: string | null;
+  nextCheckin?: CoreRosterNextCheckin | null;
   createdAt: string;
   createdBy: CoreStaffRef | null;
   updatedAt: string;
@@ -757,12 +794,28 @@ export interface CoreDailyRosterResponse {
   checkins: CoreRosterItem[];
   checkouts: CoreRosterItem[];
   blocks?: CoreBlock[];
+  housekeepingTasks?: CoreRosterHousekeepingTask[];
 }
 
 export interface CoreDepositRemindersResponse {
   reminders: CoreBookingDto[];
   count: number;
   today: string;
+}
+
+function mapNextCheckin(n: CoreRosterNextCheckin | null | undefined): DailyRosterItem["nextCheckin"] {
+  if (!n) return null;
+  return {
+    id: n.id,
+    guestName: n.guestName,
+    checkinAt: n.checkinAt,
+    numGuests: n.numGuests,
+    bookingType: n.bookingType,
+    status: n.status,
+    note: u(n.note),
+    closingNote: u(n.closingNote),
+    gapMinutes: n.gapMinutes,
+  };
 }
 
 export function toDailyRosterItem(item: CoreRosterItem): DailyRosterItem {
@@ -779,15 +832,22 @@ export function toDailyRosterItem(item: CoreRosterItem): DailyRosterItem {
     instagram: u(item.instagram),
     facebook: u(item.facebook),
     zalo: u(item.zalo),
+    numGuests: item.numGuests ?? 2,
     bookingType: item.bookingType,
     checkinAt: item.checkinAt,
     checkoutAt: item.checkoutAt,
     turnoverStartAt: item.turnoverStartAt,
     turnoverEndAt: item.turnoverEndAt,
+    earlyCheckinHours: item.earlyCheckinHours ?? 0,
     totalPrice: item.totalPrice,
+    remainingAmount: item.remainingAmount ?? 0,
+    isDeposit: item.isDeposit ?? false,
+    depositStatus: item.depositStatus ?? "none",
+    channel: item.channel ?? null,
     status: item.status,
     closingNote: u(item.closingNote),
     note: u(item.note),
+    nextCheckin: mapNextCheckin(item.nextCheckin),
     loyaltyTier:
       item.loyaltyTier === "bronze" || item.loyaltyTier === "silver" || item.loyaltyTier === "gold"
         ? item.loyaltyTier
@@ -807,6 +867,24 @@ export function toDailyRosterItem(item: CoreRosterItem): DailyRosterItem {
 export function toDailyRosterResponse(core: CoreDailyRosterResponse): DailyRosterResponse {
   const checkins = (core.checkins || []).map(toDailyRosterItem);
   const checkouts = (core.checkouts || []).map(toDailyRosterItem);
+  const housekeepingTasks = (core.housekeepingTasks ?? []).map((t) => ({
+    refId: t.refId,
+    kind: t.kind,
+    roomId: t.roomId,
+    roomName: t.roomName || t.roomId,
+    roomNumber: t.roomNumber || "",
+    roomClass: t.roomClass,
+    guestName: t.guestName,
+    bookingType: t.bookingType,
+    checkoutAt: t.checkoutAt,
+    turnoverStartAt: t.turnoverStartAt,
+    turnoverEndAt: t.turnoverEndAt,
+    lateCheckoutHours: t.lateCheckoutHours ?? 0,
+    note: u(t.note),
+    closingNote: u(t.closingNote),
+    nextCheckin: mapNextCheckin(t.nextCheckin) ?? null,
+    urgent: t.urgent,
+  }));
   return {
     date: core.date,
     summary: {
@@ -816,11 +894,16 @@ export function toDailyRosterResponse(core: CoreDailyRosterResponse): DailyRoste
       overnightCount: core.summary?.overnightCount ?? 0,
       dayuseCount: core.summary?.dayuseCount ?? 0,
       customCount: core.summary?.customCount ?? 0,
-      doorCodeMissingCount: checkins.filter((c) => !c.doorCode).length,
+      doorCodeMissingCount: checkins.filter((c) => c.status !== "pending" && !c.doorCode).length,
+      pendingCheckinsCount: checkins.filter((c) => c.status === "pending").length,
+      guideUnsentCount: checkins.filter((c) => c.status === "confirmed").length,
+      hkDoneCount: 0,
+      hkUrgentCount: housekeepingTasks.filter((t) => t.urgent).length,
     },
     checkins,
     checkouts,
     blocks: (core.blocks ?? []).map((b) => ({ ...toGanttBlock(b), roomName: b.roomName })),
+    housekeepingTasks,
   };
 }
 
