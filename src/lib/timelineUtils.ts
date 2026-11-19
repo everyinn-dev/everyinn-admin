@@ -72,33 +72,32 @@ export function getVnCurrentMonth(): string {
   return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 7);
 }
 
+const VN_OFFSET_MS = 7 * 3600 * 1000;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
 /**
- * Format ISO datetime string to HH:mm
+ * Format ISO datetime string to HH:mm in Vietnam time (Asia/Ho_Chi_Minh, UTC+7)
  */
 export function formatTimeShort(iso: string): string {
   try {
-    return new Date(iso).toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return "";
+    const d = new Date(ms + VN_OFFSET_MS);
+    return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
   } catch {
     return "";
   }
 }
 
 /**
- * Format ISO datetime string to DD/MM HH:mm
+ * Format ISO datetime string to DD/MM HH:mm in Vietnam time (Asia/Ho_Chi_Minh, UTC+7)
  */
 export function formatDateTimeShort(iso: string): string {
   try {
-    const d = new Date(iso);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const time = d.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${day}/${month} ${time}`;
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return "";
+    const d = new Date(ms + VN_OFFSET_MS);
+    return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
   } catch {
     return "";
   }

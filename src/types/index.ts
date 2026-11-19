@@ -420,6 +420,43 @@ export interface BookingsListResponse {
 }
 
 // Daily Roster (Operational Hub) Types
+export interface DailyRosterNextCheckin {
+  id: string;
+  guestName: string;
+  checkinAt: string;
+  numGuests: number;
+  bookingType: BookingType;
+  status: "pending" | "confirmed";
+  note?: string;
+  closingNote?: string;
+  gapMinutes: number;
+}
+
+export type CheckinGuideStatus = "pending" | "sent_auto" | "sent_manual";
+export type HousekeepingStatus = "pending" | "cleaning" | "done";
+
+export interface DailyRosterHousekeepingTask {
+  refId: string;
+  kind: "booking_checkout" | "owner_stay";
+  roomId: string;
+  roomName: string;
+  roomNumber: string;
+  roomClass: RoomClass;
+  guestName: string;
+  bookingType: BookingType | null;
+  checkoutAt: string;
+  turnoverStartAt: string;
+  turnoverEndAt: string;
+  lateCheckoutHours: number;
+  note?: string;
+  closingNote?: string;
+  nextCheckin: DailyRosterNextCheckin | null;
+  urgent: boolean;
+  hkStatus?: HousekeepingStatus;
+  hkUpdatedAt?: string | null;
+  hkUpdatedByName?: string | null;
+}
+
 export interface DailyRosterItem {
   id: string;
   roomId: string;
@@ -432,17 +469,33 @@ export interface DailyRosterItem {
   instagram?: string;
   facebook?: string;
   zalo?: string;
+  numGuests: number;
   bookingType: BookingType;
   checkinAt: string;
   checkoutAt: string;
   turnoverStartAt?: string;
   turnoverEndAt?: string;
+  earlyCheckinHours?: number;
   totalPrice: number;
+  remainingAmount?: number;
+  isDeposit?: boolean;
+  depositStatus?: DepositStatus;
+  channel?: string | null;
   status: BookingStatus;
   doorCode?: string;
+  doorCodeGate?: string | null;
+  doorCodeLockbox?: string | null;
+  doorCodeMissing?: Array<"gate" | "lockbox">;
   doorCodeSentAt?: string;
+  checkinGuideStatus?: CheckinGuideStatus;
+  checkinGuideSentAt?: string | null;
+  checkinGuideSentByName?: string | null;
+  hkStatus?: HousekeepingStatus;
+  hkUpdatedAt?: string | null;
+  hkUpdatedByName?: string | null;
   closingNote?: string;
   note?: string;
+  nextCheckin?: DailyRosterNextCheckin | null;
   loyaltyTier?: LoyaltyTier;
   totalBookings?: number;
   lateCheckoutHours: number;
@@ -463,6 +516,10 @@ export interface DailyRosterSummary {
   dayuseCount: number;
   customCount: number;
   doorCodeMissingCount: number;
+  pendingCheckinsCount?: number;
+  guideUnsentCount?: number;
+  hkDoneCount?: number;
+  hkUrgentCount?: number;
 }
 
 export interface DailyRosterResponse {
@@ -472,6 +529,7 @@ export interface DailyRosterResponse {
   checkouts: DailyRosterItem[];
   /** Rooms locked (maintenance / stop-sell / owner stay / deep cleaning) during the day. */
   blocks?: (GanttBlockItem & { roomName?: string | null })[];
+  housekeepingTasks: DailyRosterHousekeepingTask[];
 }
 
 // Pricing calculation models
