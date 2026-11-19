@@ -4,11 +4,11 @@ import React, { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { formatDateTimeShort } from "@/lib/timelineUtils";
 import { vnLocalInputValue } from "@/lib/vnTime";
-import { balanceOf, canReverse, ENTRY_LABELS, methodLabel, PAYMENT_METHODS, type LedgerAction, type LedgerEntry } from "@/lib/ledger";
+import { balanceOf, canReverse, entryLabel, methodLabel, PAYMENT_METHODS, type LedgerAction, type LedgerEntry } from "@/lib/ledger";
 import type { GanttBookingItem } from "@/types";
 
 export interface LedgerIntent {
-  action: Exclude<LedgerAction, "reverse">;
+  action: Exclude<LedgerAction, "reverse" | "transfer">;
   amount: number;
   reason?: string;
 }
@@ -32,7 +32,7 @@ const inputCls = "w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5
 export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager, intent, onIntentConsumed, onChanged }) => {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<{ action: LedgerAction; amount: number; method: string; occurredAt: string; reason: string; entryId?: string } | null>(null);
+  const [form, setForm] = useState<{ action: LedgerAction; amount: number; method: string; occurredAt: string; reason: string; entryId?: string; toBookingId?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,7 +55,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager
 
   const open = (action: LedgerAction, amount = 0, extra: { reason?: string; entryId?: string } = {}) => {
     setError("");
-    setForm({ action, amount, method: "cash", occurredAt: vnLocalInputValue(Date.now()), reason: extra.reason ?? "", entryId: extra.entryId });
+    setForm({ action, amount, method: action === "transfer" ? "other" : "cash", occurredAt: vnLocalInputValue(Date.now()), reason: extra.reason ?? "", entryId: extra.entryId, toBookingId: "" });
   };
 
   useEffect(() => {
@@ -95,6 +95,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager
     refund: "↩️ Hoàn tiền cho khách",
     adjustment: "⚖️ Điều chỉnh (quản lý)",
     reverse: "🔁 Đảo bút toán (quản lý)",
+    transfer: "➡️ Chuyển sang đơn khác",
   };
 
   return (
@@ -127,6 +128,11 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager
               ↩️ Hoàn tiền
             </button>
           )}
+          {bal.netReceived > 0 && (
+            <button type="button" onClick={() => open("transfer", bal.netReceived)} className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-bold">
+              ➡️ Chuyển sang đơn khác
+            </button>
+          )}
           {isManager && (
             <button type="button" onClick={() => open("adjustment", 0)} className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-bold">
               ⚖️ Điều chỉnh
@@ -142,6 +148,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager
             <span className="text-xs font-bold text-slate-800">{title[form.action]}</span>
             <button type="button" onClick={() => setForm(null)} className="text-slate-400 hover:text-slate-700 text-xs font-bold">✕</button>
           </div>
+          {form.action === "transfer" && (
+            <label className="block text-[11px] font-bold text-slate-700">
+              Mã đơn nhận tiền *
+              <input type="text" className={inputCls} value={form.toBookingId ?? ""} onChange={(e) => setForm({ ...form, toBookingId: e.target.value })} placeholder="VD: EI-20261110-E274" />
+            </label>
+          )}
           {form.action !== "reverse" && (
             <>
               <label className="block text-[11px] font-bold text-slate-700">
@@ -157,10 +169,12 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager
                     ))}
                   </select>
                 </label>
-                <label className="block text-[11px] font-bold text-slate-700">
-                  {form.action === "refund" ? "Ngày giờ chi" : "Ngày giờ nhận"}
-                  <input type="datetime-local" className={inputCls} max={vnLocalInputValue(Date.now())} value={form.occurredAt} onChange={(e) => setForm({ ...form, occurredAt: e.target.value })} />
-                </label>
+                {form.action !== "transfer" && (
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    {form.action === "refund" ? "Ngày giờ chi" : "Ngày giờ nhận"}
+                    <input type="datetime-local" className={inputCls} max={vnLocalInputValue(Date.now())} value={form.occurredAt} onChange={(e) => setForm({ ...form, occurredAt: e.target.value })} />
+                  </label>
+                )}
               </div>
             </>
           )}
@@ -188,7 +202,7 @@ export const LedgerSection: React.FC<LedgerSectionProps> = ({ booking, isManager
           {entries.map((e) => (
             <li key={e.id} className="py-1.5 flex items-start justify-between gap-2 text-[11px]">
               <div className="min-w-0">
-                <span className="font-semibold text-slate-800">{ENTRY_LABELS[e.entryType]}</span>
+                <span className="font-semibold text-slate-800">{entryLabel(e)}</span>
                 <span className="text-slate-500"> · {methodLabel(e.method)} · {formatDateTimeShort(e.occurredAt)}</span>
                 {(e.reason || e.actor?.name) && (
                   <span className="block text-slate-400 truncate">
