@@ -12,6 +12,9 @@ import { notifyDataChanged } from "@/lib/syncEvents";
 import { CancelBookingPanel } from "@/components/bookings/cancel/CancelBookingPanel";
 import { ClosedBookingBanner } from "@/components/bookings/cancel/ClosedBookingBanner";
 import { ChargesSection } from "@/components/bookings/charges/ChargesSection";
+import { LedgerSection, type LedgerIntent } from "@/components/bookings/ledger/LedgerSection";
+import { useAdminStaff } from "@/components/layout/AdminShell";
+import { balanceOf } from "@/lib/ledger";
 import { bookingRowToItem, canCloseBooking, isClosedBooking, isVersionConflict, netReceivedOf, type BffError } from "@/lib/bookingClosure";
 import type { Booking, ClosureReasonCode } from "@/types";
 
@@ -46,12 +49,9 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const [cancelInitialReason, setCancelInitialReason] = useState<ClosureReasonCode | undefined>(undefined);
 
-  // Complete Deposit Payment state
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentNote, setPaymentNote] = useState("");
-  const [completingPayment, setCompletingPayment] = useState(false);
-  const [paymentError, setPaymentError] = useState("");
+  // Ledger ("Sổ thu tiền"): payment / refund / adjustment / reversal with method + when the money moved.
+  const isManager = useAdminStaff()?.role === "manager";
+  const [ledgerIntent, setLedgerIntent] = useState<LedgerIntent | null>(null);
 
   // Reminder state
   const [markingReminder, setMarkingReminder] = useState(false);
@@ -78,14 +78,8 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     if (isNewBooking) {
       setMode("view");
       setShowConfirmCancel(false);
-      setShowPaymentForm(false);
-      setPaymentError("");
-      setPaymentNote("");
+      setLedgerIntent(null);
     }
-    const remaining = booking.remainingAmount !== undefined
-      ? booking.remainingAmount
-      : Math.max(0, booking.totalPrice - (booking.paidAmount || booking.depositAmount || 0));
-    setPaymentAmount(remaining);
   }, [booking, currentBooking]);
 
   // The list / Gantt snapshot may be stale (cancelled in another tab or by a colleague): always load the
@@ -227,6 +221,14 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     setCurrentBooking(updated);
     setMode("view");
     toast.success(`Đã cập nhật đơn đặt phòng #${currentBooking.id} thành công!`, "Lưu thành công");
+    // B6: the new value vs the money already received → offer to collect the difference or refund what is held over.
+    const bal = balanceOf({ totalPrice: updated.totalPrice, paidAmount: updated.paidAmount, refundAmount: updated.refundAmount, status: updated.status });
+    if (bal.overpaid > 0) {
+      setLedgerIntent({ action: "refund", amount: bal.overpaid, reason: "Hoàn chênh lệch sau khi sửa đơn" });
+      toast.warning(`Giá trị đơn giảm — đang giữ thừa ${bal.overpaid.toLocaleString("vi-VN")} đ của khách. Ghi hoàn tiền nếu đã trả lại khách.`, "Chênh lệch sau khi sửa");
+    } else if (bal.due > 0 && (updated.paidAmount ?? 0) > 0) {
+      setLedgerIntent({ action: "payment", amount: bal.due });
+    }
     onBookingUpdated?.(updated);
     notifyDataChanged("BOOKINGS_CHANGED");
   };
@@ -243,38 +245,13 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     notifyDataChanged("BOOKINGS_CHANGED");
   };
 
-  const handleCompletePayment = async () => {
-    try {
-      setCompletingPayment(true);
-      setPaymentError("");
-      const res = await apiFetch(`/api/bookings/${currentBooking.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "complete_deposit_payment",
-          paymentAmount,
-          note: paymentNote,
-          expectedVersion: currentBooking.version ?? currentBooking.modNo,
-        }),
-      });
-
-      const data = (await res.json()) as any;
-      if (!res.ok) {
-        if (await handleCommandError(res.status, data, "Lỗi thanh toán")) return;
-        throw new Error(data.error || "Không thể bổ sung thanh toán.");
-      }
-
-      toast.success(data.message || "Đã ghi nhận thanh toán.", "Thanh toán thành công");
-      const updated: GanttBookingItem = data.booking ? mergeFresh(currentBooking, data.booking as Booking) : currentBooking;
-      setCurrentBooking(updated);
-      setShowPaymentForm(false);
-      onBookingUpdated?.(updated);
-      notifyDataChanged("BOOKINGS_CHANGED");
-    } catch (err: any) {
-      setPaymentError(err.message || "Lỗi khi bổ sung thanh toán.");
-    } finally {
-      setCompletingPayment(false);
-    }
+  const handleLedgerChanged = ({ booking: row, message }: { booking: Record<string, unknown> | null; message: string }) => {
+    toast.success(message, "Sổ thu tiền");
+    if (!row) return;
+    const updated = mergeFresh(currentBooking, row as unknown as Booking);
+    setCurrentBooking(updated);
+    onBookingUpdated?.(updated);
+    notifyDataChanged("BOOKINGS_CHANGED");
   };
 
   const handleMarkReminderSent = async () => {
@@ -374,100 +351,17 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
                     <span>✏️ Chỉnh sửa</span>
                   </button>
 
-                  {/* Complete Deposit Payment CTA & Form */}
-                  {(currentBooking.remainingAmount ?? 0) > 0 && (
-                    <div className="pt-1 space-y-2.5">
-                      {!showPaymentForm ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const remaining =
-                              currentBooking.remainingAmount !== undefined
-                                ? currentBooking.remainingAmount
-                                : Math.max(0, currentBooking.totalPrice - (currentBooking.paidAmount || currentBooking.depositAmount || 0));
-                            setPaymentAmount(remaining);
-                            setShowPaymentForm(true);
-                          }}
-                          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold text-xs shadow-sm border border-amber-500 flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-                        >
-                          <span>💰</span>
-                          <span>Bổ Sung Thanh Toán Phần Còn Lại</span>
-                          <span className="px-2 py-0.5 rounded-md bg-amber-800/40 font-mono text-[11px]">
-                            ({(currentBooking.remainingAmount ?? (currentBooking.totalPrice - (currentBooking.paidAmount || 0))).toLocaleString("vi-VN")} đ)
-                          </span>
-                        </button>
-                      ) : (
-                        <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 space-y-3 shadow-xs animate-in fade-in duration-150">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
-                              <span>💰</span> Ghi nhận thanh toán
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setShowPaymentForm(false)}
-                              className="text-slate-400 hover:text-slate-700 text-xs font-bold"
-                            >
-                              ✕ Đóng
-                            </button>
-                          </div>
-
-                          <div className="space-y-2">
-                            <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                Số tiền thu thêm (VNĐ):
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                step="any"
-                                value={paymentAmount || ""}
-                                onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
-                                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-amber-600"
-                                placeholder="Nhập số tiền thu thêm..."
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                Ghi chú thanh toán (Tùy chọn):
-                              </label>
-                              <input
-                                type="text"
-                                value={paymentNote}
-                                onChange={(e) => setPaymentNote(e.target.value)}
-                                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-amber-600"
-                                placeholder="VD: Khách chuyển khoản VCB, trả tiền mặt tại quầy..."
-                              />
-                            </div>
-                          </div>
-
-                          {paymentError && (
-                            <p className="text-[11px] text-rose-700 font-medium">⚠️ {paymentError}</p>
-                          )}
-
-                          <div className="flex items-center gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => setShowPaymentForm(false)}
-                              className="flex-1 py-1.5 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="button"
-                              disabled={completingPayment}
-                              onClick={handleCompletePayment}
-                              className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-                            >
-                              {completingPayment ? "Đang lưu..." : "Xác Nhận Đã Thu"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
+
+              {/* Sổ thu tiền: every money movement; refunds / reversals stay possible after closing. */}
+              <LedgerSection
+                booking={currentBooking}
+                isManager={isManager}
+                intent={ledgerIntent}
+                onIntentConsumed={() => setLedgerIntent(null)}
+                onChanged={handleLedgerChanged}
+              />
 
               {/* Stay charges: +1h / early / late / incidental — one list, one sheet. Read-only once closed or past checkout. */}
               <ChargesSection

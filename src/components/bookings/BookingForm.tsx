@@ -14,6 +14,7 @@ import {
   SurchargeRule,
 } from "@/types";
 import { calculatePrice } from "@/lib/pricing";
+import { vnDateOf, vnDateTime, vnInstant } from "@/lib/vnTime";
 import { lookupMemberByPhone, PhoneLookupField } from "./PhoneLookupField";
 import { CustomerSearchCombobox } from "./CustomerSearchCombobox";
 import { useGuestAutofill } from "./useGuestAutofill";
@@ -167,8 +168,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     calculatedLateHours,
   } = useMemo(() => {
     if (bookingType === "hourly") {
-      const d = new Date(`${hourlyDate}T00:00:00`);
-      d.setHours(hourlyCheckinHour, 0, 0, 0);
+      const d = vnInstant(hourlyDate, hourlyCheckinHour);
       const out = new Date(d.getTime() + hourlyDuration * 3600 * 1000);
       return {
         calculatedCheckinAt: d,
@@ -181,10 +181,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     if (bookingType === "overnight") {
       const maxEarly = Math.max(0, overnightStartHour - 21);
       const earlyH = Math.min(maxEarly, Math.max(0, overnightEarlyHours));
-      const d = new Date(`${overnightDate}T00:00:00`);
-      d.setHours(overnightStartHour - earlyH, 0, 0, 0);
-      const out = new Date(`${overnightDate}T00:00:00`);
-      out.setHours(overnightStartHour + 12 + overnightLateHours, 0, 0, 0);
+      const d = vnInstant(overnightDate, overnightStartHour - earlyH);
+      const out = vnInstant(overnightDate, overnightStartHour + 12 + overnightLateHours);
       return {
         calculatedCheckinAt: d,
         calculatedCheckoutAt: out,
@@ -195,11 +193,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
     if (bookingType === "dayuse") {
       const earlyH = Math.max(0, dayuseEarlyHours);
-      const d = new Date(`${dayuseDate}T15:00:00`);
-      d.setHours(15 - earlyH, 0, 0, 0);
-      const out = new Date(`${dayuseDate}T15:00:00`);
-      out.setDate(out.getDate() + dayuseNights);
-      out.setHours(12 + dayuseLateHours, 0, 0, 0);
+      const d = vnInstant(dayuseDate, 15 - earlyH);
+      const out = vnInstant(dayuseDate, 12 + dayuseLateHours, 0, dayuseNights);
       return {
         calculatedCheckinAt: d,
         calculatedCheckoutAt: out,
@@ -209,8 +204,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     }
 
     // Custom
-    const d = new Date(`${customCheckinDate}T${customCheckinTime}:00`);
-    const out = new Date(`${customCheckoutDate}T${customCheckoutTime}:00`);
+    const d = vnDateTime(customCheckinDate, customCheckinTime);
+    const out = vnDateTime(customCheckoutDate, customCheckoutTime);
     return {
       calculatedCheckinAt: d,
       calculatedCheckoutAt: out,
@@ -871,7 +866,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         depositDueDate={depositDueDate}
         onChangeDepositDueDate={setDepositDueDate}
         totalPrice={currentPricing?.totalPrice || 0}
-        checkinDateStr={calculatedCheckinAt ? calculatedCheckinAt.toISOString().slice(0, 10) : defaultDate}
+        checkinDateStr={calculatedCheckinAt ? vnDateOf(calculatedCheckinAt) : defaultDate}
       />
 
       {/* 4. Price & Booking Summary Card */}
