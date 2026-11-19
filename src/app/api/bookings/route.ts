@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/auth";
 import { bookingCore, coreErrorResponse, newIdempotencyKey } from "@/lib/cores";
+import { fullPaymentKey, planCollection } from "@/lib/bookingCollection";
 import {
   toLegacyBookingRow,
   type CoreBookingEnvelope,
   type CoreBookingListResponse,
-  type CoreQuoteResponse,
 } from "@/lib/coreMappers";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +19,6 @@ const NO_CACHE_HEADERS = {
 
 /** Core accepts 8–128 chars of [A-Za-z0-9._:-]. */
 const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
-
-/** Legacy form has no payment-method selector yet (A-W6); every manual collection is recorded as cash. */
-const DEFAULT_PAYMENT_METHOD = "cash";
 
 export async function GET(req: NextRequest) {
   try {
@@ -150,28 +147,15 @@ export async function POST(req: NextRequest) {
       customPrice,
     };
 
-    const isDeposit = Boolean(body.isDeposit ?? body.is_deposit);
-    const depositAmount = Math.round(Number(body.depositAmount ?? body.deposit_amount) || 0);
-    const depositDueDate = String(body.depositDueDate ?? body.deposit_due_date ?? "").trim() || undefined;
-    if (isDeposit && depositAmount <= 0) {
-      return bad("Vui lòng nhập số tiền cọc hợp lệ.");
-    }
+    // EI-FINANCE-ONTOLOGY-001 invariant 8: record only money that actually arrived, as the staff stated it.
+    const collection = planCollection(body);
+    if (!collection.ok) return bad(collection.error);
+    const { plan } = collection;
 
     // One user intent == one key. A client that retries (double submit, flaky network) sends the same
     // header and Core replays the original result instead of creating a second booking.
     const headerKey = req.headers.get("idempotency-key")?.trim();
     const idempotencyKey = headerKey && IDEMPOTENCY_KEY_RE.test(headerKey) ? headerKey : newIdempotencyKey("booking-create");
-
-    // Non-deposit bookings are paid in full → we need Core's authoritative total (promotion applied).
-    let payment: { amount: number; method: string } | undefined;
-    if (!isDeposit) {
-      const quote = await bookingCore.post<CoreQuoteResponse>("/internal/v1/quotes", {
-        staff,
-        body: { ...stay, phone, promotionId, promotionCode },
-      });
-      const total = quote.data!.quote.totalBeforeLoyalty;
-      if (total > 0) payment = { amount: total, method: DEFAULT_PAYMENT_METHOD };
-    }
 
     const res = await bookingCore.post<CoreBookingEnvelope>("/internal/v1/bookings", {
       staff,
@@ -184,16 +168,38 @@ export async function POST(req: NextRequest) {
         status,
         promotionId,
         promotionCode,
-        deposit: isDeposit ? { amount: depositAmount, method: DEFAULT_PAYMENT_METHOD, dueDate: depositDueDate } : undefined,
-        payment,
+        deposit: plan.deposit,
       },
     });
 
-    const row = toLegacyBookingRow(res.data!.booking);
-    const loyalty = res.data!.booking.loyalty;
+    let created = res.data!.booking;
+    let paymentError: string | null = null;
+    if (plan.mode === "full") {
+      // "Đã thu đủ" = the booking's FINAL total from Core (after promotion and the sync-first loyalty reward), so the
+      // ledger never over-records (old bug: pre-loyalty quote). Keyed off the create key → a retry never pays twice.
+      const due = toLegacyBookingRow(created).remaining_amount ?? 0;
+      if (due > 0) {
+        try {
+          await bookingCore.post(`/internal/v1/bookings/${created.id}/financial-entries`, {
+            staff,
+            idempotencyKey: fullPaymentKey(idempotencyKey),
+            body: { entryType: "payment", amount: due, method: plan.method, reason: "Thu đủ khi tạo đơn" },
+          });
+          const refreshed = await bookingCore.get<CoreBookingEnvelope>(`/internal/v1/bookings/${created.id}`, { staff });
+          if (refreshed.data?.booking) created = refreshed.data.booking;
+        } catch (err) {
+          console.error("POST booking: full payment not recorded", err);
+          paymentError = "Đã tạo đơn nhưng CHƯA ghi nhận được khoản thanh toán. Vui lòng ghi nhận thanh toán trong chi tiết đơn.";
+        }
+      }
+    }
+
+    const row = toLegacyBookingRow(created);
+    const loyalty = created.loyalty;
     return NextResponse.json({
       success: true,
       replayed: res.data!.replayed ?? false,
+      paymentError,
       booking: {
         id: row.id,
         roomId: row.room_id,
