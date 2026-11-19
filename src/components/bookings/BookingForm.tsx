@@ -27,6 +27,8 @@ import { useRoomLocks } from "@/lib/useRoomLocks";
 import { PriceSummaryCard } from "./PriceSummaryCard";
 import { PromotionSelector } from "./PromotionSelector";
 import { DepositSection } from "./DepositSection";
+import { CollectionSection } from "./CollectionSection";
+import type { CollectionMode, PaymentMethod } from "@/lib/bookingCollection";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
@@ -124,8 +126,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
 
-  // Deposit state
-  const [isDeposit, setIsDeposit] = useState(false);
+  // Money collected at creation (EI-FINANCE-ONTOLOGY-001): nothing is recorded as paid unless staff say so.
+  const [collection, setCollection] = useState<CollectionMode>("none");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const isDeposit = collection === "deposit";
+  const setIsDeposit = (on: boolean) => setCollection(on ? "deposit" : "none");
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const [depositDueDate, setDepositDueDate] = useState<string>("");
 
@@ -466,6 +471,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         note: note.trim(),
         closingNote: closingNote.trim(),
         status: "confirmed",
+        collection,
+        paymentMethod,
         isDeposit,
         depositAmount: isDeposit ? depositAmount : 0,
         depositDueDate: isDeposit && depositDueDate ? depositDueDate : null,
@@ -494,7 +501,10 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
       const successNotice = isDeposit
         ? `Đã tạo đơn đặt cọc #${data.booking.id} cho ${name}! Đã ghi nhận cọc ${depositAmount.toLocaleString("vi-VN")}đ, hạn thu nốt ngày ${depositDueDate}.`
-        : `Đã tạo thành công mã đặt phòng #${data.booking.id} cho ${name}!`;
+        : collection === "full"
+          ? `Đã tạo mã đặt phòng #${data.booking.id} cho ${name} và ghi nhận đã thu ${Number(data.booking.paidAmount || 0).toLocaleString("vi-VN")}đ.`
+          : `Đã tạo mã đặt phòng #${data.booking.id} cho ${name}. Chưa thu tiền — còn phải thu ${Number(data.booking.remainingAmount || 0).toLocaleString("vi-VN")}đ.`;
+      if (data.paymentError) toast.warning(data.paymentError, "Chưa ghi được thanh toán");
       setSuccessMsg(`✅ ${successNotice} Đang chuyển hướng...`);
       toast.success(successNotice, isDeposit ? "Đặt cọc thành công" : "Tạo đơn thành công");
       notifyDataChanged("BOOKINGS_CHANGED");
@@ -851,7 +861,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         />
       )}
 
-      {/* 3. Deposit Configuration Section */}
+      {/* 3. Money collected + Deposit Configuration */}
+      <CollectionSection mode={collection} onChangeMode={setCollection} method={paymentMethod} onChangeMethod={setPaymentMethod} />
       <DepositSection
         isDeposit={isDeposit}
         onToggleDeposit={setIsDeposit}
@@ -913,7 +924,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         >
           {isDeposit
             ? `Xác Nhận Đặt Cọc & Giữ Phòng (Đã thu ${depositAmount.toLocaleString("vi-VN")}đ)`
-            : "Xác Nhận Tạo Đặt Phòng"}
+            : collection === "full"
+              ? "Xác Nhận Tạo Đặt Phòng (Đã thu đủ)"
+              : "Xác Nhận Tạo Đặt Phòng (Chưa thu tiền)"}
         </Button>
       </div>
     </form>

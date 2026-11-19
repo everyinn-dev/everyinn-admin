@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Input } from "../ui/Input";
 
 interface DepositSectionProps {
@@ -40,6 +40,14 @@ export const DepositSection: React.FC<DepositSectionProps> = ({
       return todayStr;
     }
   }, [checkinDateStr, todayStr]);
+
+  // Turned on from "Thu tiền khi tạo đơn" (or the switch): seed the 50% default and the due date once.
+  useEffect(() => {
+    if (!isDeposit) return;
+    if (!depositAmount && totalPrice > 0) onChangeDepositAmount(Math.round((totalPrice * 0.5) / 1000) * 1000);
+    if (!depositDueDate) onChangeDepositDueDate(dayBeforeCheckinStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDeposit]);
 
   const remainingAmount = Math.max(0, totalPrice - depositAmount);
 
