@@ -15,7 +15,7 @@ const NO_CACHE_HEADERS = {
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /**
- * GET /api/finance/revenue-matrix?from=YYYY-MM&to=YYYY-MM — room × month revenue pivot.
+ * GET /api/finance/revenue-matrix?from=YYYY-MM&to=YYYY-MM&basis=checkin|night — room × month revenue (EI-FINANCE-ONTOLOGY-001).
  * Aggregation happens in Booking Core (single grouped D1 query, manager-only); Admin just proxies with ETag support.
  */
 export async function GET(req: Request) {
@@ -32,9 +32,14 @@ export async function GET(req: Request) {
       }
     }
 
+    const basis = searchParams.get("basis")?.trim() || undefined;
+    if (basis && basis !== "checkin" && basis !== "night") {
+      return Response.json({ error: "Tham số 'basis' phải là 'checkin' hoặc 'night'." }, { status: 400 });
+    }
+
     const res = await bookingCore.get<RevenueMatrix>("/internal/v1/finance/revenue-matrix", {
       staff,
-      query: { from, to },
+      query: { from, to, basis },
       ifNoneMatch: req.headers.get("if-none-match"),
     });
 
