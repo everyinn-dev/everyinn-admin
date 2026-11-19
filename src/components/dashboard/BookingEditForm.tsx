@@ -15,6 +15,7 @@ import { CustomFields } from "../bookings/CustomFields";
 import { PriceSummaryCard } from "../bookings/PriceSummaryCard";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
+import type { EditQuote, PricingMode } from "@/lib/editPricing";
 import { useToast } from "../ui/Toast";
 
 interface BookingEditFormProps {
@@ -131,6 +132,11 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
 
   // Why money changed (custom price / incidental charge): required, goes to the audit trail.
   const [moneyReason, setMoneyReason] = useState("");
+
+  // EI-FINANCE-ONTOLOGY-001 Q2: when the agreed price and today's rates give different totals, staff choose.
+  const [editQuote, setEditQuote] = useState<EditQuote | null>(null);
+  const [pricingMode, setPricingMode] = useState<PricingMode | null>(null);
+  const [pricingReason, setPricingReason] = useState("");
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -345,6 +351,13 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
     incidentalFee,
   ]);
 
+  // Any change to the stay invalidates the price choice: ask Core again on the next save.
+  const stayKey = `${roomId}|${calculatedCheckinAt.getTime()}|${calculatedCheckoutAt.getTime()}|${calculatedLateHours}|${customPrice}`;
+  useEffect(() => {
+    setEditQuote(null);
+    setPricingMode(null);
+  }, [stayKey]);
+
   const moneyState = moneyEditState({ originalType, originalCustomPrice: originalFields?.customPrice ?? customPrice, customPrice });
   const { customPriceChanged, needsReason: needsMoneyReason } = moneyState;
 
@@ -383,6 +396,37 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       return;
     }
 
+    const stayBody = {
+      roomId,
+      checkinAt: calculatedCheckinAt.toISOString(),
+      checkoutAt: calculatedCheckoutAt.toISOString(),
+      lateCheckoutHours: calculatedLateHours,
+      ...(customPriceChanged ? { customPrice } : {}),
+    };
+
+    // Q2: ask Core for both prices first; when they differ the staff member must pick one (with a reason).
+    if (!pricingMode) {
+      try {
+        setSubmitting(true);
+        const qr = await fetch(`/api/bookings/${bookingId}/modify-quote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(stayBody) });
+        if (qr.ok) {
+          const q = (await qr.json()) as EditQuote;
+          if (q.choiceRequired) {
+            setEditQuote(q);
+            toast.warning("Giá thoả thuận và giá theo bảng giá hiện tại khác nhau — chọn một cách tính và ghi lý do.", "Chọn cách tính giá");
+            return;
+          }
+        }
+      } finally {
+        setSubmitting(false);
+      }
+    } else if (!pricingReason.trim()) {
+      const err = "Vui lòng nhập lý do chọn cách tính giá.";
+      setErrorMessage(err);
+      toast.warning(err, "Thiếu lý do");
+      return;
+    }
+
     try {
       setSubmitting(true);
       const expectedVer =
@@ -407,7 +451,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           ...(customPriceChanged ? { customPrice } : {}),
           note,
           closingNote,
-          ...(needsMoneyReason && moneyReason.trim() ? { reason: moneyReason.trim() } : {}),
+          ...(pricingMode ? { pricingMode, reason: [pricingReason.trim(), needsMoneyReason ? moneyReason.trim() : ""].filter(Boolean).join(" · ") } : {}),
+          ...(!pricingMode && needsMoneyReason && moneyReason.trim() ? { reason: moneyReason.trim() } : {}),
         }),
       });
 
@@ -581,6 +626,41 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
             className="w-full rounded-xl bg-white border border-amber-300 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20"
           />
           <p className="text-[11px] text-amber-800">Lý do được ghi vào nhật ký của đơn cùng giá trước / sau.</p>
+        </div>
+      )}
+
+      {/* Q2: both prices from Core when they differ — staff choose one and say why. */}
+      {editQuote?.choiceRequired && editQuote.keepAgreed && (
+        <div className="space-y-2 rounded-xl border border-indigo-300 bg-indigo-50 p-3.5">
+          <p className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Chọn cách tính giá <span className="text-rose-600">*</span></p>
+          {([
+            ["keep_agreed", "Giữ giá đã chốt", "Phần không đổi giữ giá đã thoả thuận; chỉ phần thay đổi tính theo bảng giá hiện tại.", editQuote.keepAgreed],
+            ["current_rates", "Theo bảng giá hiện tại", "Tính lại toàn bộ kỳ ở theo bảng giá hôm nay.", editQuote.currentRates],
+          ] as const).map(([mode, label, hint, opt]) => (
+            <label key={mode} className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer ${pricingMode === mode ? "border-indigo-600 bg-white" : "border-indigo-200 bg-white/60"}`}>
+              <input type="radio" name="pricingMode" className="mt-0.5" checked={pricingMode === mode} onChange={() => setPricingMode(mode)} />
+              <span className="flex-1 text-xs">
+                <span className="font-bold text-slate-900">{label}: {opt.total.toLocaleString("vi-VN")} đ</span>
+                <span className="block text-[11px] text-slate-500">{hint}</span>
+                <span className={`block text-[11px] font-semibold ${opt.balance > 0 ? "text-amber-800" : opt.balance < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                  {opt.balance > 0
+                    ? `Sau khi lưu còn phải thu ${opt.balance.toLocaleString("vi-VN")} đ`
+                    : opt.balance < 0
+                      ? `Sau khi lưu đang giữ thừa ${(-opt.balance).toLocaleString("vi-VN")} đ của khách`
+                      : "Khớp với số đã thu"}
+                </span>
+              </span>
+            </label>
+          ))}
+          <input
+            type="text"
+            maxLength={500}
+            value={pricingReason}
+            onChange={(e) => setPricingReason(e.target.value)}
+            placeholder="Lý do (bắt buộc), VD: Khách ở thêm 1 đêm, giữ giá cũ các đêm đã chốt"
+            className="w-full rounded-xl bg-white border border-indigo-300 px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-600"
+          />
+          <p className="text-[11px] text-indigo-800">Giá hiện tại của đơn: {editQuote.currentTotal.toLocaleString("vi-VN")} đ · đã thu ròng {editQuote.netReceived.toLocaleString("vi-VN")} đ.</p>
         </div>
       )}
 

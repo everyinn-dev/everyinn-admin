@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo } from "react";
 import { Input } from "../ui/Input";
+import { addDaysToDate } from "@/lib/vnTime";
 
 interface DepositSectionProps {
   isDeposit: boolean;
@@ -32,9 +33,8 @@ export const DepositSection: React.FC<DepositSectionProps> = ({
   // Compute 1 day before checkin
   const dayBeforeCheckinStr = useMemo(() => {
     try {
-      const d = new Date(`${checkinDateStr}T00:00:00`);
-      d.setDate(d.getDate() - 1);
-      const iso = d.toISOString().slice(0, 10);
+      // Calendar arithmetic on the VN date string (the old Date#setDate path ran in browser time: 2 days early in UTC+7).
+      const iso = addDaysToDate(checkinDateStr, -1);
       return iso < todayStr ? todayStr : iso;
     } catch {
       return todayStr;

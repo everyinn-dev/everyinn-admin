@@ -230,6 +230,8 @@ export async function PATCH(
       // bookingType is locked on edit (Core: 422 BOOKING_TYPE_LOCKED) — only forwarded so Core can refuse a change.
       if (body.bookingType) updatePayload.bookingType = body.bookingType;
       if (typeof body.reason === "string" && body.reason.trim()) updatePayload.reason = body.reason.trim().slice(0, 500);
+      // EI-FINANCE-ONTOLOGY-001 Q2: the price the staff member chose when the agreed price and today's rates differ.
+      if (body.pricingMode === "keep_agreed" || body.pricingMode === "current_rates") updatePayload.pricingMode = body.pricingMode;
       if (body.checkinAt) updatePayload.checkinAt = body.checkinAt;
       if (body.checkoutAt) updatePayload.checkoutAt = body.checkoutAt;
       if (body.earlyCheckinHours !== undefined) updatePayload.earlyCheckinHours = Number(body.earlyCheckinHours);
