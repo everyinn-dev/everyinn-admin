@@ -1,230 +1,423 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { DailyRosterItem, DailyRosterResponse, GanttBookingItem } from "@/types";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  BookingOpsStateEntry,
+} from "@/lib/rosterDoorCodes";
+import { agentApi, AgentApiError } from "@/lib/agentApi";
 import { apiFetch } from "@/lib/apiClient";
-import { getVnToday, formatTimeShort, formatDateTimeShort } from "@/lib/timelineUtils";
+import { addDaysYmd } from "@/lib/doorCodeUtils";
+import { formatVn, roomBlockTypeOf } from "@/lib/roomBlocks";
+import { subscribeToSyncEvents } from "@/lib/syncEvents";
+import { formatTimeShort, getVnToday } from "@/lib/timelineUtils";
+import {
+  CheckinGuideStatus,
+  DailyRosterHousekeepingTask,
+  DailyRosterItem,
+  DailyRosterResponse,
+  GanttBookingItem,
+  HousekeepingStatus,
+} from "@/types";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
-import { formatVn, roomBlockTypeOf } from "@/lib/roomBlocks";
 
 interface DailyRosterModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialDate?: string;
+  refreshSignal?: number;
   onSelectBooking?: (booking: GanttBookingItem) => void;
+  onOpenDoorCodes?: () => void;
 }
 
-const PROPERTY_INFO = {
-  name: "Every Inn Phan Xích Long",
-  address: "Phan Xích Long, Phường Cầu Kiệu (Phú Nhuận cũ), TP. Hồ Chí Minh",
-  wifiSsid: "EveryInn_Guest",
-  wifiPassword: "everyinn2024",
-  hotline: "0909 998 888",
-  checkinInstruction: "Bấm chuông lễ tân tầng G hoặc mở cửa bằng mã số điện tử.",
+type ViewTab = "overview" | "checkin" | "housekeeping";
+type CheckinTriage = "all" | "unsent" | "missing_code" | "collect" | "pending";
+type HkTriage = "all" | "urgent" | "pending" | "cleaning" | "done";
+
+const BOOKING_TYPE_META: Record<string, { label: string; cls: string }> = {
+  hourly: { label: "Theo giờ", cls: "bg-sky-50 text-sky-800 border-sky-200" },
+  overnight: { label: "Qua đêm", cls: "bg-indigo-50 text-indigo-800 border-indigo-200" },
+  dayuse: { label: "Theo ngày", cls: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  custom: { label: "Tùy chỉnh", cls: "bg-slate-100 text-slate-700 border-slate-200" },
 };
+
+const CHANNEL_LABEL: Record<string, string> = {
+  web: "Web",
+  admin: "Admin",
+  chat: "Chat AI",
+};
+
+function formatDateHeading(ymd: string): string {
+  const parts = ymd.split("-");
+  if (parts.length !== 3) return ymd;
+  const ms = Date.parse(`${ymd}T12:00:00+07:00`);
+  const weekdays = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const wd = weekdays[new Date(ms + 7 * 3600_000).getUTCDay()] ?? "";
+  return `${wd}, ${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+async function copyTextSafe(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall back to execCommand below when Clipboard API permission is restricted
+    }
+  }
+  if (typeof document === "undefined") return false;
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.setAttribute("readonly", "");
+    el.style.position = "fixed";
+    el.style.left = "-9999px";
+    document.body.appendChild(el);
+    el.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(el);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 export const DailyRosterModal: React.FC<DailyRosterModalProps> = ({
   isOpen,
   onClose,
+  initialDate,
+  refreshSignal = 0,
   onSelectBooking,
+  onOpenDoorCodes,
 }) => {
   const toast = useToast();
   const vnToday = useMemo(() => getVnToday(), []);
-  const [selectedDate, setSelectedDate] = useState<string>(vnToday);
+  const vnTomorrow = useMemo(() => addDaysYmd(vnToday, 1), [vnToday]);
+
+  const [selectedDate, setSelectedDate] = useState<string>(initialDate || vnToday);
+  const [prevSyncKey, setPrevSyncKey] = useState<string>(`${isOpen ? "1" : "0"}:${initialDate ?? ""}`);
   const [data, setData] = useState<DailyRosterResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [viewTab, setViewTab] = useState<"both" | "checkin" | "checkout">("both");
-  const [searchFilter, setSearchFilter] = useState<string>("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [viewTab, setViewTab] = useState<ViewTab>("overview");
+  const [checkinFilter, setCheckinFilter] = useState<CheckinTriage>("all");
+  const [hkFilter, setHkFilter] = useState<HkTriage>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [busyActionId, setBusyActionId] = useState<string | null>(null);
 
-  // Fetch roster data for selectedDate
-  const fetchRoster = useCallback(async (dateStr: string) => {
+  const syncKey = `${isOpen ? "1" : "0"}:${initialDate ?? ""}`;
+  if (prevSyncKey !== syncKey) {
+    setPrevSyncKey(syncKey);
+    if (isOpen && initialDate) {
+      setSelectedDate(initialDate);
+    }
+  }
+
+  const fetchRoster = useCallback(async (dateStr: string, signal?: AbortSignal) => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      setLoading(true);
-      const res = await apiFetch(`/api/bookings/daily-roster?date=${dateStr}`);
-      if (res.ok) {
-        const json = (await res.json()) as DailyRosterResponse;
+      const res = await apiFetch(`/api/bookings/daily-roster?date=${encodeURIComponent(dateStr)}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+        signal,
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(err?.error || `Lỗi tải dữ liệu (${res.status})`);
+      }
+      const json = (await res.json()) as DailyRosterResponse;
+      if (!signal?.aborted) {
         setData(json);
-      } else {
-        toast.error("Không thể tải lịch điều phối ngày.", "Lỗi tải dữ liệu");
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Lỗi kết nối khi tải lịch điều phối.", "Lỗi mạng");
+      if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) return;
+      const msg = err instanceof Error ? err.message : "Không tải được lịch điều phối ngày.";
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [toast]);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchRoster(selectedDate);
-    }
-  }, [isOpen, selectedDate, fetchRoster]);
+    if (!isOpen) return;
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) {
+        void fetchRoster(selectedDate, controller.signal);
+      }
+    });
+    return () => controller.abort();
+  }, [isOpen, selectedDate, refreshSignal, fetchRoster]);
 
-  // Keyboard shortcut: Escape to close
   useEffect(() => {
     if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+    window.addEventListener("keydown", onKey);
+    const unsub = subscribeToSyncEvents(() => {
+      fetchRoster(selectedDate);
+    });
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      unsub();
+    };
+  }, [isOpen, onClose, selectedDate, fetchRoster]);
 
-  // Quick Date Jump Handlers
-  const handlePrevDay = () => {
-    const current = new Date(`${selectedDate}T12:00:00+07:00`);
-    current.setDate(current.getDate() - 1);
-    setSelectedDate(current.toISOString().slice(0, 10));
-  };
+  const checkins = useMemo(() => data?.checkins ?? [], [data]);
+  const housekeepingTasks = useMemo(() => data?.housekeepingTasks ?? [], [data]);
+  const blocks = useMemo(() => data?.blocks ?? [], [data]);
 
-  const handleNextDay = () => {
-    const current = new Date(`${selectedDate}T12:00:00+07:00`);
-    current.setDate(current.getDate() + 1);
-    setSelectedDate(current.toISOString().slice(0, 10));
-  };
+  const queryNorm = searchQuery.trim().toLowerCase();
 
-  const handleToday = () => {
-    setSelectedDate(vnToday);
-  };
+  const matchesSearch = useCallback(
+    (fields: Array<string | null | undefined>) => {
+      if (!queryNorm) return true;
+      return fields.some((f) => typeof f === "string" && f.toLowerCase().includes(queryNorm));
+    },
+    [queryNorm],
+  );
 
-  // Filtered checkins and checkouts based on search filter
   const filteredCheckins = useMemo(() => {
-    if (!data?.checkins) return [];
-    if (!searchFilter.trim()) return data.checkins;
-    const q = searchFilter.toLowerCase().trim();
-    return data.checkins.filter(
-      (c) =>
-        c.roomName.toLowerCase().includes(q) ||
-        c.guestName.toLowerCase().includes(q) ||
-        c.phone.includes(q) ||
-        c.instagram?.toLowerCase().includes(q) ||
-        c.facebook?.toLowerCase().includes(q) ||
-        c.zalo?.toLowerCase().includes(q) ||
-        c.id.toLowerCase().includes(q)
-    );
-  }, [data?.checkins, searchFilter]);
+    return checkins.filter((c) => {
+      if (!matchesSearch([c.guestName, c.roomNumber, c.roomName, c.phone, c.id, c.note, c.closingNote])) return false;
+      if (checkinFilter === "unsent") return c.status === "confirmed" && (c.checkinGuideStatus ?? "pending") === "pending";
+      if (checkinFilter === "missing_code") return c.status === "confirmed" && !c.doorCode;
+      if (checkinFilter === "collect") return (c.remainingAmount ?? 0) > 0;
+      if (checkinFilter === "pending") return c.status === "pending";
+      return true;
+    });
+  }, [checkins, checkinFilter, matchesSearch]);
 
-  const filteredCheckouts = useMemo(() => {
-    if (!data?.checkouts) return [];
-    if (!searchFilter.trim()) return data.checkouts;
-    const q = searchFilter.toLowerCase().trim();
-    return data.checkouts.filter(
-      (c) =>
-        c.roomName.toLowerCase().includes(q) ||
-        c.guestName.toLowerCase().includes(q) ||
-        c.phone.includes(q) ||
-        c.instagram?.toLowerCase().includes(q) ||
-        c.facebook?.toLowerCase().includes(q) ||
-        c.zalo?.toLowerCase().includes(q) ||
-        c.id.toLowerCase().includes(q)
-    );
-  }, [data?.checkouts, searchFilter]);
+  const filteredHkTasks = useMemo(() => {
+    return housekeepingTasks.filter((t) => {
+      if (!matchesSearch([t.roomNumber, t.roomName, t.guestName, t.note, t.closingNote, t.nextCheckin?.guestName, t.nextCheckin?.note])) {
+        return false;
+      }
+      const st = t.hkStatus ?? "pending";
+      if (hkFilter === "urgent") return t.urgent && st !== "done";
+      if (hkFilter === "pending") return st === "pending";
+      if (hkFilter === "cleaning") return st === "cleaning";
+      if (hkFilter === "done") return st === "done";
+      return true;
+    });
+  }, [housekeepingTasks, hkFilter, matchesSearch]);
 
-  // Format pre-arrival check-in instruction message for guest
-  const copyCheckinGuide = (item: DailyRosterItem) => {
-    const checkinTimeFormatted = formatDateTimeShort(item.checkinAt);
-    const checkoutTimeFormatted = formatDateTimeShort(item.checkoutAt);
-    const doorCodeText = item.doorCode
-      ? `🔑 Mã mở khóa phòng của bạn: ${item.doorCode}`
-      : `🔑 Mã khóa phòng: Lễ tân sẽ cung cấp ngay khi bạn đến sảnh`;
+  const applyCheckinGuideState = useCallback((bookingId: string, st: BookingOpsStateEntry) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const nextCheckins = prev.checkins.map((c) =>
+        c.id === bookingId
+          ? {
+              ...c,
+              checkinGuideStatus: st.checkinGuideStatus as CheckinGuideStatus,
+              checkinGuideSentAt: st.checkinGuideSentAt,
+              checkinGuideSentByName: st.checkinGuideSentByName,
+            }
+          : c,
+      );
+      return {
+        ...prev,
+        checkins: nextCheckins,
+        summary: {
+          ...prev.summary,
+          guideUnsentCount: nextCheckins.filter((c) => c.status === "confirmed" && (c.checkinGuideStatus ?? "pending") === "pending").length,
+        },
+      };
+    });
+  }, []);
 
-    const message = `🏨 ${PROPERTY_INFO.name.toUpperCase()} — HƯỚNG DẪN NHẬN PHÒNG
-Chào bạn ${item.guestName || "quý khách"}, Every Inn xin gửi bạn thông tin nhận phòng:
+  const applyHousekeepingState = useCallback((refId: string, st: BookingOpsStateEntry) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const nextTasks = prev.housekeepingTasks.map((t) =>
+        t.refId === refId
+          ? {
+              ...t,
+              hkStatus: st.hkStatus as HousekeepingStatus,
+              hkUpdatedAt: st.hkUpdatedAt,
+              hkUpdatedByName: st.hkUpdatedByName,
+            }
+          : t,
+      );
+      return {
+        ...prev,
+        housekeepingTasks: nextTasks,
+        summary: {
+          ...prev.summary,
+          hkDoneCount: nextTasks.filter((t) => t.hkStatus === "done").length,
+          hkUrgentCount: nextTasks.filter((t) => t.urgent && t.hkStatus !== "done").length,
+        },
+      };
+    });
+  }, []);
 
-📍 Địa chỉ: ${PROPERTY_INFO.address}
-🚪 Phòng: ${item.roomName} (${item.roomClass === "signature" ? "Signature" : "Haven"} - Tầng ${item.floor})
-⏰ Nhận phòng (Check-in): ${checkinTimeFormatted}
-⏰ Trả phòng (Check-out): ${checkoutTimeFormatted}
-
-${doorCodeText}
-📶 WiFi: ${PROPERTY_INFO.wifiSsid} (Mật khẩu: ${PROPERTY_INFO.wifiPassword})
-ℹ️ Hướng dẫn: ${PROPERTY_INFO.checkinInstruction}
-📞 Hotline hỗ trợ 24/7: ${PROPERTY_INFO.hotline}
-
-Chúc bạn có một trải nghiệm lưu trú thật ấm cúng và thoải mái tại Every Inn! ✨`;
-
-    navigator.clipboard.writeText(message);
-    toast.success(
-      `Đã sao chép hướng dẫn nhận phòng cho khách ${item.guestName}!`,
-      "Đã sao chép tin nhắn"
-    );
+  const handleCopyStandardGuide = async (item: DailyRosterItem) => {
+    setBusyActionId(`copy:${item.id}`);
+    try {
+      const res = await agentApi<{
+        bookingId: string;
+        ready: boolean;
+        message: string | null;
+        missing: Array<"gate" | "lockbox">;
+      }>(`ops/bookings/${encodeURIComponent(item.id)}/guide-message`, {
+        method: "POST",
+        body: {
+          roomId: item.roomId,
+          roomName: item.roomName,
+          roomNumber: item.roomNumber,
+          guestName: item.guestName,
+          checkinAt: item.checkinAt,
+          checkoutAt: item.checkoutAt,
+        },
+      });
+      const payload = res.data;
+      if (!payload?.ready || !payload.message) {
+        const missingLabel = (payload?.missing ?? ["gate", "lockbox"])
+          .map((m) => (m === "gate" ? "mã cổng" : "mã hộp khóa"))
+          .join(" & ");
+        toast.warning(`Phòng ${item.roomNumber || item.roomName} chưa đủ ${missingLabel}. Vui lòng cài mã trước khi gửi khách.`, "Thiếu mã cửa");
+        return;
+      }
+      const copied = await copyTextSafe(payload.message);
+      if (copied) {
+        toast.success(`Đã sao chép mẫu hướng dẫn nhận phòng P.${item.roomNumber || item.roomName} (${item.guestName}).`, "Đã chép hướng dẫn chuẩn");
+      } else {
+        toast.error("Trình duyệt từ chối quyền ghi bộ nhớ tạm. Vui lòng thử lại hoặc dùng nút Mở Mã cửa.");
+      }
+    } catch (err) {
+      toast.error(err instanceof AgentApiError ? err.message : "Không lấy được mẫu hướng dẫn từ AI Lễ Tân.");
+    } finally {
+      setBusyActionId(null);
+    }
   };
 
-  // Format turnover cleaning briefing for Housekeeping
-  const copyHousekeepingBriefing = (item: DailyRosterItem) => {
-    const checkoutTime = formatTimeShort(item.checkoutAt);
-    const turnoverStart = formatTimeShort(item.turnoverStartAt || item.checkoutAt);
-    const turnoverEnd = formatTimeShort(item.turnoverEndAt || item.checkoutAt);
-
-    const message = `🧹 LỊCH DỌN PHÒNG — ${PROPERTY_INFO.name.toUpperCase()}
-📅 Ngày: ${selectedDate}
-- Phòng: ${item.roomName} (Tầng ${item.floor})
-- Khách trả phòng lúc: ${checkoutTime} ${item.lateCheckoutHours > 0 ? `(Khách trễ +${item.lateCheckoutHours}h)` : ""}
-- Khung dọn dẹp: ${turnoverStart} đến ${turnoverEnd} (Đệm 1 tiếng)
-- Trạng thái: Cần dọn phòng & thay drap mới đón lượt khách kế tiếp`;
-
-    navigator.clipboard.writeText(message);
-    toast.success(
-      `Đã sao chép thông tin dọn phòng ${item.roomName} cho Buồng phòng!`,
-      "Đã sao chép lịch dọn"
-    );
+  const handleToggleGuideSent = async (item: DailyRosterItem) => {
+    const currentlySent = (item.checkinGuideStatus ?? "pending") !== "pending";
+    const nextSent = !currentlySent;
+    setBusyActionId(`sent:${item.id}`);
+    try {
+      const res = await agentApi<{ state: BookingOpsStateEntry }>(`ops/bookings/${encodeURIComponent(item.id)}/guide-sent`, {
+        method: "POST",
+        body: { sent: nextSent },
+      });
+      if (res.data?.state) {
+        applyCheckinGuideState(item.id, res.data.state);
+      }
+      toast.success(nextSent ? `Đã đánh dấu gửi hướng dẫn cho ${item.guestName}.` : `Đã chuyển ${item.guestName} về trạng thái chưa gửi.`);
+    } catch (err) {
+      toast.error(err instanceof AgentApiError ? err.message : "Không cập nhật được trạng thái gửi hướng dẫn.");
+    } finally {
+      setBusyActionId(null);
+    }
   };
 
-  // Copy full daily summary report for Internal Telegram/Zalo Staff Group
-  const copyFullDailyReport = () => {
+  const handleSetHkStatus = async (task: DailyRosterHousekeepingTask, status: HousekeepingStatus) => {
+    setBusyActionId(`hk:${task.refId}`);
+    try {
+      const res = await agentApi<{ state: BookingOpsStateEntry }>(`ops/bookings/${encodeURIComponent(task.refId)}/housekeeping`, {
+        method: "POST",
+        body: { status },
+      });
+      if (res.data?.state) {
+        applyHousekeepingState(task.refId, res.data.state);
+      }
+      const label = status === "done" ? "Đã dọn xong" : status === "cleaning" ? "Đang dọn" : "Chưa dọn";
+      toast.success(`${task.roomName} (${formatTimeShort(task.turnoverStartAt)}): ${label}.`);
+    } catch (err) {
+      toast.error(err instanceof AgentApiError ? err.message : "Không cập nhật được trạng thái dọn phòng.");
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  /** Safe operational briefing without plaintext door codes or housekeeping PII phone numbers. */
+  const handleCopySafeDailyReport = async () => {
     if (!data) return;
+    const lines: string[] = [
+      `BÁO CÁO ĐIỀU PHỐI NGÀY ${formatDateHeading(selectedDate).toUpperCase()}`,
+      `Check-in: ${data.summary.totalCheckins} (${data.summary.hourlyCount} giờ · ${data.summary.overnightCount} đêm · ${data.summary.dayuseCount} ngày · ${data.summary.customCount} tùy chỉnh)`,
+      `Dọn phòng: ${data.housekeepingTasks.length} lượt · Khóa phòng: ${data.blocks?.length ?? 0}`,
+      "",
+      "1. DANH SÁCH CHECK-IN:",
+    ];
 
-    let text = `📋 BẢNG ĐIỀU PHỐI VẬN HÀNH NGÀY ${selectedDate} — ${PROPERTY_INFO.name.toUpperCase()}\n`;
-    text += `Tổng quan: ${data.summary.totalCheckins} Check-in • ${data.summary.totalCheckouts} Check-out\n\n`;
-
-    text += `📥 DANH SÁCH NHẬN PHÒNG (CHECK-IN):\n`;
     if (data.checkins.length === 0) {
-      text += `(Không có lượt check-in nào)\n`;
+      lines.push("   - Không có khách nhận phòng.");
     } else {
       data.checkins.forEach((c, idx) => {
-        text += `${idx + 1}. [${formatTimeShort(c.checkinAt)}] ${c.roomName} — ${c.guestName} (${c.phone}) • ${c.bookingType} • Mã cửa: ${c.doorCode || "Chưa có"}\n`;
+        const tags = [
+          BOOKING_TYPE_META[c.bookingType]?.label ?? c.bookingType,
+          `${c.numGuests} khách`,
+          c.status === "pending" ? "CHỜ XÁC NHẬN" : (c.checkinGuideStatus ?? "pending") !== "pending" ? "Đã gửi HD" : "Chưa gửi HD",
+          !c.doorCode && c.status === "confirmed" ? "THIẾU MÃ CỬA" : null,
+          (c.remainingAmount ?? 0) > 0 ? `Còn thu ${Number(c.remainingAmount).toLocaleString("vi-VN")}đ` : null,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        lines.push(`   ${idx + 1}. [${formatTimeShort(c.checkinAt)}–${formatTimeShort(c.checkoutAt)}] ${c.roomName} — ${c.guestName} (${tags})`);
+        if (c.closingNote) lines.push(`      Chốt đơn: ${c.closingNote}`);
+        if (c.note) lines.push(`      Ghi chú: ${c.note}`);
       });
     }
 
-    text += `\n📤 DANH SÁCH TRẢ PHÒNG & DỌN PHÒNG (CHECK-OUT):\n`;
-    if (data.checkouts.length === 0) {
-      text += `(Không có lượt check-out nào)\n`;
+    lines.push("", "2. LỊCH DỌN PHÒNG (THEO GIỜ):");
+    if (data.housekeepingTasks.length === 0) {
+      lines.push("   - Không có lượt dọn phòng.");
     } else {
-      data.checkouts.forEach((c, idx) => {
-        text += `${idx + 1}. [${formatTimeShort(c.checkoutAt)}] ${c.roomName} — ${c.guestName} • Dọn phòng: ${formatTimeShort(c.turnoverStartAt || c.checkoutAt)} - ${formatTimeShort(c.turnoverEndAt || c.checkoutAt)}\n`;
+      data.housekeepingTasks.forEach((t, idx) => {
+        const hkLabel = t.hkStatus === "done" ? "Đã xong" : t.hkStatus === "cleaning" ? "Đang dọn" : "Chưa dọn";
+        const kindLabel = t.kind === "owner_stay" ? "Chủ nhà ở" : `Trả phòng${t.lateCheckoutHours > 0 ? ` +${t.lateCheckoutHours}h trễ` : ""}`;
+        const nextStr = t.nextCheckin
+          ? `${t.urgent ? "GẤP - " : ""}Khách sau ${formatTimeShort(t.nextCheckin.checkinAt)} (${t.nextCheckin.numGuests} khách, còn ${t.nextCheckin.gapMinutes}p)`
+          : "Trống sau đó";
+        lines.push(`   ${idx + 1}. [${formatTimeShort(t.turnoverStartAt)}–${formatTimeShort(t.turnoverEndAt)}] ${t.roomName} (${kindLabel}) — ${hkLabel} | ${nextStr}`);
+        if (t.nextCheckin?.note || t.nextCheckin?.closingNote) {
+          lines.push(`      Chuẩn bị khách sau: ${[t.nextCheckin.note, t.nextCheckin.closingNote].filter(Boolean).join(" · ")}`);
+        }
       });
     }
 
     if (data.blocks?.length) {
-      text += `\n🔒 PHÒNG KHOÁ TRONG NGÀY:\n`;
+      lines.push("", "3. PHÒNG ĐANG KHÓA:");
       data.blocks.forEach((b, idx) => {
-        text += `${idx + 1}. ${b.roomName ?? b.roomId} — ${roomBlockTypeOf(b.blockType).label}: ${b.reason ?? ""} (${formatVn(b.blockedFrom)} → ${formatVn(b.blockedTo)})\n`;
+        lines.push(`   ${idx + 1}. ${b.roomName ?? b.roomId} — ${roomBlockTypeOf(b.blockType).label}: ${b.reason ?? ""} (${formatVn(b.blockedFrom)} → ${formatVn(b.blockedTo)})`);
       });
     }
 
-    navigator.clipboard.writeText(text);
-    toast.success(
-      `Đã sao chép báo cáo điều phối ngày ${selectedDate} vào bộ nhớ tạm!`,
-      "Đã sao chép báo cáo ngày"
-    );
+    const ok = await copyTextSafe(lines.join("\n"));
+    if (ok) {
+      toast.success(`Đã sao chép báo cáo điều phối ngày ${selectedDate} (đã ẩn mã cửa & SĐT).`, "Đã chép báo cáo");
+    } else {
+      toast.error("Không sao chép được vào bộ nhớ tạm.");
+    }
   };
 
-  // Convert DailyRosterItem to GanttBookingItem to open drawer
   const openDetailDrawer = (item: DailyRosterItem) => {
     if (!onSelectBooking) return;
-    const ganttItem: GanttBookingItem = {
+    onSelectBooking({
       id: item.id,
       roomId: item.roomId,
       guestName: item.guestName,
       phone: item.phone,
+      instagram: item.instagram,
+      facebook: item.facebook,
+      zalo: item.zalo,
+      numGuests: item.numGuests,
       bookingType: item.bookingType,
       checkinAt: item.checkinAt,
       checkoutAt: item.checkoutAt,
+      earlyCheckinHours: item.earlyCheckinHours,
+      lateCheckoutHours: item.lateCheckoutHours,
       totalPrice: item.totalPrice,
+      remainingAmount: item.remainingAmount,
+      isDeposit: item.isDeposit ? 1 : 0,
+      depositStatus: item.depositStatus,
       status: item.status,
-      instagram: item.instagram,
-      facebook: item.facebook,
       closingNote: item.closingNote,
       note: item.note,
       createdAt: item.createdAt,
@@ -234,561 +427,690 @@ Chúc bạn có một trải nghiệm lưu trú thật ấm cúng và thoải m�
       updatedByStaffId: item.updatedByStaffId,
       updatedByStaffName: item.updatedByStaffName,
       modNo: item.modNo,
-    };
-    onSelectBooking(ganttItem);
+      version: item.modNo,
+    });
   };
 
   if (!isOpen) return null;
 
+  const missingCodesCount = data?.summary.doorCodeMissingCount ?? 0;
+  const guideUnsentCount = data?.summary.guideUnsentCount ?? 0;
+  const pendingCount = data?.summary.pendingCheckinsCount ?? 0;
+  const hkDoneCount = data?.summary.hkDoneCount ?? 0;
+  const hkUrgentCount = data?.summary.hkUrgentCount ?? 0;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-6xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/45 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="daily-roster-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:max-w-5xl bg-slate-50 border border-slate-200 rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Top Header */}
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/80 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-lg">
-                🗓️
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-5 py-3.5 flex flex-col gap-3 shrink-0">
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </span>
-              <div>
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <span>Điều Phối Khách Vào & Ra Hằng Ngày</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Operation Hub
-                  </span>
+              <div className="min-w-0">
+                <h2 id="daily-roster-modal-title" className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight truncate">
+                  Điều phối vận hành ngày
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Gửi hướng dẫn trước giờ khách đến • Canh lịch khách trả phòng để điều phối buồng phòng
+                <p className="text-xs text-slate-600 truncate">
+                  Đồng bộ 2 chiều Admin &amp; nhóm Telegram · Múi giờ Việt Nam (UTC+7)
                 </p>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Đóng cửa sổ điều phối ngày"
+              className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          {/* Quick Date Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs">
+          {/* Date Stepper & Global Utilities */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center flex-wrap gap-1.5" role="group" aria-label="Chọn ngày điều phối">
               <button
-                onClick={handlePrevDay}
-                className="px-2.5 py-1 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors font-medium"
-                title="Ngày hôm trước"
+                type="button"
+                onClick={() => setSelectedDate((d) => addDaysYmd(d, -1))}
+                aria-label="Ngày trước"
+                className="min-h-[36px] px-2.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center justify-center cursor-pointer"
               >
-                ◀ Trước
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
               <button
-                onClick={handleToday}
-                className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                type="button"
+                onClick={() => setSelectedDate(vnToday)}
+                className={`min-h-[36px] px-3 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
                   selectedDate === vnToday
-                    ? "bg-white text-emerald-700 border border-slate-200 shadow-xs"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                 }`}
               >
                 Hôm nay
               </button>
               <button
-                onClick={handleNextDay}
-                className="px-2.5 py-1 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors font-medium"
-                title="Ngày hôm sau"
+                type="button"
+                onClick={() => setSelectedDate(vnTomorrow)}
+                className={`min-h-[36px] px-3 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                  selectedDate === vnTomorrow
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
               >
-                Sau ▶
+                Ngày mai
+              </button>
+              <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 tabular-nums">
+                {formatDateHeading(selectedDate)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedDate((d) => addDaysYmd(d, 1))}
+                aria-label="Ngày sau"
+                className="min-h-[36px] px-2.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center justify-center cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
 
-            {/* Custom Date Picker */}
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-600 transition-colors cursor-pointer shadow-xs"
-            />
-
-            {/* Copy Full Report Button */}
-            <button
-              onClick={copyFullDailyReport}
-              disabled={loading || !data}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition-all active:scale-95 shrink-0 shadow-xs"
-              title="Sao chép toàn bộ lịch ngày để gửi nhóm Zalo/Telegram"
-            >
-              <span>📋</span>
-              <span className="hidden sm:inline">Sao chép báo cáo ngày</span>
-            </button>
-
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 flex items-center justify-center transition-colors text-sm font-bold shadow-xs"
-              title="Đóng cửa sổ (ESC)"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Operational KPI Ribbon & View Switcher */}
-        <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-          {/* Quick Metrics */}
-          <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto text-xs pb-1 sm:pb-0">
-            <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 shrink-0 shadow-xs">
-              <span className="text-slate-500 text-[10px] uppercase font-semibold block">
-                Khách Check-in
-              </span>
-              <span className="text-emerald-700 font-extrabold text-sm font-mono">
-                {data?.summary.totalCheckins || 0} lượt
-              </span>
-            </div>
-
-            <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 shrink-0 shadow-xs">
-              <span className="text-slate-500 text-[10px] uppercase font-semibold block">
-                Khách Check-out
-              </span>
-              <span className="text-amber-700 font-extrabold text-sm font-mono">
-                {data?.summary.totalCheckouts || 0} lượt
-              </span>
-            </div>
-
-            <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 shrink-0 shadow-xs hidden md:block">
-              <span className="text-slate-500 text-[10px] uppercase font-semibold block">
-                Phân bổ loại hình
-              </span>
-              <span className="text-slate-700 font-medium text-xs">
-                {data?.summary.hourlyCount || 0} Giờ • {data?.summary.overnightCount || 0} Đêm • {data?.summary.dayuseCount || 0} Ngày
-              </span>
-            </div>
-
-            {data?.blocks?.length ? (
-              <div className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 shrink-0 text-amber-900 shadow-xs max-w-full" title={data.blocks.map((b) => `${b.roomName ?? b.roomId}: ${roomBlockTypeOf(b.blockType).label} ${formatVn(b.blockedFrom)} → ${formatVn(b.blockedTo)}`).join("\n")}>
-                <span className="text-[10px] uppercase font-semibold block">Phòng khoá trong ngày</span>
-                <span className="font-bold text-xs">
-                  {data.blocks.map((b) => `${roomBlockTypeOf(b.blockType).icon} ${b.roomName ?? b.roomId} (${formatVn(b.blockedFrom, { hour: "2-digit", minute: "2-digit" })}–${formatVn(b.blockedTo, { hour: "2-digit", minute: "2-digit" })})`).join(" · ")}
-                </span>
-              </div>
-            ) : null}
-
-            {data?.summary.doorCodeMissingCount ? (
-              <div className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 shrink-0 text-amber-800 shadow-xs">
-                <span className="text-[10px] uppercase font-semibold block">Cần tạo mã cửa</span>
-                <span className="font-bold text-xs">
-                  {data.summary.doorCodeMissingCount} đơn chưa có mã
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Search & Tabs */}
-          <div className="flex items-center gap-2">
-            {/* Quick search input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Tìm khách, phòng, SĐT..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 pl-8 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 w-36 sm:w-48 transition-all shadow-xs"
-              />
-              <span className="absolute left-2.5 top-1.5 text-xs text-slate-400">🔍</span>
-              {searchFilter && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {onOpenDoorCodes && (
                 <button
-                  onClick={() => setSearchFilter("")}
-                  className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 text-xs"
+                  type="button"
+                  onClick={onOpenDoorCodes}
+                  className="min-h-[36px] px-3 rounded-lg bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/60 text-xs font-bold text-slate-700 hover:text-emerald-900 flex items-center gap-1.5 cursor-pointer"
                 >
-                  ✕
+                  <svg className="w-3.5 h-3.5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                  <span>Cài / xem mã cửa</span>
                 </button>
               )}
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 text-xs shrink-0">
               <button
-                onClick={() => setViewTab("both")}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                  viewTab === "both"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
+                type="button"
+                onClick={handleCopySafeDailyReport}
+                disabled={!data}
+                className="min-h-[36px] px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
-                Toàn Cảnh
+                <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                <span>Sao chép báo cáo</span>
               </button>
               <button
-                onClick={() => setViewTab("checkin")}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                  viewTab === "checkin"
-                    ? "bg-white text-emerald-700 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
+                type="button"
+                onClick={() => fetchRoster(selectedDate)}
+                disabled={loading}
+                aria-label="Làm mới lịch điều phối"
+                className="min-h-[36px] px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
-                📥 Check-in ({filteredCheckins.length})
-              </button>
-              <button
-                onClick={() => setViewTab("checkout")}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                  viewTab === "checkout"
-                    ? "bg-white text-amber-700 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                📤 Check-out ({filteredCheckouts.length})
+                <svg className={`w-3.5 h-3.5 text-slate-600 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Làm mới</span>
               </button>
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50/50">
-          {loading ? (
-            <div className="py-24 flex flex-col items-center justify-center gap-3">
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {loading && !data ? (
+            <div className="py-16 flex flex-col items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl">
               <Spinner size="lg" />
-              <p className="text-sm text-slate-500 font-medium">
-                Đang chuẩn bị lịch điều phối ngày {selectedDate}...
-              </p>
+              <p className="text-sm font-medium text-slate-600">Đang tải lịch điều phối ngày...</p>
+            </div>
+          ) : loadError && !data ? (
+            <div className="p-6 bg-white border border-rose-200 rounded-xl text-center space-y-3">
+              <p className="text-sm font-bold text-rose-700">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => fetchRoster(selectedDate)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
+              >
+                Thử tải lại
+              </button>
             </div>
           ) : (
-            <div
-              className={`grid gap-6 ${
-                viewTab === "both" ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
-              }`}
-            >
-              {/* Column 1: Check-in (Khách Nhận Phòng) */}
-              {(viewTab === "both" || viewTab === "checkin") && (
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
-                        Khách Nhận Phòng (Check-in)
-                      </h3>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {filteredCheckins.length} lượt
+            <>
+              {/* Flat KPI Strip (4 items) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                  <span className="block text-xs font-semibold text-slate-500">Khách nhận phòng</span>
+                  <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xl font-extrabold text-slate-900 tabular-nums">{data?.summary.totalCheckins ?? 0}</span>
+                    {pendingCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 tabular-nums">
+                        {pendingCount} chờ xác nhận
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500 tabular-nums">
+                    {data?.summary.hourlyCount ?? 0} giờ · {data?.summary.overnightCount ?? 0} đêm · {data?.summary.dayuseCount ?? 0} ngày
+                  </p>
+                </div>
+
+                <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                  <span className="block text-xs font-semibold text-slate-500">Hướng dẫn &amp; Mã cửa</span>
+                  <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+                    <span className={`text-xl font-extrabold tabular-nums ${guideUnsentCount > 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                      {guideUnsentCount}
                     </span>
+                    <span className="text-xs font-semibold text-slate-600">chưa gửi HD</span>
+                  </div>
+                  <p className={`mt-1 text-xs font-semibold tabular-nums ${missingCodesCount > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                    {missingCodesCount > 0 ? `${missingCodesCount} đơn thiếu mã cửa` : "Đủ mã cửa các đơn"}
+                  </p>
+                </div>
+
+                <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                  <span className="block text-xs font-semibold text-slate-500">Tiến độ dọn phòng</span>
+                  <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xl font-extrabold text-slate-900 tabular-nums">
+                      {hkDoneCount}/{housekeepingTasks.length}
+                    </span>
+                    {hkUrgentCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 tabular-nums">
+                        {hkUrgentCount} gấp
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Sắp xếp theo giờ trả phòng</p>
+                </div>
+
+                <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                  <span className="block text-xs font-semibold text-slate-500">Khóa phòng trong ngày</span>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="text-xl font-extrabold text-slate-900 tabular-nums">{blocks.length}</span>
+                    <span className="text-xs text-slate-600">phòng tạm đóng</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {blocks.filter((b) => b.blockType === "owner_stay").length} chủ ở · bảo trì / vệ sinh
+                  </p>
+                </div>
+              </div>
+
+              {/* Tabs & Triage Controls */}
+              <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80 overflow-x-auto">
+                    {(
+                      [
+                        { id: "overview", label: "Toàn cảnh" },
+                        { id: "checkin", label: `Check-in (${checkins.length})` },
+                        { id: "housekeeping", label: `Dọn phòng (${housekeepingTasks.length})` },
+                      ] as const
+                    ).map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setViewTab(tab.id)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                          viewTab === tab.id ? "bg-white text-emerald-800 shadow-2xs border border-slate-200" : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom text search (never input type="search") */}
+                  <div className="relative w-full sm:w-72 min-w-0">
+                    <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Tìm tên khách, số phòng, SĐT, mã đơn..."
+                      className="w-full min-h-[36px] pl-9 pr-8 py-1.5 rounded-lg border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 focus:border-emerald-600"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        aria-label="Xóa từ khóa tìm kiếm"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Contextual triage filter chips */}
+                {viewTab !== "housekeeping" && (
+                  <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Lọc nhanh Check-in">
+                    <span className="text-xs font-semibold text-slate-500 mr-1">Lọc Check-in:</span>
+                    {(
+                      [
+                        { id: "all", label: "Tất cả" },
+                        { id: "unsent", label: "Chưa gửi HD" },
+                        { id: "missing_code", label: "Thiếu mã cửa" },
+                        { id: "collect", label: "Còn thu tiền" },
+                        { id: "pending", label: "Chờ xác nhận" },
+                      ] as const
+                    ).map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        onClick={() => setCheckinFilter(chip.id)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                          checkinFilter === chip.id
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {viewTab !== "checkin" && (
+                  <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Lọc nhanh Dọn phòng">
+                    <span className="text-xs font-semibold text-slate-500 mr-1">Lọc Dọn phòng:</span>
+                    {(
+                      [
+                        { id: "all", label: "Tất cả" },
+                        { id: "urgent", label: "Cần dọn gấp" },
+                        { id: "pending", label: "Chưa dọn" },
+                        { id: "cleaning", label: "Đang dọn" },
+                        { id: "done", label: "Đã xong" },
+                      ] as const
+                    ).map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        onClick={() => setHkFilter(chip.id)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                          hkFilter === chip.id
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 1: Check-in List */}
+              {viewTab !== "housekeeping" && (
+                <section aria-label="Danh sách khách nhận phòng" className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Danh sách khách nhận phòng ({filteredCheckins.length})
+                    </h3>
                   </div>
 
                   {filteredCheckins.length === 0 ? (
-                    <div className="p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-1 shadow-xs">
-                      <div className="text-2xl">🌿</div>
-                      <p className="text-xs font-semibold text-slate-500">
-                        Không có lượt khách nhận phòng nào trong ngày này
-                      </p>
+                    <div className="p-8 bg-white border border-slate-200 rounded-xl text-center">
+                      <p className="text-sm font-medium text-slate-600">Không có đơn nhận phòng phù hợp bộ lọc.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-200">
                       {filteredCheckins.map((item) => (
-                        <CheckinCard
-                          key={`in-${item.id}`}
+                        <CheckinRow
+                          key={item.id}
                           item={item}
-                          onCopyGuide={() => copyCheckinGuide(item)}
+                          isCopying={busyActionId === `copy:${item.id}`}
+                          isTogglingSent={busyActionId === `sent:${item.id}`}
+                          onCopyGuide={() => handleCopyStandardGuide(item)}
+                          onToggleSent={() => handleToggleGuideSent(item)}
                           onOpenDetail={() => openDetailDrawer(item)}
+                          onOpenDoorCodes={onOpenDoorCodes}
                         />
                       ))}
                     </div>
                   )}
-                </div>
+                </section>
               )}
 
-              {/* Column 2: Check-out (Khách Trả Phòng & Dọn Phòng) */}
-              {(viewTab === "both" || viewTab === "checkout") && (
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                      <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
-                        Khách Trả Phòng & Buồng Phòng (Check-out)
-                      </h3>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                      {filteredCheckouts.length} lượt
-                    </span>
+              {/* Section 2: Housekeeping Queue (Sorted chronologically, includes owner_stay) */}
+              {viewTab !== "checkin" && (
+                <section aria-label="Lịch dọn phòng theo giờ" className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Lịch dọn phòng theo thứ tự giờ ({filteredHkTasks.length})
+                    </h3>
                   </div>
 
-                  {filteredCheckouts.length === 0 ? (
-                    <div className="p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-1 shadow-xs">
-                      <div className="text-2xl">✨</div>
-                      <p className="text-xs font-semibold text-slate-500">
-                        Không có lượt khách trả phòng nào trong ngày này
-                      </p>
+                  {filteredHkTasks.length === 0 ? (
+                    <div className="p-8 bg-white border border-slate-200 rounded-xl text-center">
+                      <p className="text-sm font-medium text-slate-600">Không có lượt dọn phòng phù hợp bộ lọc.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {filteredCheckouts.map((item) => (
-                        <CheckoutCard
-                          key={`out-${item.id}`}
-                          item={item}
-                          onCopyBriefing={() => copyHousekeepingBriefing(item)}
-                          onOpenDetail={() => openDetailDrawer(item)}
+                    <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-200">
+                      {filteredHkTasks.map((task, idx) => (
+                        <HousekeepingRow
+                          key={`${task.refId}-${task.checkoutAt}`}
+                          index={idx + 1}
+                          task={task}
+                          isBusy={busyActionId === `hk:${task.refId}`}
+                          onSetStatus={(st) => handleSetHkStatus(task, st)}
                         />
                       ))}
                     </div>
                   )}
-                </div>
+                </section>
               )}
-            </div>
+
+              {/* Section 3: Active Room Blocks */}
+              {viewTab !== "checkin" && blocks.length > 0 && (
+                <section aria-label="Phòng đang khóa trong ngày" className="space-y-2">
+                  <h3 className="text-sm font-extrabold text-slate-900 px-1">
+                    Phòng đang khóa trong ngày ({blocks.length})
+                  </h3>
+                  <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-200">
+                    {blocks.map((bl) => {
+                      const bt = roomBlockTypeOf(bl.blockType);
+                      return (
+                        <div key={String(bl.id)} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-slate-900">{bl.roomName ?? bl.roomId}</span>
+                              <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                {bt.label}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600">
+                              {bl.reason || "Không có lý do"}
+                              {bl.note ? ` · ${bl.note}` : ""}
+                            </p>
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700 tabular-nums shrink-0">
+                            {formatVn(bl.blockedFrom)} → {formatVn(bl.blockedTo)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── CheckinRow Subcomponent ─────────────────────────────────────────────────────────────────
+
+const CheckinRow: React.FC<{
+  item: DailyRosterItem;
+  isCopying: boolean;
+  isTogglingSent: boolean;
+  onCopyGuide: () => void;
+  onToggleSent: () => void;
+  onOpenDetail: () => void;
+  onOpenDoorCodes?: () => void;
+}> = ({ item, isCopying, isTogglingSent, onCopyGuide, onToggleSent, onOpenDetail, onOpenDoorCodes }) => {
+  const typeMeta = BOOKING_TYPE_META[item.bookingType] ?? { label: item.bookingType, cls: "bg-slate-100 text-slate-700 border-slate-200" };
+  const isPending = item.status === "pending";
+  const isSent = (item.checkinGuideStatus ?? "pending") !== "pending";
+  const hasCodes = Boolean(item.doorCode);
+  const missingNames = (item.doorCodeMissing ?? [])
+    .map((m) => (m === "gate" ? "mã cổng" : "hộp khóa"))
+    .join(" & ");
+  const contactParts = [
+    item.phone,
+    item.instagram ? `IG: ${item.instagram}` : null,
+    item.facebook ? `FB: ${item.facebook}` : null,
+    item.zalo ? `Zalo: ${item.zalo}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        {/* Top line: time, room, guest, status badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white text-xs font-bold tabular-nums">
+            {formatTimeShort(item.checkinAt)} → {formatTimeShort(item.checkoutAt)}
+          </span>
+          <span className="text-sm font-extrabold text-slate-900">
+            {item.roomName}
+          </span>
+          <span className="text-sm font-bold text-slate-800">{item.guestName}</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${typeMeta.cls}`}>
+            {typeMeta.label}
+          </span>
+          <span className="text-xs font-semibold text-slate-600 tabular-nums">
+            {item.numGuests} khách
+          </span>
+          {item.channel && CHANNEL_LABEL[item.channel] && (
+            <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              {CHANNEL_LABEL[item.channel]}
+            </span>
+          )}
+          {isPending && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300">
+              Chờ xác nhận
+            </span>
+          )}
+          {(item.remainingAmount ?? 0) > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 tabular-nums">
+              Còn thu {Number(item.remainingAmount).toLocaleString("vi-VN")} đ
+            </span>
           )}
         </div>
 
-        {/* Footer info note */}
-        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span>Đệm giờ dọn phòng tiêu chuẩn: 1 tiếng tự động sau mỗi lượt trả phòng</span>
-          </div>
-          <span className="hidden sm:inline text-slate-400 font-mono">
-            Every Inn Operational Hub v1.0
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// -------------------------------------------------------------
-// Component Thẻ Check-in Đón Khách
-// -------------------------------------------------------------
-interface CheckinCardProps {
-  item: DailyRosterItem;
-  onCopyGuide: () => void;
-  onOpenDetail: () => void;
-}
-
-const CheckinCard: React.FC<CheckinCardProps> = ({ item, onCopyGuide, onOpenDetail }) => {
-  const checkinTime = formatTimeShort(item.checkinAt);
-  const checkoutTime = formatTimeShort(item.checkoutAt);
-
-  const bookingTypeBadge: Record<string, { label: string; color: string }> = {
-    hourly: { label: "Theo Giờ", color: "bg-sky-50 text-sky-700 border-sky-200" },
-    overnight: { label: "Qua Đêm", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-    dayuse: { label: "Theo Ngày", color: "bg-purple-50 text-purple-700 border-purple-200" },
-    custom: { label: "Tuỳ Chỉnh", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  };
-
-  const typeConfig = bookingTypeBadge[item.bookingType] || {
-    label: item.bookingType,
-    color: "bg-slate-100 text-slate-700 border-slate-200",
-  };
-
-  return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all shadow-xs space-y-3 group">
-      {/* Top row: Time + Room + Type */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          {/* Check-in Time Badge */}
-          <div className="px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-extrabold text-sm flex items-center gap-1.5 shadow-xs">
-            <span>⏰</span>
-            <span>{checkinTime}</span>
-          </div>
-
-          {/* Room Badge */}
-          <span className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs">
-            {item.roomName}
-          </span>
-
-          {/* Class Pill */}
-          <span
-            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-              item.roomClass === "signature"
-                ? "bg-amber-50 text-amber-800 border border-amber-200"
-                : "bg-teal-50 text-teal-800 border border-teal-200"
-            }`}
-          >
-            {item.roomClass === "signature" ? "Signature" : "Haven"}
-          </span>
+        {/* Contact & code status */}
+        <div className="flex items-center gap-3 flex-wrap text-xs text-slate-600">
+          {contactParts.length > 0 && <span className="tabular-nums">{contactParts.join(" · ")}</span>}
+          <span className="text-slate-400">Mã đơn: {item.id}</span>
         </div>
 
-        {/* Booking Type Pill */}
-        <span
-          className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg border ${typeConfig.color}`}
-        >
-          {typeConfig.label}
-        </span>
-      </div>
+        {/* Door code + guide status */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          {hasCodes ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold tabular-nums">
+              {item.doorCode}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 font-semibold">
+              <span>Thiếu {missingNames || "mã cửa"}</span>
+              {onOpenDoorCodes && (
+                <button
+                  type="button"
+                  onClick={onOpenDoorCodes}
+                  className="underline font-bold hover:text-rose-900 cursor-pointer"
+                >
+                  Cài ngay
+                </button>
+              )}
+            </span>
+          )}
 
-      {/* Guest Details & Social Channels */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-        {/* Guest name & Tier */}
-        <div>
-          <span className="text-[10px] text-slate-500 block">Khách hàng:</span>
-          <div className="flex items-center gap-1.5 font-bold text-slate-900">
-            <span>{item.guestName || "Khách vãng lai"}</span>
-            {item.loyaltyTier === "gold" && <span title="Thành viên Vàng">🌟</span>}
-            {item.loyaltyTier === "silver" && <span title="Thành viên Bạc">🥈</span>}
-            {item.loyaltyTier === "bronze" && <span title="Thành viên Đồng">🥉</span>}
-          </div>
-          <div className="text-[11px] font-mono text-slate-600 mt-0.5">{item.phone}</div>
-        </div>
-
-        {/* Social & Contact */}
-        <div className="space-y-0.5 sm:text-right">
-          <span className="text-[10px] text-slate-500 block">Kênh kết nối:</span>
-          <div className="flex items-center sm:justify-end gap-2 text-[11px]">
-            {item.instagram && (
-              <a
-                href={`https://instagram.com/${item.instagram.replace(/^@/, "")}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-pink-600 hover:text-pink-700 underline font-medium truncate max-w-[130px]"
-                title="Mở Instagram"
-              >
-                @{item.instagram.replace(/^@/, "")}
-              </a>
-            )}
-            {item.facebook && (
-              <span className="text-blue-600 font-medium truncate max-w-[130px]">
-                FB: {item.facebook}
-              </span>
-            )}
-            {item.zalo && (
-              <span className="text-sky-600 font-medium truncate max-w-[130px]">
-                ZL: {item.zalo}
-              </span>
-            )}
-            {!item.instagram && !item.facebook && !item.zalo && (
-              <span className="text-slate-400 italic">Chưa lưu social</span>
-            )}
-          </div>
-          <div className="text-[11px] text-slate-500">
-            Out: <strong className="text-slate-800 font-mono">{checkoutTime}</strong>
-          </div>
-        </div>
-      </div>
-
-      {/* Door Code Status Box */}
-      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">🔑</span>
-          <div>
-            <span className="text-[10px] text-slate-500 block leading-tight">Mã khoá cửa:</span>
-            {item.doorCode ? (
-              <span className="font-mono font-extrabold text-emerald-700 tracking-wider text-xs">
-                {item.doorCode}
+          {!isPending && (
+            isSent ? (
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold tabular-nums">
+                {item.checkinGuideStatus === "sent_auto" ? "AI đã gửi HD" : "Đã gửi HD"}
+                {item.checkinGuideSentByName ? ` · ${item.checkinGuideSentByName}` : ""}
+                {item.checkinGuideSentAt ? ` · ${formatTimeShort(item.checkinGuideSentAt)}` : ""}
               </span>
             ) : (
-              <span className="text-amber-700 font-medium text-[11px]">
-                Chưa tạo mã cửa
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                Chưa gửi hướng dẫn
               </span>
+            )
+          )}
+        </div>
+
+        {/* Full notes (closingNote + note) */}
+        {(item.closingNote || item.note) && (
+          <div className="space-y-1 pt-0.5 text-xs">
+            {item.closingNote && (
+              <p className="text-slate-700">
+                <span className="font-bold text-slate-900">Chốt đơn:</span> {item.closingNote}
+              </p>
+            )}
+            {item.note && (
+              <p className="text-amber-900 bg-amber-50/70 border border-amber-200/80 rounded-lg px-2.5 py-1">
+                <span className="font-bold">Ghi chú:</span> {item.note}
+              </p>
             )}
           </div>
-        </div>
-
-        <div className="text-right">
-          <span className="text-[10px] text-slate-500 block leading-tight">Tổng thanh toán:</span>
-          <span className="font-mono font-bold text-teal-700 text-xs">
-            {item.totalPrice.toLocaleString("vi-VN")} đ
-          </span>
-        </div>
-      </div>
-
-      {/* Action Toolbar */}
-      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-        <button
-          onClick={onCopyGuide}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all active:scale-95 shadow-xs"
-          title="Sao chép toàn bộ mẫu tin nhắn hướng dẫn nhận phòng để gửi khách"
-        >
-          <span>📋</span>
-          <span>Copy Tin Nhắn Hướng Dẫn</span>
-        </button>
-
-        <button
-          onClick={onOpenDetail}
-          className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition-colors shadow-xs"
-          title="Xem chi tiết hoặc chỉnh sửa đơn"
-        >
-          Chi Tiết
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// -------------------------------------------------------------
-// Component Thẻ Check-out Canh Giờ Dọn Phòng
-// -------------------------------------------------------------
-interface CheckoutCardProps {
-  item: DailyRosterItem;
-  onCopyBriefing: () => void;
-  onOpenDetail: () => void;
-}
-
-const CheckoutCard: React.FC<CheckoutCardProps> = ({ item, onCopyBriefing, onOpenDetail }) => {
-  const checkoutTime = formatTimeShort(item.checkoutAt);
-  const turnoverStart = formatTimeShort(item.turnoverStartAt || item.checkoutAt);
-  const turnoverEnd = formatTimeShort(item.turnoverEndAt || item.checkoutAt);
-
-  return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all shadow-xs space-y-3 group">
-      {/* Top row: Time + Room + Late Checkout */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          {/* Check-out Time Badge */}
-          <div className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 font-mono font-extrabold text-sm flex items-center gap-1.5 shadow-xs">
-            <span>📤</span>
-            <span>{checkoutTime}</span>
-          </div>
-
-          {/* Room Badge */}
-          <span className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs">
-            {item.roomName}
-          </span>
-
-          {/* Floor */}
-          <span className="text-[11px] text-slate-500 font-medium">Tầng {item.floor}</span>
-        </div>
-
-        {/* Late checkout alert if present */}
-        {item.lateCheckoutHours > 0 && (
-          <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold">
-            Trễ +{item.lateCheckoutHours}h
-          </span>
         )}
       </div>
 
-      {/* Guest Details */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-        <div>
-          <span className="text-[10px] text-slate-500 block">Khách đang ở:</span>
-          <span className="font-bold text-slate-900">{item.guestName || "Khách"}</span>
-          <div className="text-[11px] font-mono text-slate-500">{item.phone}</div>
-        </div>
+      {/* Action buttons (max 3 compact buttons) */}
+      <div className="flex items-center gap-2 flex-wrap shrink-0">
+        {!isPending && (
+          <>
+            <button
+              type="button"
+              onClick={onCopyGuide}
+              disabled={isCopying}
+              className="min-h-[36px] px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <span>{isCopying ? "Đang tạo..." : "Copy mẫu chuẩn"}</span>
+            </button>
 
-        <div className="sm:text-right">
-          <span className="text-[10px] text-slate-500 block">Check-in từ:</span>
-          <span className="text-slate-700 font-mono text-xs">
-            {formatDateTimeShort(item.checkinAt)}
-          </span>
-        </div>
-      </div>
-
-      {/* Turnover Cleaning Buffer Banner (1 Hour) */}
-      <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 space-y-1">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-bold text-amber-800 flex items-center gap-1.5">
-            <span>🧹</span>
-            <span>Khung dọn phòng (1h Turnover)</span>
-          </span>
-          <span className="font-mono font-extrabold text-amber-900">
-            {turnoverStart} ➔ {turnoverEnd}
-          </span>
-        </div>
-        <p className="text-[11px] text-amber-700">
-          Buồng phòng tiến hành vệ sinh & thay drap để sẵn sàng đón khách tiếp theo.
-        </p>
-      </div>
-
-      {/* Action Toolbar */}
-      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-        <button
-          onClick={onCopyBriefing}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition-all active:scale-95 shadow-xs"
-          title="Sao chép thông tin phòng cần dọn gửi cho bộ phận Buồng phòng"
-        >
-          <span>📋</span>
-          <span>Copy Lịch Dọn Housekeeping</span>
-        </button>
+            <button
+              type="button"
+              onClick={onToggleSent}
+              disabled={isTogglingSent}
+              className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors disabled:opacity-50 cursor-pointer ${
+                isSent
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                  : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {isSent ? "Đã gửi HD" : "Đánh dấu đã gửi"}
+            </button>
+          </>
+        )}
 
         <button
+          type="button"
           onClick={onOpenDetail}
-          className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition-colors shadow-xs"
-          title="Mở để xem chi tiết hoặc gia hạn trả phòng (+1h)"
+          className="min-h-[36px] px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold cursor-pointer transition-colors"
         >
-          Gia Hạn / Sửa
+          Chi tiết
         </button>
+      </div>
+    </div>
+  );
+};
+
+// ── HousekeepingRow Subcomponent ─────────────────────────────────────────────────────────────
+
+const HousekeepingRow: React.FC<{
+  index: number;
+  task: DailyRosterHousekeepingTask;
+  isBusy: boolean;
+  onSetStatus: (status: HousekeepingStatus) => void;
+}> = ({ index, task, isBusy, onSetStatus }) => {
+  const status = task.hkStatus ?? "pending";
+  const kindLabel =
+    task.kind === "owner_stay"
+      ? "Chủ nhà ở"
+      : `Trả phòng (${BOOKING_TYPE_META[task.bookingType ?? "hourly"]?.label ?? ""})`;
+
+  return (
+    <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 flex items-center justify-center tabular-nums shrink-0">
+            {index}
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white text-xs font-bold tabular-nums">
+            {formatTimeShort(task.turnoverStartAt)} – {formatTimeShort(task.turnoverEndAt)}
+          </span>
+          <span className="text-sm font-extrabold text-slate-900">{task.roomName}</span>
+          <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+            {kindLabel}
+          </span>
+          {task.lateCheckoutHours > 0 && (
+            <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 tabular-nums">
+              +{task.lateCheckoutHours}h trễ
+            </span>
+          )}
+          {task.urgent && status !== "done" && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 tabular-nums">
+              Cần dọn gấp · còn {task.nextCheckin?.gapMinutes ?? 0} phút
+            </span>
+          )}
+        </div>
+
+        {/* Next guest turnaround details */}
+        <div className="text-xs text-slate-700 space-y-1">
+          {task.nextCheckin ? (
+            <p className="tabular-nums">
+              <span className="font-bold text-slate-900">Khách kế tiếp:</span>{" "}
+              {formatTimeShort(task.nextCheckin.checkinAt)} ({task.nextCheckin.numGuests} khách · cách {task.nextCheckin.gapMinutes} phút)
+              {task.nextCheckin.status === "pending" ? " · Chờ xác nhận" : ""}
+              {[task.nextCheckin.note, task.nextCheckin.closingNote].filter(Boolean).length > 0
+                ? ` — Chuẩn bị: ${[task.nextCheckin.note, task.nextCheckin.closingNote].filter(Boolean).join(" · ")}`
+                : ""}
+            </p>
+          ) : (
+            <p className="text-slate-500">Chưa có khách kế tiếp trong 24 giờ.</p>
+          )}
+
+          {[task.note, task.closingNote].filter(Boolean).length > 0 && (
+            <p className="text-slate-600">
+              <span className="font-semibold text-slate-800">Lưu ý lượt trả:</span>{" "}
+              {[task.note, task.closingNote].filter(Boolean).join(" · ")}
+            </p>
+          )}
+
+          {task.hkUpdatedAt && task.hkUpdatedByName && (
+            <p className="text-emerald-800 font-semibold tabular-nums">
+              Cập nhật: {task.hkUpdatedByName} · {formatTimeShort(task.hkUpdatedAt)}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* 2-way Housekeeping 3-state segmented toggle */}
+      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 self-start lg:self-center" role="group" aria-label={`Trạng thái dọn phòng ${task.roomName}`}>
+        {(
+          [
+            { id: "pending", label: "Chưa dọn", activeCls: "bg-white text-slate-900 border-slate-300 shadow-2xs" },
+            { id: "cleaning", label: "Đang dọn", activeCls: "bg-amber-600 text-white border-amber-600 shadow-2xs" },
+            { id: "done", label: "Đã xong", activeCls: "bg-emerald-600 text-white border-emerald-600 shadow-2xs" },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            disabled={isBusy}
+            onClick={() => onSetStatus(opt.id)}
+            className={`min-h-[34px] px-3 py-1 rounded-md text-xs font-bold border transition-colors disabled:opacity-50 cursor-pointer ${
+              status === opt.id ? opt.activeCls : "border-transparent text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
     </div>
   );

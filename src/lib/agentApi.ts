@@ -182,6 +182,21 @@ export interface AgentRun {
   createdAt: string;
 }
 
+export interface OpsRemindersConfig {
+  enabled: boolean;
+  dailyBriefTime: string;
+  hkDailyTime: string;
+  nightBeforeTime: string;
+  nightBeforeEndHour: number;
+  checkinLeadHours: number;
+  hkLeadMinutes: number;
+  enableM1: boolean;
+  enableM2: boolean;
+  enableM3: boolean;
+  enableM4: boolean;
+  enableM5: boolean;
+}
+
 export interface AgentSettings {
   botName: string;
   personaPrompt: string;
@@ -210,6 +225,7 @@ export interface AgentSettings {
     facebook: { names: string[]; ids: string[] };
     instagram: { usernames: string[]; ids: string[] };
   };
+  opsReminders?: OpsRemindersConfig;
   version: number;
 }
 

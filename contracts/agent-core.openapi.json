@@ -3499,6 +3499,159 @@
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
+    },
+    "/internal/v1/ops/booking-state/batch": {
+      "post": {
+        "operationId": "batchOpsState",
+        "x-callers": ["admin-bff"],
+        "summary": "Batch read 2-way check-in guide and housekeeping status for bookings / owner_stay blocks",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["bookingIds"],
+                "properties": { "bookingIds": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "type": "string" } } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["states"],
+                  "properties": { "states": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/BookingOpsState" } } }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/ops/bookings/{bookingId}/guide-message": {
+      "post": {
+        "operationId": "bookingGuideMessage",
+        "x-callers": ["admin-bff"],
+        "summary": "Compose standard Master Data check-in guide with resolved gate and lockbox door codes",
+        "parameters": [{ "name": "bookingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["bookingId", "ready", "message", "missing", "gateCode", "lockboxCode"],
+                  "properties": {
+                    "bookingId": { "type": "string" },
+                    "ready": { "type": "boolean" },
+                    "message": { "type": ["string", "null"] },
+                    "missing": { "type": "array", "items": { "enum": ["gate", "lockbox"] } },
+                    "gateCode": { "type": ["string", "null"] },
+                    "lockboxCode": { "type": ["string", "null"] }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/ops/bookings/{bookingId}/guide-sent": {
+      "post": {
+        "operationId": "markBookingGuideSent",
+        "x-callers": ["admin-bff"],
+        "summary": "Mark booking check-in guide as sent manually or revert to pending (2-way sync with Telegram)",
+        "parameters": [{ "name": "bookingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "sent": { "type": "boolean" } } }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["state"], "properties": { "state": { "$ref": "#/components/schemas/BookingOpsState" } } } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/ops/bookings/{bookingId}/housekeeping": {
+      "post": {
+        "operationId": "updateBookingHousekeeping",
+        "x-callers": ["admin-bff"],
+        "summary": "Update housekeeping turnover status (pending | cleaning | done) synced 2-way with Telegram",
+        "parameters": [{ "name": "bookingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["status"], "properties": { "status": { "enum": ["pending", "cleaning", "done"] } } }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["state"], "properties": { "state": { "$ref": "#/components/schemas/BookingOpsState" } } } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/internal/v1/ops/telegram/trigger": {
+      "post": {
+        "operationId": "triggerOpsTelegram",
+        "x-callers": ["admin-bff"],
+        "x-required-role": "manager",
+        "summary": "Manager-only on-demand send of daily_ops (M1), hk_daily (M2) or checkin_20h (M3) to Telegram",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["kind"],
+                "properties": {
+                  "kind": { "enum": ["daily_ops", "hk_daily", "checkin_20h"] },
+                  "date": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok", "kind", "date", "messageCount"],
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "kind": { "enum": ["daily_ops", "hk_daily", "checkin_20h"] },
+                    "date": { "type": "string" },
+                    "messageCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
     }
   },
   "components": {
@@ -3808,7 +3961,46 @@
                 "description": "AI-13: auto = a hard or unsure turn is read again by the Hiểu step with thinking (≤ 4 000 tokens, +5–45 s, ~3–6× neurons on that turn); the writer never thinks. Default auto."
               }
             }
+          },
+          "opsReminders": {
+            "$ref": "#/components/schemas/OpsReminders"
           }
+        }
+      },
+      "OpsReminders": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "dailyBriefTime", "hkDailyTime", "nightBeforeTime", "nightBeforeEndHour", "checkinLeadHours", "hkLeadMinutes", "enableM1", "enableM2", "enableM3", "enableM4", "enableM5"],
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "dailyBriefTime": { "type": "string", "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$" },
+          "hkDailyTime": { "type": "string", "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$" },
+          "nightBeforeTime": { "type": "string", "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$" },
+          "nightBeforeEndHour": { "type": "integer", "minimum": 1, "maximum": 23 },
+          "checkinLeadHours": { "type": "integer", "minimum": 1, "maximum": 24 },
+          "hkLeadMinutes": { "type": "integer", "minimum": 15, "maximum": 240 },
+          "enableM1": { "type": "boolean" },
+          "enableM2": { "type": "boolean" },
+          "enableM3": { "type": "boolean" },
+          "enableM4": { "type": "boolean" },
+          "enableM5": { "type": "boolean" }
+        }
+      },
+      "BookingOpsState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bookingId", "checkinGuideStatus", "checkinGuideSentAt", "checkinGuideSentById", "checkinGuideSentByName", "hkStatus", "hkUpdatedAt", "hkUpdatedById", "hkUpdatedByName", "updatedAt"],
+        "properties": {
+          "bookingId": { "type": "string" },
+          "checkinGuideStatus": { "enum": ["pending", "sent_auto", "sent_manual"] },
+          "checkinGuideSentAt": { "type": ["string", "null"] },
+          "checkinGuideSentById": { "type": ["integer", "null"] },
+          "checkinGuideSentByName": { "type": ["string", "null"] },
+          "hkStatus": { "enum": ["pending", "cleaning", "done"] },
+          "hkUpdatedAt": { "type": ["string", "null"] },
+          "hkUpdatedById": { "type": ["integer", "null"] },
+          "hkUpdatedByName": { "type": ["string", "null"] },
+          "updatedAt": { "type": ["string", "null"] }
         }
       },
       "SettingsEnvelope": {
