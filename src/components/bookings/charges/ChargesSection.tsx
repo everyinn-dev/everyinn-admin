@@ -8,6 +8,8 @@ import { BookingCommandPanel } from "@/components/bookings/shared/BookingCommand
 import { MoneySummary } from "@/components/bookings/shared/MoneySummary";
 import { ReasonField } from "@/components/bookings/shared/ReasonField";
 import { useBookingCommand } from "@/components/bookings/shared/useBookingCommand";
+import { MoneyMoveField, initialMove, moveAmount, type MoneyMove } from "@/components/bookings/shared/MoneyMoveField";
+import { editSettlement } from "@/lib/editPricing";
 import { ChargeSheet } from "./ChargeSheet";
 
 interface ChargesSectionProps {
@@ -126,17 +128,24 @@ const VoidChargePanel: React.FC<{
   line: ChargeLine;
   onError: (status: number, data: BffError) => Promise<void> | void;
   onDismiss: () => void;
-  onVoided: (result: { booking: Record<string, unknown>; message: string }) => void;
+  onVoided: (result: { booking: Record<string, unknown>; message: string; paymentError?: string | null }) => void;
 }> = ({ booking, line, onError, onDismiss, onVoided }) => {
   const [reason, setReason] = useState("");
+  // If the guest had already paid this charge, the sheet offers to hand the money back in the same step (NOT ticked:
+  // a refund is money going out, staff say so explicitly).
+  const [refundMove, setRefundMove] = useState<MoneyMove>(initialMove(false));
+  const netReceived = (booking.paidAmount ?? 0) - (booking.refundAmount ?? 0);
+  const refundSlot = editSettlement(booking.totalPrice, booking.totalPrice - line.fee, netReceived).refund;
+  const refundNow = moveAmount(refundMove, refundSlot);
   const { run, submitting, error } = useBookingCommand({ onError });
   const submit = async () => {
     if (!reason.trim()) return;
-    const data = await run<{ booking?: Record<string, unknown>; message?: string }>(`/api/bookings/${booking.id}/charges/${encodeURIComponent(line.id)}/void`, {
+    const data = await run<{ booking?: Record<string, unknown>; message?: string; paymentError?: string | null }>(`/api/bookings/${booking.id}/charges/${encodeURIComponent(line.id)}/void`, {
       reason: reason.trim(),
+      ...(refundNow > 0 ? { refund: { amount: refundNow, method: refundMove.method } } : {}),
       expectedVersion: booking.version ?? booking.modNo,
     });
-    if (data) onVoided({ booking: data.booking ?? {}, message: data.message || "Đã huỷ khoản phát sinh." });
+    if (data) onVoided({ booking: data.booking ?? {}, message: data.message || "Đã huỷ khoản phát sinh.", paymentError: data.paymentError ?? null });
   };
   return (
     <BookingCommandPanel
@@ -146,12 +155,31 @@ const VoidChargePanel: React.FC<{
       submitting={submitting}
       error={error}
       blockedReason={reason.trim() ? undefined : "Nhập lý do huỷ khoản này."}
-      confirmLabel="Huỷ khoản phát sinh"
+      confirmLabel={refundSlot.available ? (refundNow > 0 ? "Huỷ khoản & ghi hoàn tiền" : "Huỷ khoản (chưa hoàn tiền)") : "Huỷ khoản phát sinh"}
       onConfirm={submit}
       onDismiss={onDismiss}
     >
       <ReasonField label="Lý do huỷ" required value={reason} onChange={setReason} placeholder="VD: Nhập nhầm, khách đã tự thanh toán" />
-      <MoneySummary rows={[{ label: "Trừ khỏi tổng tiền", value: -line.fee, signed: true, tone: "good" }]} />
+      <MoneyMoveField
+        id="void-refund"
+        label="Hoàn lại khách ngay"
+        amountLabel="Số tiền hoàn (VNĐ)"
+        offHint="Chưa hoàn: khách đang giữ thừa tiền cho tới khi bạn ghi hoàn ở Sổ thu tiền."
+        slot={refundSlot}
+        move={refundMove}
+        onChange={setRefundMove}
+      />
+      <MoneySummary
+        rows={[
+          { label: "Trừ khỏi tổng tiền", value: -line.fee, signed: true, tone: "good" },
+          ...(refundSlot.available
+            ? [
+                { label: "Khách đang giữ thừa sau khi huỷ", value: refundSlot.max },
+                ...(refundNow > 0 ? [{ label: "Hoàn ngay", value: -refundNow, signed: true }] : []),
+              ]
+            : []),
+        ]}
+      />
     </BookingCommandPanel>
   );
 };

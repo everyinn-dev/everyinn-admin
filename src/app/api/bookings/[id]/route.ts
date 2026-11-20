@@ -4,6 +4,7 @@ import { toHttpError } from "@/lib/apiError";
 import { toLegacyBookingRow, type CoreBookingEnvelope, type CoreBookingDto } from "@/lib/coreMappers";
 import { closureReasonLabel } from "@/lib/bookingClosure";
 import { intentKey } from "@/lib/bffIdempotency";
+import { settleAfterChange, settledSuffix } from "@/lib/bffSettle";
 import type { ClosureReasonCode } from "@/types";
 
 const CLOSURE_CODES: readonly ClosureReasonCode[] = ["guest_cancel", "no_show", "property_cancel", "staff_error", "other"];
@@ -243,16 +244,27 @@ export async function PATCH(
       if (body.incidentalFee !== undefined) updatePayload.incidentalFee = Number(body.incidentalFee);
       if (body.incidentalReason !== undefined) updatePayload.incidentalReason = body.incidentalReason ? String(body.incidentalReason).trim() : null;
 
+      const updateKey = newIdempotencyKey("booking-update");
       const coreRes = await bookingCore.patch<CoreBookingEnvelope>(`/internal/v1/bookings/${id}`, {
         staff,
-        idempotencyKey: newIdempotencyKey("booking-update"),
+        idempotencyKey: updateKey,
         body: updatePayload,
       });
 
-      const updated = toLegacyBookingRow(requireBooking(coreRes.data));
+      // "Khách trả thêm ngay" / "Hoàn lại khách ngay": the money of the price change, recorded in the same request.
+      const settled = await settleAfterChange({
+        staff,
+        bookingId: id,
+        booking: requireBooking(coreRes.data),
+        settle: body.settle,
+        description: { payment: "Thu chênh lệch sau khi sửa đơn", refund: "Hoàn chênh lệch sau khi sửa đơn" },
+        baseKey: updateKey,
+      });
+      const updated = toLegacyBookingRow(settled.booking);
       return Response.json({
         success: true,
-        message: "Cập nhật thông tin đặt phòng thành công.",
+        message: `Cập nhật thông tin đặt phòng thành công.${settledSuffix(settled)}`,
+        paymentError: settled.paymentError,
         booking: updated,
       });
     }

@@ -98,6 +98,31 @@ export function planChargePayment(collect: unknown, dueAfter: number, descriptio
   return { kind: "pay", amount, body: { ...plan.body, entryType: "payment" } };
 }
 
+export type SettlePlan =
+  | { kind: "none" }
+  | { kind: "error"; error: string }
+  | { kind: "payment" | "refund"; amount: number; body: { entryType: "payment" | "refund"; amount: number; method: PaymentMethod; reason?: string; reference?: string; occurredAt?: string } };
+
+/**
+ * The money recorded together with a price change ("Khách trả thêm ngay" / "Hoàn lại khách ngay"), judged against the
+ * booking AFTER the change: a payment never exceeds what is still due, a refund never exceeds what the guest holds above
+ * the new value (nor what was received). Nothing is recorded when nothing was asked for or nothing is left to settle.
+ * Same validation as any ledger entry (a refund needs a reason).
+ */
+export function planSettlement(settle: unknown, after: { due: number; overpaid: number; netReceived: number }, description: string, nowMs = Date.now()): SettlePlan {
+  if (!settle || typeof settle !== "object") return { kind: "none" };
+  const s = settle as { kind?: unknown; amount?: unknown; method?: unknown };
+  if (s.kind !== "payment" && s.kind !== "refund") return { kind: "none" };
+  const cap = s.kind === "payment" ? Math.max(0, Math.round(after.due)) : Math.min(Math.max(0, Math.round(after.overpaid)), Math.max(0, Math.round(after.netReceived)));
+  const asked = Math.round(Number(s.amount));
+  const amount = Number.isFinite(asked) && asked > 0 ? Math.min(asked, cap) : 0;
+  if (amount <= 0) return { kind: "none" };
+  const plan = planLedgerAction({ action: s.kind, amount, method: s.method, reason: description }, nowMs);
+  if (!plan.ok) return { kind: "error", error: plan.error };
+  if (plan.kind !== "entry" || (plan.body.entryType !== "payment" && plan.body.entryType !== "refund")) return { kind: "error", error: "Thông tin thu/hoàn tiền không hợp lệ." };
+  return { kind: s.kind, amount, body: { ...plan.body, entryType: plan.body.entryType } };
+}
+
 export type LedgerPlan =
   | { ok: true; kind: "entry"; body: { entryType: "payment" | "refund" | "adjustment"; amount: number; method: PaymentMethod; reason?: string; reference?: string; occurredAt?: string } }
   | { ok: true; kind: "reverse"; entryId: string; body: { reason: string } }
