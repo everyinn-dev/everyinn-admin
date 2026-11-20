@@ -184,12 +184,18 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   };
 
   /** A stay charge was added or voided: show the booking as Core now has it (new total, new amount due, new times). */
-  const handleChargesChanged = ({ booking: row, message }: { booking: Record<string, unknown>; message: string }) => {
+  const handleChargesChanged = ({ booking: row, message, paymentError }: { booking: Record<string, unknown>; message: string; paymentError?: string | null }) => {
     toast.success(message, "Phụ phí");
     const updated = mergeFresh(currentBooking, row as unknown as Booking);
     setCurrentBooking(updated);
     onBookingUpdated?.(updated);
     notifyDataChanged("BOOKINGS_CHANGED");
+    if (paymentError) {
+      // The charge is saved but the money was not recorded: open the ledger with the amount still due, ready to submit.
+      toast.warning(paymentError, "Chưa ghi được khoản thu");
+      const due = balanceOf({ totalPrice: updated.totalPrice, paidAmount: updated.paidAmount, refundAmount: updated.refundAmount, status: updated.status }).due;
+      if (due > 0) setLedgerIntent({ action: "payment", amount: due });
+    }
   };
 
   const handleEditSuccess = (updatedData: any) => {

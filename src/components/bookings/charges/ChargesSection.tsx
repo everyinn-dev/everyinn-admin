@@ -14,7 +14,7 @@ interface ChargesSectionProps {
   booking: GanttBookingItem;
   /** Closed (cancelled / no-show) bookings only list their charges. A stay past checkout can still get charges. */
   readOnly: boolean;
-  onChanged: (result: { booking: Record<string, unknown>; message: string }) => void;
+  onChanged: (result: { booking: Record<string, unknown>; message: string; paymentError?: string | null }) => void;
   onError: (status: number, data: BffError) => Promise<void> | void;
 }
 
