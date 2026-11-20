@@ -1,7 +1,7 @@
 "use client";
 
 import { useRoomLocks } from "@/lib/useRoomLocks";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Booking, BookingType, GanttBookingItem, PricingRule, Room, SurchargeRule } from "@/types";
 import { Promotion } from "@/types/promotions";
 import { calculatePrice } from "@/lib/pricing";
@@ -15,7 +15,8 @@ import { CustomFields } from "../bookings/CustomFields";
 import { PriceSummaryCard } from "../bookings/PriceSummaryCard";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
-import type { EditQuote, PricingMode } from "@/lib/editPricing";
+import { editSettlement, type EditQuote, type PricingMode } from "@/lib/editPricing";
+import { MoneyMoveField, initialMove, moveAmount, type MoneyMove } from "../bookings/shared/MoneyMoveField";
 import { useToast } from "../ui/Toast";
 
 interface BookingEditFormProps {
@@ -137,6 +138,9 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
   const [editQuote, setEditQuote] = useState<EditQuote | null>(null);
   const [pricingMode, setPricingMode] = useState<PricingMode | null>(null);
   const [pricingReason, setPricingReason] = useState("");
+  // "Settle in the same step" (EI-FINANCE-ONTOLOGY-001 §8): collect the increase (ticked) / hand back the decrease (NOT ticked).
+  const [collectMove, setCollectMove] = useState<MoneyMove>(initialMove(true));
+  const [refundMove, setRefundMove] = useState<MoneyMove>(initialMove(false));
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -351,15 +355,60 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
     incidentalFee,
   ]);
 
-  // Any change to the stay invalidates the price choice: ask Core again on the next save.
+  const moneyState = moneyEditState({ originalType, originalCustomPrice: originalFields?.customPrice ?? customPrice, customPrice });
+  const { customPriceChanged, needsReason: needsMoneyReason } = moneyState;
+
+  // Any change to the stay invalidates the price choice. Booking Core then re-prices the edit (debounced, read-only):
+  // both prices when they differ (Q2) and what that means for the money already received — so the difference can be
+  // settled in this same save instead of in a second step.
   const stayKey = `${roomId}|${calculatedCheckinAt.getTime()}|${calculatedCheckoutAt.getTime()}|${calculatedLateHours}|${customPrice}`;
+  const initialStayKey = useRef<string | null>(null);
   useEffect(() => {
     setEditQuote(null);
     setPricingMode(null);
-  }, [stayKey]);
+    if (loadingInitial) return;
+    if (initialStayKey.current === null) {
+      initialStayKey.current = stayKey; // the booking as loaded: nothing to re-price yet
+      return;
+    }
+    if (stayKey === initialStayKey.current) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const qr = await fetch(`/api/bookings/${bookingId}/modify-quote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            checkinAt: calculatedCheckinAt.toISOString(),
+            checkoutAt: calculatedCheckoutAt.toISOString(),
+            lateCheckoutHours: calculatedLateHours,
+            ...(customPriceChanged ? { customPrice } : {}),
+          }),
+        });
+        if (alive && qr.ok) setEditQuote((await qr.json()) as EditQuote);
+      } catch {
+        /* the save still asks Core again */
+      }
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stayKey, loadingInitial]);
 
-  const moneyState = moneyEditState({ originalType, originalCustomPrice: originalFields?.customPrice ?? customPrice, customPrice });
-  const { customPriceChanged, needsReason: needsMoneyReason } = moneyState;
+  // The money of the CHOSEN price: with a choice to make nothing is offered until staff pick one.
+  const chosenOption = editQuote ? (editQuote.choiceRequired ? (pricingMode === "keep_agreed" ? editQuote.keepAgreed : pricingMode === "current_rates" ? editQuote.currentRates : null) : editQuote.currentRates) : null;
+  const settlement = editQuote && chosenOption ? editSettlement(editQuote.currentTotal, chosenOption.total, editQuote.netReceived) : null;
+  const settleKey = `${stayKey}|${pricingMode ?? ""}`;
+  useEffect(() => {
+    setCollectMove(initialMove(true));
+    setRefundMove(initialMove(false));
+  }, [settleKey]);
+  const collectNow = settlement ? moveAmount(collectMove, settlement.collect) : 0;
+  const refundNow = settlement ? moveAmount(refundMove, settlement.refund) : 0;
+  const settle = collectNow > 0 ? { kind: "payment", amount: collectNow, method: collectMove.method } : refundNow > 0 ? { kind: "refund", amount: refundNow, method: refundMove.method } : null;
 
   // Room locks overlapping the new stay (the booking's current room stays selectable).
   const lockedRooms = useRoomLocks(calculatedCheckinAt, calculatedCheckoutAt);
@@ -404,8 +453,13 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       ...(customPriceChanged ? { customPrice } : {}),
     };
 
-    // Q2: ask Core for both prices first; when they differ the staff member must pick one (with a reason).
-    if (!pricingMode) {
+    // Q2: when the two prices differ the staff member must pick one (with a reason). The live quote already says so;
+    // without it (typed and saved within the debounce) ask Core now.
+    if (!pricingMode && editQuote?.choiceRequired) {
+      toast.warning("Giá thoả thuận và giá theo bảng giá hiện tại khác nhau — chọn một cách tính và ghi lý do.", "Chọn cách tính giá");
+      return;
+    }
+    if (!pricingMode && !editQuote) {
       try {
         setSubmitting(true);
         const qr = await fetch(`/api/bookings/${bookingId}/modify-quote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(stayBody) });
@@ -420,7 +474,8 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
       } finally {
         setSubmitting(false);
       }
-    } else if (!pricingReason.trim()) {
+    }
+    if (pricingMode && !pricingReason.trim()) {
       const err = "Vui lòng nhập lý do chọn cách tính giá.";
       setErrorMessage(err);
       toast.warning(err, "Thiếu lý do");
@@ -453,6 +508,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           closingNote,
           ...(pricingMode ? { pricingMode, reason: [pricingReason.trim(), needsMoneyReason ? moneyReason.trim() : ""].filter(Boolean).join(" · ") } : {}),
           ...(!pricingMode && needsMoneyReason && moneyReason.trim() ? { reason: moneyReason.trim() } : {}),
+          ...(settle ? { settle } : {}),
         }),
       });
 
@@ -476,6 +532,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         throw new Error(errorText);
       }
 
+      if (data.paymentError) toast.warning(data.paymentError, "Chưa ghi được khoản thu / hoàn");
       onSuccess(data.booking);
     } catch (err: any) {
       setErrorMessage(err.message || "Lỗi cập nhật đặt phòng.");
@@ -664,6 +721,20 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
         </div>
       )}
 
+      {/* Money of the price change: collect the increase / hand back the decrease in the same save. */}
+      {editQuote && chosenOption && settlement && (settlement.collect.available || settlement.refund.available) && (
+        <div className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3.5">
+          <p className="text-xs font-bold text-emerald-900 uppercase tracking-wide">Chênh lệch tiền sau khi sửa</p>
+          <p className="text-[11px] text-emerald-900">
+            Giá mới {chosenOption.total.toLocaleString("vi-VN")} đ (hiện {editQuote.currentTotal.toLocaleString("vi-VN")} đ) · khách đã trả ròng {editQuote.netReceived.toLocaleString("vi-VN")} đ
+            {" → "}
+            {chosenOption.balance > 0 ? `còn phải thu ${chosenOption.balance.toLocaleString("vi-VN")} đ` : `đang giữ thừa ${(-chosenOption.balance).toLocaleString("vi-VN")} đ`}.
+          </p>
+          <MoneyMoveField id="edit-collect" label="Khách trả thêm ngay" amountLabel="Số tiền thu (VNĐ)" offHint="Chưa thu: phần tăng nằm trong “còn phải thu” cho tới khi bạn ghi ở Sổ thu tiền." slot={settlement.collect} move={collectMove} onChange={setCollectMove} />
+          <MoneyMoveField id="edit-refund" label="Hoàn lại khách ngay" amountLabel="Số tiền hoàn (VNĐ)" offHint="Chưa hoàn: khách đang giữ thừa tiền cho tới khi bạn ghi hoàn ở Sổ thu tiền." slot={settlement.refund} move={refundMove} onChange={setRefundMove} />
+        </div>
+      )}
+
       {/* Live Price Summary Preview */}
       {currentPricing && (
         <PriceSummaryCard
@@ -713,7 +784,7 @@ export const BookingEditForm: React.FC<BookingEditFormProps> = ({
           className="flex-1"
           isLoading={submitting}
         >
-          ✅ Xác nhận cập nhật
+          {settle ? (settle.kind === "payment" ? "✅ Xác nhận cập nhật & ghi thu" : "✅ Xác nhận cập nhật & ghi hoàn") : "✅ Xác nhận cập nhật"}
         </Button>
         <Button
           type="button"
