@@ -65,3 +65,20 @@ test("ledger: transfer to another booking — B10", async () => {
   assert.equal(entryLabel(inn), "Nhận từ đơn EI-A");
   assert.equal(canReverse(out, [out]), false); // legs are never reversed alone
 });
+
+test("charge + collect in one form: the payment is clamped to what is due after the charge and validated like any payment", async () => {
+  const { planChargePayment } = await import("../src/lib/ledger.ts");
+  const ok = planChargePayment({ amount: 60000, method: "cash" }, 60000, "+1 giờ", NOW);
+  assert.deepEqual(ok, { kind: "pay", amount: 60000, body: { entryType: "payment", amount: 60000, method: "cash", reason: "Thu phụ phí: +1 giờ" } });
+  // asked more than is due → only what is due
+  assert.equal(planChargePayment({ amount: 90000, method: "bank_transfer" }, 60000, "x", NOW).amount, 60000);
+  // nothing asked / nothing due / junk → nothing recorded, never an error
+  assert.deepEqual(planChargePayment(undefined, 60000, "x", NOW), { kind: "none" });
+  assert.deepEqual(planChargePayment({ amount: 0, method: "cash" }, 60000, "x", NOW), { kind: "none" });
+  assert.deepEqual(planChargePayment({ amount: 50000, method: "cash" }, 0, "x", NOW), { kind: "none" });
+  assert.deepEqual(planChargePayment({ amount: -5, method: "cash" }, 60000, "x", NOW), { kind: "none" });
+  assert.deepEqual(planChargePayment("yes", 60000, "x", NOW), { kind: "none" });
+  // an unknown method is refused (the charge stays; the drawer asks to record the payment again)
+  assert.equal(planChargePayment({ amount: 50000, method: "crypto" }, 60000, "x", NOW).kind, "error");
+  assert.equal(planChargePayment({ amount: 50000 }, 60000, "x", NOW).kind, "error");
+});

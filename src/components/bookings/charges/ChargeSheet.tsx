@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { GanttBookingItem } from "@/types";
 import { apiFetch } from "@/lib/apiClient";
 import type { BffError } from "@/lib/bookingClosure";
-import { availableChargeKinds, CHARGE_KIND_ICON, CHARGE_KIND_LABEL, chargeNeedsReason, isTimeKind, type ChargeKind, type ChargeQuote } from "@/lib/charges";
+import { availableChargeKinds, CHARGE_KIND_ICON, CHARGE_KIND_LABEL, chargeNeedsReason, clampCollect, collectPlan, isTimeKind, type ChargeKind, type ChargeQuote } from "@/lib/charges";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/ledger";
 import { BookingCommandPanel } from "@/components/bookings/shared/BookingCommandPanel";
 import { MoneySummary } from "@/components/bookings/shared/MoneySummary";
 import { ReasonField } from "@/components/bookings/shared/ReasonField";
@@ -14,7 +15,7 @@ interface ChargeSheetProps {
   booking: GanttBookingItem;
   initialKind: ChargeKind;
   initialHours?: number;
-  onAdded: (result: { booking: Record<string, unknown>; message: string }) => void;
+  onAdded: (result: { booking: Record<string, unknown>; message: string; paymentError?: string | null }) => void;
   /** Core rejected the command (the drawer reloads the booking on a 409). */
   onError: (status: number, data: BffError) => Promise<void> | void;
   onDismiss: () => void;
@@ -40,6 +41,11 @@ export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, 
   const [quote, setQuote] = useState<ChargeQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
   const [quoting, setQuoting] = useState(false);
+  // "Khách đã trả ngay": ticked by default; the amount follows the charge until staff type their own.
+  const [paidNow, setPaidNow] = useState(true);
+  const [collectAmount, setCollectAmount] = useState(0);
+  const [collectTouched, setCollectTouched] = useState(false);
+  const [collectMethod, setCollectMethod] = useState<PaymentMethod>("cash");
   const { run, submitting, error } = useBookingCommand({ onError });
 
   const timeKind = isTimeKind(kind);
@@ -84,6 +90,13 @@ export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, 
   }, [booking.id, kind, hours, amount, feeForQuote, timeKind, overridden]);
 
   const fee = quote?.fee ?? 0;
+  // The typed amount belongs to ONE charge: when the fee changes (other kind / hours / agreed price) start from the default again.
+  useEffect(() => {
+    setCollectTouched(false);
+  }, [quote?.fee]);
+  const collect = quote ? collectPlan(quote.fee, quote.remainingAfter) : null;
+  const collecting = !!collect?.available && paidNow;
+  const collectNow = collecting && collect ? clampCollect(collectTouched ? collectAmount : collect.defaultAmount, collect.max) : 0;
   const needsReason = chargeNeedsReason(kind, overrideFee, quote?.tableFee ?? 0, overridden);
 
   const blockedReason = useMemo(() => {
@@ -97,13 +110,14 @@ export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, 
 
   const submit = async () => {
     if (blockedReason || !quote) return;
-    const data = await run<{ booking?: Record<string, unknown>; message?: string }>(`/api/bookings/${booking.id}/charges`, {
+    const data = await run<{ booking?: Record<string, unknown>; message?: string; paymentError?: string | null }>(`/api/bookings/${booking.id}/charges`, {
       kind,
       ...(timeKind ? { hours, ...(overridden ? { feeOverride: overrideFee } : {}) } : { amount }),
       ...(reason.trim() ? { reason: reason.trim() } : {}),
+      ...(collectNow > 0 ? { collect: { amount: collectNow, method: collectMethod } } : {}),
       expectedVersion: booking.version ?? booking.modNo,
     });
-    if (data) onAdded({ booking: data.booking ?? {}, message: data.message || "Đã thêm phụ phí." });
+    if (data) onAdded({ booking: data.booking ?? {}, message: data.message || "Đã thêm phụ phí.", paymentError: data.paymentError ?? null });
   };
 
   const pickKind = (k: ChargeKind) => {
@@ -116,11 +130,11 @@ export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, 
     <BookingCommandPanel
       tone="emerald"
       title={`Thêm phụ phí · đơn #${booking.id}`}
-      intro="Giá và giờ do hệ thống tính. Khoản này cộng vào tổng tiền của đơn và vào số còn phải thu; tiền thu thêm ghi ở bước “Ghi nhận thanh toán”."
+      intro="Giá và giờ do hệ thống tính. Khoản này cộng vào tổng tiền của đơn. Nếu khách trả ngay, giữ nguyên ô “Khách đã trả ngay” để ghi luôn khoản thu; bỏ tick thì khoản này nằm trong số còn phải thu."
       submitting={submitting}
       error={error}
       blockedReason={blockedReason || undefined}
-      confirmLabel="Thêm phụ phí"
+      confirmLabel={collect?.available ? (collecting ? "Thêm phụ phí & ghi thu" : "Thêm phụ phí (chưa thu tiền)") : "Thêm phụ phí"}
       confirmVariant="primary"
       onConfirm={submit}
       onDismiss={onDismiss}
@@ -234,6 +248,59 @@ export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, 
         placeholder={kind === "incidental" ? "VD: Đền bù vỡ ly, minibar, giặt ủi" : undefined}
       />
 
+      {collect?.available && (
+        <div className="space-y-2 bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
+          <label className="flex items-center gap-2 text-[11px] font-bold text-slate-800 cursor-pointer">
+            <input type="checkbox" className="accent-emerald-600" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} />
+            Khách đã trả ngay
+          </label>
+          {paidNow ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label htmlFor="charge-collect-amount" className="block text-[11px] font-bold text-slate-700">
+                  Số tiền thu (VNĐ)
+                </label>
+                <input
+                  id="charge-collect-amount"
+                  type="number"
+                  min={1}
+                  max={collect.max}
+                  step={1000}
+                  value={collectTouched ? collectAmount || "" : collect.defaultAmount}
+                  onChange={(e) => {
+                    setCollectTouched(true);
+                    setCollectAmount(Math.max(0, parseInt(e.target.value, 10) || 0));
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="charge-collect-method" className="block text-[11px] font-bold text-slate-700">
+                  Phương thức
+                </label>
+                <select
+                  id="charge-collect-method"
+                  value={collectMethod}
+                  onChange={(e) => setCollectMethod(e.target.value as PaymentMethod)}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-amber-800">Chưa ghi khoản thu: phụ phí này sẽ nằm trong “còn phải thu” cho tới khi bạn ghi ở Sổ thu tiền.</p>
+          )}
+          {paidNow && collectTouched && collectAmount > collect.max && (
+            <p className="text-[11px] text-amber-800">Số thu tối đa là {vnd(collect.max)} (số còn phải thu sau khi thêm).</p>
+          )}
+        </div>
+      )}
+
       {quoteError && <p role="alert" className="text-xs text-rose-700 font-semibold">{quoteError}</p>}
 
       {quote && (
@@ -242,7 +309,8 @@ export const ChargeSheet: React.FC<ChargeSheetProps> = ({ booking, initialKind, 
             { label: "Phụ phí này", value: fee, signed: true },
             { label: "Tổng tiền đơn", value: quote.totalAfter },
             { label: "Khách đã trả", value: quote.netPaid },
-            { label: "Còn phải thu sau khi thêm", value: quote.remainingAfter, strong: true, tone: quote.remainingAfter > 0 ? "bad" : "good" },
+            ...(collectNow > 0 ? [{ label: "Thu ngay (khoản này)", value: collectNow }] : []),
+            { label: "Còn phải thu sau khi thêm", value: quote.remainingAfter - collectNow, strong: true, tone: quote.remainingAfter - collectNow > 0 ? "bad" : "good" },
           ]}
         />
       )}

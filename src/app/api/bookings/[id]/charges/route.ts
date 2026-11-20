@@ -4,6 +4,8 @@ import { toHttpError } from "@/lib/apiError";
 import { intentKey } from "@/lib/bffIdempotency";
 import { describeCharge, type ChargeKind } from "@/lib/charges";
 import { toLegacyBookingRow, type CoreBookingEnvelope } from "@/lib/coreMappers";
+import { derivedKey } from "@/lib/derivedKey";
+import { planChargePayment } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,6 +15,10 @@ const KINDS: readonly ChargeKind[] = ["early_checkin", "late_checkout", "extensi
 /**
  * POST /api/bookings/[id]/charges — add a stay charge (+N hours, early check-in, late check-out, incidental).
  * One command; the drawer's quick buttons only preselect the kind. Booking Core prices it and checks availability.
+ *
+ * Optional `collect: { amount, method }` ("Khách đã trả ngay"): after the charge is saved, the money the guest paid is
+ * recorded as a ledger payment in the same request (EI-FINANCE-ONTOLOGY-001 §8). The charge stays if the payment
+ * fails — the response then carries `paymentError` and the drawer opens the ledger to record it again.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,9 +46,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!current.data?.booking) return Response.json({ error: "Không tìm thấy thông tin đặt phòng." }, { status: 404 });
     const expectedVersion = Number(body.expectedVersion ?? current.data.booking.control.version);
 
+    const chargeKey = intentKey(req, "booking-charge");
     const res = await bookingCore.post<CoreBookingEnvelope>(`/internal/v1/bookings/${id}/charges`, {
       staff,
-      idempotencyKey: intentKey(req, "booking-charge"),
+      idempotencyKey: chargeKey,
       body: {
         expectedVersion,
         kind,
@@ -52,10 +59,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     if (!res.data?.booking) throw new Error("Không nhận được dữ liệu đặt phòng từ Booking Core.");
     const added = [...res.data.booking.charges].reverse().find((c) => c.kind === kind && !c.voided);
+    let booking = res.data.booking;
+    let paymentError: string | null = null;
+    let collected = 0;
+
+    // "Khách đã trả ngay": never above what is still due after this charge, whole đồng, only if staff asked for it.
+    const pay = planChargePayment(body.collect, toLegacyBookingRow(booking).remaining_amount ?? 0, added ? describeCharge(added) : "phụ phí");
+    if (pay.kind === "error") {
+      paymentError = pay.error;
+    } else if (pay.kind === "pay") {
+      try {
+        await bookingCore.post(`/internal/v1/bookings/${id}/financial-entries`, {
+          staff,
+          idempotencyKey: derivedKey(chargeKey, "pay"),
+          body: pay.body,
+        });
+        collected = pay.amount;
+        const refreshed = await bookingCore.get<CoreBookingEnvelope>(`/internal/v1/bookings/${id}`, { staff });
+        if (refreshed.data?.booking) booking = refreshed.data.booking;
+      } catch (err) {
+        console.error("POST charge: payment not recorded", err);
+        paymentError = "Đã thêm phụ phí nhưng CHƯA ghi được khoản thu tiền. Vui lòng ghi nhận thanh toán trong Sổ thu tiền.";
+      }
+    }
+    const baseMessage = added ? `Đã thêm phụ phí: ${describeCharge(added)}.` : "Đã thêm phụ phí.";
     return Response.json({
       success: true,
-      message: added ? `Đã thêm phụ phí: ${describeCharge(added)}.` : "Đã thêm phụ phí.",
-      booking: toLegacyBookingRow(res.data.booking),
+      message: collected > 0 ? `${baseMessage} Đã ghi thu ${collected.toLocaleString("vi-VN")} đ.` : baseMessage,
+      booking: toLegacyBookingRow(booking),
+      paymentError,
     });
   } catch (error) {
     return toHttpError(error);

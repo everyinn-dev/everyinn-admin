@@ -75,6 +75,29 @@ export function balanceOf(b: { totalPrice: number; paidAmount?: number | null; r
   };
 }
 
+export type ChargePaymentPlan =
+  | { kind: "none" }
+  | { kind: "error"; error: string }
+  | { kind: "pay"; amount: number; body: { entryType: "payment"; amount: number; method: PaymentMethod; reason?: string; reference?: string; occurredAt?: string } };
+
+/**
+ * The payment recorded together with a charge ("Khách đã trả ngay"): the amount staff asked for, never above what is
+ * still due AFTER the charge, validated by the same rules as any ledger payment. Nothing is recorded when nothing
+ * was asked for or nothing is due.
+ */
+export function planChargePayment(collect: unknown, dueAfter: number, description: string, nowMs = Date.now()): ChargePaymentPlan {
+  if (!collect || typeof collect !== "object") return { kind: "none" };
+  const c = collect as { amount?: unknown; method?: unknown };
+  const due = Math.max(0, Math.round(Number(dueAfter) || 0));
+  const asked = Math.round(Number(c.amount));
+  const amount = Number.isFinite(asked) && asked > 0 ? Math.min(asked, due) : 0;
+  if (amount <= 0) return { kind: "none" };
+  const plan = planLedgerAction({ action: "payment", amount, method: c.method, reason: `Thu phụ phí: ${description}` }, nowMs);
+  if (!plan.ok) return { kind: "error", error: plan.error };
+  if (plan.kind !== "entry" || plan.body.entryType !== "payment") return { kind: "error", error: "Thông tin thu tiền không hợp lệ." };
+  return { kind: "pay", amount, body: { ...plan.body, entryType: "payment" } };
+}
+
 export type LedgerPlan =
   | { ok: true; kind: "entry"; body: { entryType: "payment" | "refund" | "adjustment"; amount: number; method: PaymentMethod; reason?: string; reference?: string; occurredAt?: string } }
   | { ok: true; kind: "reverse"; entryId: string; body: { reason: string } }

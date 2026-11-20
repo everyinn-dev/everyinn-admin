@@ -73,3 +73,34 @@ test("charges flow Core DTO → legacy row → drawer item", () => {
   const { charges: _omit, ...older } = dto;
   assert.deepEqual(toLegacyBookingRow(older).charges, []);
 });
+
+test("collect on the charge sheet: only when there is something to collect; default = this charge, capped at what is due", async () => {
+  const { collectPlan, clampCollect } = await import("../src/lib/charges.ts");
+  assert.deepEqual(collectPlan(60_000, 60_000), { available: true, defaultAmount: 60_000, max: 60_000 });
+  assert.equal(collectPlan(0, 60_000).available, false); // a free hour: nothing to collect
+  assert.equal(collectPlan(60_000, 0).available, false); // nothing due after the charge (already overpaid / settled)
+  // deposit booking that still owes an older balance: default is THIS charge only, max is the whole balance
+  assert.deepEqual(collectPlan(60_000, 360_000), { available: true, defaultAmount: 60_000, max: 360_000 });
+  // fee larger than what is due (cannot collect above the due amount)
+  assert.deepEqual(collectPlan(100_000, 40_000), { available: true, defaultAmount: 40_000, max: 40_000 });
+  assert.deepEqual(collectPlan(59_999.6, 100_000), { available: true, defaultAmount: 60_000, max: 100_000 });
+});
+
+test("collect: the recorded amount is clamped to what is due and never negative or fractional", async () => {
+  const { clampCollect } = await import("../src/lib/charges.ts");
+  assert.equal(clampCollect(60_000, 60_000), 60_000);
+  assert.equal(clampCollect(90_000, 60_000), 60_000);
+  assert.equal(clampCollect(20_000.4, 60_000), 20_000);
+  assert.equal(clampCollect(0, 60_000), 0);
+  assert.equal(clampCollect(-5, 60_000), 0);
+  assert.equal(clampCollect(Number.NaN, 60_000), 0);
+});
+
+test("derived idempotency key: stable, distinct from the intent's key, within Core's 8–128 chars", async () => {
+  const { derivedKey } = await import("../src/lib/derivedKey.ts");
+  assert.equal(derivedKey("adm.charge.abc12345", "pay"), "adm.charge.abc12345.pay");
+  assert.equal(derivedKey("adm.charge.abc12345", "pay"), derivedKey("adm.charge.abc12345", "pay"));
+  const long = derivedKey("k".repeat(128), "pay");
+  assert.ok(long.length <= 128 && long.endsWith(".pay"));
+  assert.match(long, /^[A-Za-z0-9._:-]{8,128}$/);
+});

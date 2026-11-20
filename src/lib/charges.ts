@@ -43,6 +43,36 @@ export interface ChargeQuote {
   remainingAfter: number;
 }
 
+/**
+ * "Khách đã trả ngay" on the charge sheet (EI-FINANCE-ONTOLOGY-001 §8: a charge is revenue, the money collected is a
+ * separate ledger entry — one form may create both). Pure so the rules are testable:
+ *  - nothing to collect when the charge is free or nothing remains due after it;
+ *  - the default is exactly THIS charge (never the older balance of a deposit booking);
+ *  - the amount can be lowered but never above what is still due after the charge.
+ */
+export interface CollectPlan {
+  /** Show the "Khách đã trả ngay" block at all. */
+  available: boolean;
+  /** Pre-filled amount: this charge's fee, capped at what is due. */
+  defaultAmount: number;
+  /** Upper bound of the amount field. */
+  max: number;
+}
+
+export function collectPlan(fee: number, remainingAfter: number): CollectPlan {
+  const due = Math.max(0, Math.round(remainingAfter));
+  const f = Math.max(0, Math.round(fee));
+  const max = due;
+  return { available: f > 0 && due > 0, defaultAmount: Math.min(f, max), max };
+}
+
+/** The amount actually recorded: what staff typed, never above `max`, whole đồng, 0 when invalid. */
+export function clampCollect(amount: number, max: number): number {
+  const a = Math.round(Number(amount));
+  if (!Number.isFinite(a) || a <= 0) return 0;
+  return Math.min(a, Math.max(0, Math.round(max)));
+}
+
 export const CHARGE_KIND_LABEL: Record<ChargeKind, string> = {
   extension: "Thêm giờ",
   late_checkout: "Trả muộn",
