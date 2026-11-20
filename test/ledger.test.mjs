@@ -82,3 +82,37 @@ test("charge + collect in one form: the payment is clamped to what is due after 
   assert.equal(planChargePayment({ amount: 50000, method: "crypto" }, 60000, "x", NOW).kind, "error");
   assert.equal(planChargePayment({ amount: 50000 }, 60000, "x", NOW).kind, "error");
 });
+
+test("settle with a price change: collect the INCREASE, refund the DECREASE, capped by what is due / held over", async () => {
+  const { editSettlement } = await import("../src/lib/editPricing.ts");
+  // paid in full 500k → edit to 560k: collect the 60k increase
+  assert.deepEqual(editSettlement(500000, 560000, 500000), { collect: { available: true, defaultAmount: 60000, max: 60000 }, refund: { available: false, defaultAmount: 0, max: 0 } });
+  // deposit booking (paid 200k of 500k) → 560k: default = the increase only, max = everything still due
+  assert.deepEqual(editSettlement(500000, 560000, 200000).collect, { available: true, defaultAmount: 60000, max: 360000 });
+  // paid in full 500k → edit to 400k: refund the 100k decrease
+  assert.deepEqual(editSettlement(500000, 400000, 500000), { collect: { available: false, defaultAmount: 0, max: 0 }, refund: { available: true, defaultAmount: 100000, max: 100000 } });
+  // paid only 200k → new total 150k: can refund at most the 50k held above the new value
+  assert.deepEqual(editSettlement(500000, 150000, 200000).refund, { available: true, defaultAmount: 50000, max: 50000 });
+  // price unchanged, or nothing due / nothing held over → nothing to settle
+  assert.equal(editSettlement(500000, 500000, 500000).collect.available, false);
+  assert.equal(editSettlement(500000, 500000, 700000).refund.available, false); // old overpayment is not this edit's business
+  assert.equal(editSettlement(500000, 560000, 700000).collect.available, false); // already holds more than the new value
+  assert.equal(editSettlement(500000, 400000, 300000).refund.available, false); // paid less than the new value
+});
+
+test("planSettlement: payment ≤ due, refund ≤ held over ≤ received; reason required for a refund; junk records nothing", async () => {
+  const { planSettlement } = await import("../src/lib/ledger.ts");
+  const after = { due: 60000, overpaid: 0, netReceived: 500000 };
+  assert.deepEqual(planSettlement({ kind: "payment", amount: 60000, method: "cash" }, after, "Thu chênh lệch", NOW), { kind: "payment", amount: 60000, body: { entryType: "payment", amount: 60000, method: "cash", reason: "Thu chênh lệch" } });
+  assert.equal(planSettlement({ kind: "payment", amount: 90000, method: "cash" }, after, "x", NOW).amount, 60000); // clamped to what is due
+  const over = { due: 0, overpaid: 100000, netReceived: 500000 };
+  const refund = planSettlement({ kind: "refund", amount: 150000, method: "bank_transfer" }, over, "Hoàn chênh lệch", NOW);
+  assert.deepEqual(refund, { kind: "refund", amount: 100000, body: { entryType: "refund", amount: 100000, method: "bank_transfer", reason: "Hoàn chênh lệch" } });
+  assert.equal(planSettlement({ kind: "refund", amount: 100000, method: "cash" }, { due: 0, overpaid: 100000, netReceived: 40000 }, "x", NOW).amount, 40000); // never above what was received
+  for (const bad of [undefined, null, "x", {}, { kind: "transfer", amount: 5, method: "cash" }, { kind: "payment", amount: 0, method: "cash" }, { kind: "payment", amount: -3, method: "cash" }]) {
+    assert.deepEqual(planSettlement(bad, after, "x", NOW), { kind: "none" });
+  }
+  assert.deepEqual(planSettlement({ kind: "refund", amount: 5000, method: "cash" }, over, "", NOW).kind, "error"); // refund needs a reason
+  assert.equal(planSettlement({ kind: "payment", amount: 5000, method: "crypto" }, after, "x", NOW).kind, "error");
+  assert.deepEqual(planSettlement({ kind: "payment", amount: 5000, method: "cash" }, { due: 0, overpaid: 0, netReceived: 0 }, "x", NOW), { kind: "none" }); // nothing due
+});

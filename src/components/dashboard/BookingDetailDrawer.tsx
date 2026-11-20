@@ -191,10 +191,12 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
     onBookingUpdated?.(updated);
     notifyDataChanged("BOOKINGS_CHANGED");
     if (paymentError) {
-      // The charge is saved but the money was not recorded: open the ledger with the amount still due, ready to submit.
-      toast.warning(paymentError, "Chưa ghi được khoản thu");
-      const due = balanceOf({ totalPrice: updated.totalPrice, paidAmount: updated.paidAmount, refundAmount: updated.refundAmount, status: updated.status }).due;
-      if (due > 0) setLedgerIntent({ action: "payment", amount: due });
+      // The change is saved but the money was not recorded: open the ledger prefilled, ready to submit —
+      // the amount still due (collect) or the amount held over (refund after voiding a charge).
+      toast.warning(paymentError, "Chưa ghi được khoản thu / hoàn");
+      const bal = balanceOf({ totalPrice: updated.totalPrice, paidAmount: updated.paidAmount, refundAmount: updated.refundAmount, status: updated.status });
+      if (bal.due > 0) setLedgerIntent({ action: "payment", amount: bal.due });
+      else if (bal.overpaid > 0) setLedgerIntent({ action: "refund", amount: bal.overpaid, reason: "Hoàn tiền sau khi huỷ phụ phí" });
     }
   };
 
@@ -217,6 +219,7 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       remainingAmount: updatedData.remaining_amount ?? currentBooking.remainingAmount,
       depositStatus: updatedData.deposit_status ?? currentBooking.depositStatus,
       paidAmount: updatedData.paid_amount ?? currentBooking.paidAmount,
+      refundAmount: updatedData.refund_amount ?? currentBooking.refundAmount,
       note: updatedData.note !== undefined ? updatedData.note : currentBooking.note,
       closingNote: updatedData.closing_note !== undefined ? updatedData.closing_note : currentBooking.closingNote,
       modNo: updatedData.mod_no !== undefined ? updatedData.mod_no : (currentBooking.modNo || 0) + 1,
