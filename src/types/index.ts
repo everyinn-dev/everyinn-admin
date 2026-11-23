@@ -478,6 +478,10 @@ export interface DailyRosterItem {
   earlyCheckinHours?: number;
   totalPrice: number;
   remainingAmount?: number;
+  /** Ledger projection — same numbers as the booking detail (absent only from an older Core). */
+  paidAmount?: number;
+  refundAmount?: number;
+  netPaid?: number;
   isDeposit?: boolean;
   depositStatus?: DepositStatus;
   channel?: string | null;

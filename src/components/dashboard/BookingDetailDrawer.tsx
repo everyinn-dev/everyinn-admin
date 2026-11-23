@@ -26,6 +26,13 @@ function mergeFresh(current: GanttBookingItem, row: Booking): GanttBookingItem {
   return merged as unknown as GanttBookingItem;
 }
 
+/** Overlay a prop snapshot on the current item: only fields the snapshot actually carries replace ours. */
+function mergeSnapshot(current: GanttBookingItem, snapshot: GanttBookingItem): GanttBookingItem {
+  const merged: Record<string, unknown> = { ...current };
+  for (const [k, v] of Object.entries(snapshot)) if (v !== undefined) merged[k] = v;
+  return merged as unknown as GanttBookingItem;
+}
+
 interface BookingDetailDrawerProps {
   booking: GanttBookingItem | null;
   onClose: () => void;
@@ -59,28 +66,31 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   // Loyalty sync retry state (A-W8)
   const [retryingSync, setRetryingSync] = useState(false);
 
-  // Synchronize prop updates
+  // Synchronize prop updates. The snapshot handed in by the Gantt / list / daily roster can carry fewer fields than
+  // the full booking (the roster has no paid / refunded amounts), so for the SAME booking we overlay what the
+  // snapshot has onto what we already hold instead of replacing it — otherwise the fresh row we loaded on open
+  // (see below) would be wiped by the stale snapshot and money fields would read 0 ("Chưa thu tiền").
+  const shownIdRef = React.useRef<string | null>(null);
   useEffect(() => {
     if (!booking) {
+      shownIdRef.current = null;
       setCurrentBooking(null);
       return;
     }
-    // Don't overwrite if currentBooking is already newer for the same booking ID
-    if (
-      currentBooking &&
-      currentBooking.id === booking.id &&
-      (currentBooking.version || currentBooking.modNo || 0) > (booking.version || booking.modNo || 0)
-    ) {
-      return;
-    }
-    const isNewBooking = !currentBooking || currentBooking.id !== booking.id;
-    setCurrentBooking(booking);
+    const isNewBooking = shownIdRef.current !== booking.id;
+    shownIdRef.current = booking.id;
+    setCurrentBooking((cur) => {
+      if (!cur || cur.id !== booking.id) return booking;
+      // Never go back to an older version of the same booking.
+      if ((cur.version || cur.modNo || 0) > (booking.version || booking.modNo || 0)) return cur;
+      return mergeSnapshot(cur, booking);
+    });
     if (isNewBooking) {
       setMode("view");
       setShowConfirmCancel(false);
       setLedgerIntent(null);
     }
-  }, [booking, currentBooking]);
+  }, [booking]);
 
   // The list / Gantt snapshot may be stale (cancelled in another tab or by a colleague): always load the
   // latest state when a booking is opened, so every action below is gated on the real status.
@@ -184,20 +194,12 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
   };
 
   /** A stay charge was added or voided: show the booking as Core now has it (new total, new amount due, new times). */
-  const handleChargesChanged = ({ booking: row, message, paymentError }: { booking: Record<string, unknown>; message: string; paymentError?: string | null }) => {
+  const handleChargesChanged = ({ booking: row, message }: { booking: Record<string, unknown>; message: string }) => {
     toast.success(message, "Phụ phí");
     const updated = mergeFresh(currentBooking, row as unknown as Booking);
     setCurrentBooking(updated);
     onBookingUpdated?.(updated);
     notifyDataChanged("BOOKINGS_CHANGED");
-    if (paymentError) {
-      // The change is saved but the money was not recorded: open the ledger prefilled, ready to submit —
-      // the amount still due (collect) or the amount held over (refund after voiding a charge).
-      toast.warning(paymentError, "Chưa ghi được khoản thu / hoàn");
-      const bal = balanceOf({ totalPrice: updated.totalPrice, paidAmount: updated.paidAmount, refundAmount: updated.refundAmount, status: updated.status });
-      if (bal.due > 0) setLedgerIntent({ action: "payment", amount: bal.due });
-      else if (bal.overpaid > 0) setLedgerIntent({ action: "refund", amount: bal.overpaid, reason: "Hoàn tiền sau khi huỷ phụ phí" });
-    }
   };
 
   const handleEditSuccess = (updatedData: any) => {
@@ -219,7 +221,6 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
       remainingAmount: updatedData.remaining_amount ?? currentBooking.remainingAmount,
       depositStatus: updatedData.deposit_status ?? currentBooking.depositStatus,
       paidAmount: updatedData.paid_amount ?? currentBooking.paidAmount,
-      refundAmount: updatedData.refund_amount ?? currentBooking.refundAmount,
       note: updatedData.note !== undefined ? updatedData.note : currentBooking.note,
       closingNote: updatedData.closing_note !== undefined ? updatedData.closing_note : currentBooking.closingNote,
       modNo: updatedData.mod_no !== undefined ? updatedData.mod_no : (currentBooking.modNo || 0) + 1,

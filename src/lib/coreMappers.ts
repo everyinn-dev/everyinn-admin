@@ -105,6 +105,8 @@ export interface CoreGanttBooking {
   isDeposit: 0 | 1;
   depositAmount: number;
   paidAmount: number;
+  refundAmount?: number;
+  netPaid?: number;
   remainingAmount: number;
   depositDueDate: string | null;
   depositStatus: "none" | "deposit_paid" | "fully_paid";
@@ -339,6 +341,8 @@ export function toGanttBooking(b: CoreGanttBooking): GanttBookingItem & {
     isDeposit: b.isDeposit,
     depositAmount: b.depositAmount,
     paidAmount: b.paidAmount,
+    refundAmount: b.refundAmount,
+    netPaid: b.netPaid,
     remainingAmount: b.remainingAmount,
     depositDueDate: nz(b.depositDueDate),
     depositStatus: b.depositStatus,
@@ -764,6 +768,9 @@ export interface CoreRosterItem {
   lateCheckoutHours: number;
   totalPrice: number;
   remainingAmount: number;
+  paidAmount?: number;
+  refundAmount?: number;
+  netPaid?: number;
   isDeposit?: boolean;
   depositStatus?: "none" | "deposit_paid" | "fully_paid";
   channel?: string | null;
@@ -841,6 +848,9 @@ export function toDailyRosterItem(item: CoreRosterItem): DailyRosterItem {
     earlyCheckinHours: item.earlyCheckinHours ?? 0,
     totalPrice: item.totalPrice,
     remainingAmount: item.remainingAmount ?? 0,
+    paidAmount: item.paidAmount,
+    refundAmount: item.refundAmount,
+    netPaid: item.netPaid,
     isDeposit: item.isDeposit ?? false,
     depositStatus: item.depositStatus ?? "none",
     channel: item.channel ?? null,
