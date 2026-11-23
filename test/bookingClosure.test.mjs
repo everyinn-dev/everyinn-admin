@@ -7,6 +7,7 @@ import {
   closureReasonLabel,
   isClosedBooking,
   isVersionConflict,
+  moneyKnownOf,
   netReceivedOf,
 } from "../src/lib/bookingClosure.ts";
 import { toLegacyBookingRow } from "../src/lib/coreMappers.ts";
@@ -101,4 +102,10 @@ test("closure fields flow Core DTO → legacy row → drawer item", () => {
   assert.equal(item.refundAmount, 150000);
   assert.equal(netReceivedOf(item), 50000);
   assert.equal(item.version, 3);
+});
+
+test("a snapshot with no money fields is 'unknown', not 'nothing received'", () => {
+  assert.equal(moneyKnownOf({}), false); // e.g. an older daily-roster item
+  assert.equal(moneyKnownOf({ paidAmount: 0 }), true); // a real zero
+  assert.equal(moneyKnownOf({ netPaid: 810000 }), true);
 });

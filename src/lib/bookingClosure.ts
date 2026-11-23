@@ -53,6 +53,11 @@ export function netReceivedOf(b: Pick<GanttBookingItem, "netPaid" | "paidAmount"
   return Math.max(0, (b.paidAmount ?? 0) - (b.refundAmount ?? 0));
 }
 
+/** False while the snapshot carries no money fields at all (e.g. opened from a list that omits them): unknown ≠ 0. */
+export function moneyKnownOf(b: Pick<GanttBookingItem, "netPaid" | "paidAmount">): boolean {
+  return typeof b.netPaid === "number" || typeof b.paidAmount === "number";
+}
+
 /** Legacy BFF row (snake_case) → drawer item (camelCase). Single mapper for the list and the drawer refetch. */
 export function bookingRowToItem(b: Booking): GanttBookingItem {
   return {

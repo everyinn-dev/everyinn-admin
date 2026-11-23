@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import type { ClosureReasonCode, GanttBookingItem } from "@/types";
-import { CLOSURE_REASONS, netReceivedOf, REFUND_METHODS, type BffError, type RefundMethod } from "@/lib/bookingClosure";
+import { CLOSURE_REASONS, moneyKnownOf, netReceivedOf, REFUND_METHODS, type BffError, type RefundMethod } from "@/lib/bookingClosure";
 import { BookingCommandPanel } from "@/components/bookings/shared/BookingCommandPanel";
 import { MoneySummary } from "@/components/bookings/shared/MoneySummary";
 import { ReasonField } from "@/components/bookings/shared/ReasonField";
@@ -29,6 +29,9 @@ const vnd = (n: number) => `${Math.max(0, Math.round(n)).toLocaleString("vi-VN")
  */
 export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking, onClosed, onError, onDismiss, initialReason }) => {
   const received = netReceivedOf(booking);
+  // A snapshot opened from the daily roster carries no paid amounts until the drawer has loaded the full booking:
+  // never present "nothing received" while the money is simply not known yet.
+  const moneyKnown = moneyKnownOf(booking);
   const isPending = booking.status === "pending";
   // From the check-in time until checkout the guest may already be in the room.
   const inHouse = Date.now() >= Date.parse(booking.checkinAt);
@@ -47,12 +50,13 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
   const retained = received - refundAmount;
 
   const blockedReason = useMemo(() => {
+    if (!moneyKnown) return "Đang tải số tiền đã thu của đơn — vui lòng chờ giây lát (hoặc đóng và mở lại đơn).";
     if (!reason) return "Vui lòng chọn lý do huỷ.";
     if (reason.code === "no_show" && isPending) return "Đơn chưa xác nhận không thể ghi nhận No-show.";
     if (reason.noteRequired && !note.trim()) return "Vui lòng nhập lý do cụ thể.";
     if (refundChoice === "partial" && (partialAmount <= 0 || partialAmount > received)) return `Số tiền hoàn phải từ 1đ đến ${vnd(received)}.`;
     return "";
-  }, [reason, isPending, note, refundChoice, partialAmount, received]);
+  }, [moneyKnown, reason, isPending, note, refundChoice, partialAmount, received]);
 
   const pickReason = (code: ClosureReasonCode) => {
     const r = CLOSURE_REASONS.find((x) => x.code === code)!;
@@ -94,7 +98,7 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
       }
       submitting={submitting}
       error={error}
-      blockedReason={reasonCode ? blockedReason : undefined}
+      blockedReason={reasonCode || !moneyKnown ? blockedReason : undefined}
       confirmLabel={reason?.code === "no_show" ? "Xác nhận No-show" : "Xác nhận huỷ"}
       onConfirm={submit}
       onDismiss={onDismiss}
@@ -137,7 +141,9 @@ export const CancelBookingPanel: React.FC<CancelBookingPanelProps> = ({ booking,
           </div>
         </div>
 
-        {received <= 0 ? (
+        {!moneyKnown ? (
+          <p className="text-[11px] text-amber-700 italic">Đang tải số tiền khách đã trả…</p>
+        ) : received <= 0 ? (
           <p className="text-[11px] text-slate-500 italic">Chưa thu tiền của đơn này — không có gì để hoàn.</p>
         ) : (
           <div className="space-y-1.5 pt-1 border-t border-slate-100">
