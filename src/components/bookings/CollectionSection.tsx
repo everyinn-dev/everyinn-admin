@@ -17,6 +17,8 @@ interface CollectionSectionProps {
  */
 export const CollectionSection: React.FC<CollectionSectionProps> = ({ mode, onChangeMode, method, onChangeMethod }) => {
   const active = COLLECTION_OPTIONS.find((o) => o.value === mode);
+  // "Đặt cọc" is driven only by the deposit switch in DepositSection (same state), so it is not offered as a button here.
+  const buttonOptions = COLLECTION_OPTIONS.filter((o) => o.value !== "deposit");
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
       <div className="p-4 space-y-3">
@@ -25,7 +27,7 @@ export const CollectionSection: React.FC<CollectionSectionProps> = ({ mode, onCh
           <span className="text-[11px] text-slate-500">Chỉ ghi nhận số tiền khách đã thực trả.</span>
         </div>
         <div role="radiogroup" aria-label="Trạng thái thu tiền" className="grid grid-cols-3 gap-2">
-          {COLLECTION_OPTIONS.map((o) => (
+          {buttonOptions.map((o) => (
             <button
               key={o.value}
               type="button"
