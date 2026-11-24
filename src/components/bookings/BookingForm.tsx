@@ -128,7 +128,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [discountAmount, setDiscountAmount] = useState<number>(0);
 
   // Money collected at creation (EI-FINANCE-ONTOLOGY-001): nothing is recorded as paid unless staff say so.
-  const [collection, setCollection] = useState<CollectionMode>("none");
+  const [collection, setCollection] = useState<CollectionMode>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const isDeposit = collection === "deposit";
   const setIsDeposit = (on: boolean) => setCollection(on ? "deposit" : "none");
